@@ -29,7 +29,7 @@ Confidence: medium. The map uses live Shortcut story coverage plus current high-
 | `sc-6150` | Audio domain model, storage, recipe contracts | Core domain, persistence |
 | `sc-6151` | Capability-based provider and model manifests | Provider registry, manifest schema |
 | `sc-6158` | Worker runtime, packaging, model installation | Worker runtime, installer, packaging, no-Python shipped runtime validation |
-| `sc-6157` | Source-backed model evaluation harness and scorecard | Evaluation fixtures, model scorecards |
+| `sc-6157` | Source-backed model evaluation harness and scorecard | Evaluation fixtures, model scorecards, product eligibility gates |
 | `sc-6152` | Text-to-Speech Studio | TTS workflow, voice selection, script generation |
 | `sc-6177` | Voice Lab cloning, fine-tuning, conversion | Voice profiles, consent, conversion jobs |
 | `sc-6153` | SFX and ambience generation | Effects and ambience workflow |

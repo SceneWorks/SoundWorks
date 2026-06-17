@@ -26,6 +26,7 @@ export type AppOverview = {
   studios: StudioSurface[];
   commands: CommandBoundary[];
   providerCatalog: ProviderCatalogOverview;
+  modelEvaluation: ModelEvaluationOverview;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -138,4 +139,15 @@ export type ProviderCatalogOverview = {
   modelCount: number;
   capabilityCount: number;
   workflows: CapabilityWorkflowSummary[];
+};
+
+export type ModelEvaluationOverview = {
+  schemaVersion: number;
+  candidateCount: number;
+  sourceCount: number;
+  fixtureCount: number;
+  laneCount: number;
+  statusCounts: Record<string, number>;
+  productEligibilityCounts: Record<string, number>;
+  recommendedCandidateIds: string[];
 };

@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 pub mod domain;
+pub mod evaluation;
 pub mod fixtures;
 pub mod manifests;
 pub mod runtime;
 pub mod storage;
 
 pub use domain::*;
+pub use evaluation::*;
 pub use fixtures::*;
 pub use manifests::*;
 pub use runtime::*;
@@ -20,6 +22,7 @@ pub struct AppOverview {
     pub studios: Vec<StudioSurface>,
     pub commands: Vec<CommandBoundary>,
     pub provider_catalog: ProviderCatalogOverview,
+    pub model_evaluation: ModelEvaluationOverview,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -159,8 +162,16 @@ impl AppOverview {
                         "Report worker runtime policy, device/model state, job progress, and cancellation readiness."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_model_evaluation_catalog".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load source-backed model scorecards, fixtures, recommendation status, and product eligibility gates."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
+            model_evaluation: ModelEvaluationCatalog::reference().overview(),
         }
     }
 }
@@ -250,7 +261,12 @@ mod tests {
         assert_eq!(payload["productName"], "SoundWorks");
         assert_eq!(payload["commands"][0]["name"], "get_app_overview");
         assert_eq!(payload["commands"][2]["name"], "get_runtime_overview");
+        assert_eq!(
+            payload["commands"][3]["name"],
+            "get_model_evaluation_catalog"
+        );
         assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
+        assert_eq!(payload["modelEvaluation"]["candidateCount"], 28);
     }
 
     #[test]
@@ -352,6 +368,9 @@ mod tests {
             "storage_paths",
             "provider_manifests",
             "model_manifests",
+            "model_evaluation_candidates",
+            "model_evaluation_fixtures",
+            "model_evaluation_recommendations",
         ] {
             assert!(
                 sql.contains(table),
@@ -396,5 +415,17 @@ mod tests {
             .workflows
             .iter()
             .any(|workflow| workflow.default_model_id == "reference-generation-suite"));
+    }
+
+    #[test]
+    fn app_overview_summarizes_model_evaluation() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.model_evaluation.schema_version, 1);
+        assert_eq!(overview.model_evaluation.candidate_count, 28);
+        assert!(overview
+            .model_evaluation
+            .recommended_candidate_ids
+            .contains(&"moss-soundeffect".to_string()));
     }
 }

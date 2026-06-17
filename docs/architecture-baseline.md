@@ -49,11 +49,12 @@ The core crate should own stable types and validation:
 - Audio asset metadata and filesystem references.
 - Generation recipes and workflow-specific parameter sets.
 - Provider/model manifests and capability matching.
+- Source-backed model evaluation scorecards, fixtures, and product eligibility gates.
 - Job model and execution state.
 - Rights, consent, provenance, and safety metadata.
 - Export presets, render requests, stems, and metadata sidecars.
 
-Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, `fixtures.rs`, and `manifests.rs` define these first-pass contracts, provider capability matching, and fixture coverage for TTS, SFX, instrument sample, loop, and song outputs.
+Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, `fixtures.rs`, `manifests.rs`, `runtime.rs`, and `evaluation.rs` define these first-pass contracts, provider capability matching, runtime packaging policy, model scorecards, and fixture coverage for TTS, SFX, instrument sample, loop, and song outputs.
 
 ### Persistence
 
@@ -91,6 +92,12 @@ Provider/model manifests should describe capabilities, constraints, and defaults
 
 Current implementation: `crates/soundworks-core/src/manifests.rs` defines the manifest schema, built-in reference catalog, full initial capability workflow surface, matching queries, defaults, install metadata, and safety constraints. `docs/provider-manifests.md` captures the story-level contract.
 
+### Model Evaluation
+
+Model selection should be source-backed and repeatable before workflow slices hard-code providers.
+
+Current implementation: `crates/soundworks-core/src/evaluation.rs` defines candidate metadata, source evidence, license/runtime assessments, no-Python product eligibility, lane fixtures, score axes, smoke test plans, and first spike recommendations. `docs/model-evaluation.md` captures all 28 candidates named in the epic/story comments and their current status.
+
 ### Export
 
 Export should be treated as a first-class job type, not a UI save action. Export jobs should produce files plus metadata sidecars, and should be able to target:
@@ -115,6 +122,7 @@ Export should be treated as a first-class job type, not a UI save action. Export
 - `ExportPreset` - render format, naming, sidecar, stem, and target integration settings.
 - `ProvenanceRecord` - trace of source material, model/provider, prompt, edits, and export history.
 - `RuntimeOverview` - packaged runtime policy, device inventory, model availability, cache state, validation checks, and job snapshots.
+- `ModelEvaluationCatalog` - source-backed candidate scorecards, fixtures, recommendation status, and product eligibility gates.
 
 ## Initial Implementation Order
 

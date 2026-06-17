@@ -3,6 +3,7 @@ import {
   Boxes,
   CircleAlert,
   CircleCheck,
+  ClipboardCheck,
   Cpu,
   HardDrive,
   Library,
@@ -48,6 +49,10 @@ function formatMb(value?: number | null) {
   }
 
   return value >= 1024 ? `${Math.round(value / 1024)} GB` : `${value} MB`;
+}
+
+function countFor(counts: Record<string, number>, key: string) {
+  return counts[key] ?? 0;
 }
 
 export function App() {
@@ -196,6 +201,51 @@ export function App() {
                   <small>{workflow.defaultModelId}</small>
                 </li>
               ))}
+            </ol>
+          </div>
+
+          <div className="panel evaluation-panel">
+            <div className="panel-heading">
+              <h2>Evaluation Scorecard</h2>
+              <span>{overview.modelEvaluation.candidateCount}</span>
+            </div>
+            <div className="evaluation-summary" aria-label="Model evaluation">
+              <div>
+                <ClipboardCheck aria-hidden="true" size={18} />
+                <strong>{overview.modelEvaluation.sourceCount}</strong>
+                <span>sources</span>
+              </div>
+              <div>
+                <Boxes aria-hidden="true" size={18} />
+                <strong>{overview.modelEvaluation.fixtureCount}</strong>
+                <span>fixtures</span>
+              </div>
+              <div>
+                <CircleCheck aria-hidden="true" size={18} />
+                <strong>
+                  {countFor(
+                    overview.modelEvaluation.productEligibilityCounts,
+                    "product-candidate",
+                  )}
+                </strong>
+                <span>product candidates</span>
+              </div>
+              <div>
+                <CircleAlert aria-hidden="true" size={18} />
+                <strong>
+                  {countFor(overview.modelEvaluation.statusCounts, "blocked")}
+                </strong>
+                <span>blocked</span>
+              </div>
+            </div>
+            <ol className="recommendation-list" aria-label="Recommended spikes">
+              {overview.modelEvaluation.recommendedCandidateIds.map(
+                (candidateId) => (
+                  <li key={candidateId}>
+                    <span>{candidateId}</span>
+                  </li>
+                ),
+              )}
             </ol>
           </div>
 

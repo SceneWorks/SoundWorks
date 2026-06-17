@@ -1,6 +1,6 @@
 # SoundWorks Structural Overview
 
-This repository is not yet indexed in CodeGraph. As of the first app scaffold, it contains a Rust workspace, a Tauri desktop shell, and a React frontend.
+This repository is not yet meaningfully indexed in CodeGraph. It contains a Rust workspace, a Tauri desktop shell, a React frontend, and first-pass Rust domain/storage contracts for audio assets, recipes, jobs, provenance, and compositions.
 
 ## Intended Architecture
 
@@ -19,7 +19,7 @@ The exact layout should be created by implementation stories, but the baseline t
 - `apps/desktop/` - Tauri shell and desktop packaging.
 - `apps/web/` - React UI workspace.
 - `apps/worker/` - planned local worker runtime and model execution bridge.
-- `crates/soundworks-core/` - shared domain model, storage contracts, recipes, job model, validation, and export types.
+- `crates/soundworks-core/` - shared app overview, domain model, schema migration contracts, storage path allocation, recipes, job model, validation fixtures, provenance, and export/composition types.
 - `docs/` - requirements, architecture, parity, and planning artifacts.
 
 ## Discovery Notes
@@ -27,6 +27,7 @@ The exact layout should be created by implementation stories, but the baseline t
 - Shortcut epic: `6148` - SoundWorks: Audio-First Sister Product Planning.
 - First executable story: `sc-6149` - establish architecture baseline and product parity map.
 - App scaffold story: `sc-6250` - codify Rust backend, React UI, Tauri app architecture.
+- Domain contract story: `sc-6150` - define audio domain model, storage, and recipe contracts.
 - CodeGraph had no SoundWorks analysis available during baseline creation.
 - SceneWorks CodeGraph summary was used only as orientation for sibling-product concepts. Current SoundWorks files remain the source of truth for this repo.
 

@@ -2,9 +2,9 @@
 
 ## Baseline Context
 
-The repository currently starts from an initial commit with only `.gitignore`. This document establishes the target architecture for the first implementation wave and gives later stories concrete boundaries to execute against.
+The repository now has an initial Rust/React/Tauri scaffold and first-pass Rust domain/storage contracts. This document establishes the target architecture for the first implementation wave and gives later stories concrete boundaries to execute against.
 
-Confidence: medium. The architecture aligns with the live Shortcut epic and the intended Rust, React, and Tauri direction, but source code has not been scaffolded yet.
+Confidence: medium-high. The architecture aligns with the live Shortcut epic and the intended Rust, React, and Tauri direction, and the first core crate contracts now exist. Provider, worker, and persistence service details still need story-level validation.
 
 ## Architectural Goals
 
@@ -52,6 +52,8 @@ The core crate should own stable types and validation:
 - Job model and execution state.
 - Rights, consent, provenance, and safety metadata.
 - Export presets, render requests, stems, and metadata sidecars.
+
+Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, and `fixtures.rs` define these first-pass contracts and fixture coverage for TTS, SFX, instrument sample, loop, and song outputs.
 
 ### Persistence
 

@@ -1,0 +1,26 @@
+{
+  "name": "soundworks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web",
+    "preview": "npm run preview -w apps/web",
+    "lint": "npm run lint -w apps/web",
+    "test": "npm run test -w apps/web",
+    "format": "npm run format -w apps/web",
+    "rust:fmt": "cargo fmt --all --check",
+    "rust:test": "cargo test --workspace",
+    "rust:check": "cargo check --workspace",
+    "check": "npm run lint && npm run test && npm run build && npm run rust:fmt && npm run rust:test && npm run rust:check",
+    "tauri:dev": "tauri dev --config apps/desktop/tauri.conf.json",
+    "tauri:build": "tauri build --config apps/desktop/tauri.conf.json"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

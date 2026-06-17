@@ -19,3 +19,19 @@ target
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Node / web tooling
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Tauri bundles and local runtime output
+apps/desktop/target/
+apps/desktop/gen/
+apps/web/dist/
+
+# Local environment
+.env
+.env.*
+!.env.example

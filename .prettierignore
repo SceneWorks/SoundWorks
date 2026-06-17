@@ -1,0 +1,6 @@
+node_modules/
+dist/
+coverage/
+target/
+apps/web/dist/
+apps/desktop/target/

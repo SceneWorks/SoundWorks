@@ -2,7 +2,7 @@
 
 SoundWorks is the audio-first sister product to SceneWorks. It is planned as a local-first creative desktop app for generating, organizing, editing, and exporting AI-assisted audio assets and compositions.
 
-Current status: architecture and product baseline only. The implementation source of truth is Shortcut epic [6148](https://app.shortcut.com/trefry/epic/6148), with the initial baseline captured in this repository.
+Current status: architecture baseline plus initial Rust/React/Tauri scaffold. The implementation source of truth is Shortcut epic [6148](https://app.shortcut.com/trefry/epic/6148), with the initial baseline captured in this repository.
 
 ## Product Scope
 
@@ -27,10 +27,39 @@ SoundWorks covers the full audio creation surface tracked in the epic:
 - `docs/architecture-baseline.md` - target app architecture, subsystem boundaries, data flow, and confidence notes.
 - `docs/product-parity-map.md` - SceneWorks-to-SoundWorks parity map and story coverage.
 - `docs/implementation-plan.md` - Shortcut-backed implementation order and success criteria.
+- `apps/web/` - React/Vite UI workspace.
+- `apps/desktop/` - Tauri desktop shell and Rust command boundary.
+- `crates/soundworks-core/` - shared Rust contracts for the app shell and future domain work.
+
+## Development
+
+Install dependencies:
+
+```sh
+npm install
+```
+
+Run the web app:
+
+```sh
+npm run dev
+```
+
+Run checks:
+
+```sh
+npm run check
+```
+
+Run the Tauri desktop shell:
+
+```sh
+npm run tauri:dev
+```
 
 ## Current Assumptions
 
-- The repository starts from an initial commit with only `.gitignore`.
+- The repository started from an initial commit with only `.gitignore`.
 - The target app architecture is Rust backend plus React UI in a Tauri desktop shell.
 - SoundWorks should mirror SceneWorks' durable concepts where useful: projects, assets, recipes, provider capabilities, job orchestration, and generated outputs.
 - Audio-specific decisions must be first-class rather than thin renames of image concepts.

@@ -1,4 +1,4 @@
-use soundworks_core::{AppOverview, ProviderCatalog, RuntimeOverview};
+use soundworks_core::{AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview};
 
 #[tauri::command]
 fn get_app_overview() -> AppOverview {
@@ -15,6 +15,11 @@ fn get_runtime_overview() -> RuntimeOverview {
     runtime_overview()
 }
 
+#[tauri::command]
+fn get_model_evaluation_catalog() -> ModelEvaluationCatalog {
+    model_evaluation_catalog()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -27,13 +32,18 @@ pub fn runtime_overview() -> RuntimeOverview {
     RuntimeOverview::reference()
 }
 
+pub fn model_evaluation_catalog() -> ModelEvaluationCatalog {
+    ModelEvaluationCatalog::reference()
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_app_overview,
             get_provider_catalog,
-            get_runtime_overview
+            get_runtime_overview,
+            get_model_evaluation_catalog
         ])
 }
 
@@ -46,7 +56,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{app_overview, provider_catalog, runtime_overview};
+    use super::{app_overview, model_evaluation_catalog, provider_catalog, runtime_overview};
 
     #[test]
     fn app_overview_command_returns_soundworks() {
@@ -74,5 +84,17 @@ mod tests {
             .jobs
             .iter()
             .any(|job| job.id == "job-runtime-reference-generate"));
+    }
+
+    #[test]
+    fn model_evaluation_command_returns_scorecard() {
+        let catalog = model_evaluation_catalog();
+
+        assert_eq!(catalog.schema_version, 1);
+        assert_eq!(catalog.candidates.len(), 28);
+        assert!(catalog
+            .recommendations
+            .iter()
+            .any(|recommendation| recommendation.candidate_id == "kokoro-82m"));
     }
 }

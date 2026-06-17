@@ -152,6 +152,41 @@ CREATE TABLE runtime_validation_checks (
 );
 ",
     },
+    SchemaMigration {
+        version: 5,
+        name: "model_evaluation_scorecards",
+        sql: "
+CREATE TABLE model_evaluation_candidates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  lanes_json TEXT NOT NULL,
+  sources_json TEXT NOT NULL,
+  license_json TEXT NOT NULL,
+  runtime_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  product_eligibility TEXT NOT NULL,
+  evidence_level TEXT NOT NULL,
+  blockers_json TEXT NOT NULL,
+  notes TEXT NOT NULL
+);
+CREATE TABLE model_evaluation_fixtures (
+  id TEXT PRIMARY KEY,
+  lane TEXT NOT NULL,
+  name TEXT NOT NULL,
+  prompt_or_script TEXT NOT NULL,
+  expected_outputs_json TEXT NOT NULL,
+  measurements_json TEXT NOT NULL
+);
+CREATE TABLE model_evaluation_recommendations (
+  lane TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL REFERENCES model_evaluation_candidates(id),
+  status TEXT NOT NULL,
+  rationale TEXT NOT NULL,
+  required_next_evidence_json TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -86,6 +86,12 @@ export const fallbackOverview: AppOverview = {
       purpose:
         "Report worker runtime policy, device/model state, job progress, and cancellation readiness.",
     },
+    {
+      name: "get_model_evaluation_catalog",
+      direction: "ui-to-backend",
+      purpose:
+        "Load source-backed model scorecards, fixtures, recommendation status, and product eligibility gates.",
+    },
   ],
   providerCatalog: {
     schemaVersion: 1,
@@ -153,6 +159,31 @@ export const fallbackOverview: AppOverview = {
         defaultProviderId: "soundworks-reference",
         defaultModelId: "reference-utility-suite",
       },
+    ],
+  },
+  modelEvaluation: {
+    schemaVersion: 1,
+    candidateCount: 28,
+    sourceCount: 67,
+    fixtureCount: 9,
+    laneCount: 10,
+    statusCounts: {
+      "promising-spike": 24,
+      blocked: 4,
+    },
+    productEligibilityCounts: {
+      "product-candidate": 2,
+      "needs-runtime-port": 7,
+      "research-only": 15,
+      blocked: 4,
+    },
+    recommendedCandidateIds: [
+      "kokoro-82m",
+      "chatterbox",
+      "rvc",
+      "moss-soundeffect",
+      "ace-step-1-5",
+      "mmaudio",
     ],
   },
 };

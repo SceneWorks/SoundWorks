@@ -46,6 +46,7 @@ Success means a user can move from an idea or source reference to generated audi
 - Model evaluation harness and scorecard grounded in source-backed model metadata and reproducible fixtures.
 - Packaging strategy for desktop distribution and local model installation.
 - Shipped desktop runtime paths must not depend on Python. Python can be used for tests, research spikes, model proof-of-concepts, and build-time tooling.
+- Candidate model recommendations must distinguish source metadata from runnable SoundWorks evidence.
 
 ### Safety, Rights, And Provenance
 

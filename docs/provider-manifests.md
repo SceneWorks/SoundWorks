@@ -2,7 +2,7 @@
 
 `sc-6151` establishes the first provider/model manifest contract for SoundWorks. The goal is capability-based routing: workflow code asks for required inputs, outputs, runtime needs, and safety constraints, then the catalog returns compatible providers and defaults.
 
-Confidence: medium-high for the contract shape; medium for future provider details. The current registry uses built-in reference manifests so later model evaluation can replace fixture entries with source-backed model metadata without changing workflow routing.
+Confidence: medium-high for the contract shape; medium for future provider details. The current registry uses built-in reference manifests; `docs/model-evaluation.md` now tracks source-backed candidates, product eligibility, and the evidence required before replacing fixture entries with real provider defaults.
 
 ## Core Module
 

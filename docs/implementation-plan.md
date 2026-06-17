@@ -70,10 +70,12 @@ Success criteria:
 Outcome:
 
 - Create source-backed model metadata, fixtures, and evaluation scorecards.
+- Cover every named candidate with status, evidence, license/runtime notes, product eligibility, and first spike recommendations.
 
 Success criteria:
 
 - Candidate models are compared through repeatable fixtures and documented constraints rather than preference-only selection.
+- No model is marked ready without runnable SoundWorks evidence.
 
 ## Phase 2: Core Generation Workflows
 

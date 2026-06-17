@@ -2,7 +2,7 @@
 
 `sc-6158` establishes the first executable runtime boundary for SoundWorks. It does not port a specific audio model stack; it defines the contract every local, external executable, native binding, or managed API provider must satisfy before workflow stories can submit jobs.
 
-Confidence: medium-high. The status, install, cache, progress, cancellation, packaging, and validation surfaces are now typed and tested. Real provider adapters will still need source-backed model evaluation and platform-specific execution validation.
+Confidence: medium-high. The status, install, cache, progress, cancellation, packaging, and validation surfaces are now typed and tested. `docs/model-evaluation.md` tracks source-backed candidates and the platform-specific execution evidence still required before product enablement.
 
 ## Standing Product Rule
 

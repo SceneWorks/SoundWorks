@@ -22,5 +22,9 @@ describe("App", () => {
     expect(
       screen.getByText(/Reinstall the provider package/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Evaluation Scorecard" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("moss-soundeffect")).toBeInTheDocument();
   });
 });

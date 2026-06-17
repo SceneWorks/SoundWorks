@@ -45,6 +45,7 @@ Success means a user can move from an idea or source reference to generated audi
 - Worker runtime for local model execution, installation, capability discovery, and job execution.
 - Model evaluation harness and scorecard grounded in source-backed model metadata and reproducible fixtures.
 - Packaging strategy for desktop distribution and local model installation.
+- Shipped desktop runtime paths must not depend on Python. Python can be used for tests, research spikes, model proof-of-concepts, and build-time tooling.
 
 ### Safety, Rights, And Provenance
 
@@ -70,8 +71,8 @@ Success means a user can move from an idea or source reference to generated audi
 ## Open Questions
 
 - Exact initial model/provider list is not selected in this slice.
-- Whether the worker runtime is Rust-only, Python-assisted, or hybrid remains a story-level decision for `sc-6158`.
+- Concrete provider adapters still need to choose between Rust-native execution, native library bindings, external executables, and managed APIs.
 - SceneWorks export should be validated against current SceneWorks import/media contracts before implementation.
 - Voice cloning and voice conversion require explicit consent UX and policy decisions before they can be considered shippable.
 
-Confidence: medium-high for product scope because it is derived from live Shortcut story coverage; medium for runtime details because implementation has not started.
+Confidence: medium-high for product scope because it is derived from live Shortcut story coverage; medium for provider execution details because concrete model adapters are not implemented yet.

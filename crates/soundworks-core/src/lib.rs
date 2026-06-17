@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 pub mod domain;
 pub mod fixtures;
 pub mod manifests;
+pub mod runtime;
 pub mod storage;
 
 pub use domain::*;
 pub use fixtures::*;
 pub use manifests::*;
+pub use runtime::*;
 pub use storage::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,7 +121,7 @@ impl AppOverview {
                         responsibility:
                             "Model execution, installation, device capabilities, progress, and cancellation."
                                 .to_string(),
-                        status: ScaffoldStatus::Planned,
+                        status: ScaffoldStatus::Scaffolded,
                     },
                 ],
             },
@@ -148,6 +150,13 @@ impl AppOverview {
                     direction: CommandDirection::UiToBackend,
                     purpose:
                         "Load provider/model manifests, capability defaults, and matching inputs."
+                            .to_string(),
+                },
+                CommandBoundary {
+                    name: "get_runtime_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Report worker runtime policy, device/model state, job progress, and cancellation readiness."
                             .to_string(),
                 },
             ],
@@ -229,11 +238,9 @@ mod tests {
             .layers
             .iter()
             .any(|layer| layer.id == "react-ui" && layer.status == ScaffoldStatus::Scaffolded));
-        assert!(overview
-            .architecture
-            .layers
-            .iter()
-            .any(|layer| layer.id == "worker-runtime" && layer.status == ScaffoldStatus::Planned));
+        assert!(overview.architecture.layers.iter().any(|layer| {
+            layer.id == "worker-runtime" && layer.status == ScaffoldStatus::Scaffolded
+        }));
     }
 
     #[test]
@@ -242,6 +249,7 @@ mod tests {
 
         assert_eq!(payload["productName"], "SoundWorks");
         assert_eq!(payload["commands"][0]["name"], "get_app_overview");
+        assert_eq!(payload["commands"][2]["name"], "get_runtime_overview");
         assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
     }
 

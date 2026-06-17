@@ -4,7 +4,7 @@
 
 The repository now has an initial Rust/React/Tauri scaffold and first-pass Rust domain/storage contracts. This document establishes the target architecture for the first implementation wave and gives later stories concrete boundaries to execute against.
 
-Confidence: medium-high. The architecture aligns with the live Shortcut epic and the intended Rust, React, and Tauri direction, and the first core crate contracts now exist. Provider, worker, and persistence service details still need story-level validation.
+Confidence: medium-high. The architecture aligns with the live Shortcut epic and the intended Rust, React, and Tauri direction, and the first core crate contracts now exist. Real provider adapters and persistence service details still need story-level validation.
 
 ## Architectural Goals
 
@@ -77,7 +77,7 @@ The worker runtime should own:
 - Provider-specific request translation.
 - Output registration back into the core asset/job model.
 
-The runtime strategy is intentionally deferred to `sc-6158`; this baseline requires the boundary and contracts, not a specific implementation language.
+Current implementation: `crates/soundworks-core/src/runtime.rs` defines the worker/runtime contract for packaged desktop policy, no-Python product validation, model install/cache state, hardware compatibility, job admission, progress, cancellation, logs, and actionable failures. `docs/runtime-packaging.md` captures the story-level packaging strategy.
 
 ### Provider And Model Manifests
 
@@ -114,6 +114,7 @@ Export should be treated as a first-class job type, not a UI save action. Export
 - `Clip` - timeline placement of an audio asset or generated region.
 - `ExportPreset` - render format, naming, sidecar, stem, and target integration settings.
 - `ProvenanceRecord` - trace of source material, model/provider, prompt, edits, and export history.
+- `RuntimeOverview` - packaged runtime policy, device inventory, model availability, cache state, validation checks, and job snapshots.
 
 ## Initial Implementation Order
 

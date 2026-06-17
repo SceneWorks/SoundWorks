@@ -1,19 +1,23 @@
 import {
   Activity,
   Boxes,
+  CircleAlert,
+  CircleCheck,
   Cpu,
+  HardDrive,
   Library,
   Mic2,
   Music2,
+  PackageCheck,
   Radio,
   SlidersHorizontal,
   Sparkles,
   Waves,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { fallbackOverview } from "./appData";
-import { loadAppOverview } from "./tauri";
-import type { AppOverview } from "./types";
+import { fallbackOverview, fallbackRuntime } from "./appData";
+import { loadAppOverview, loadRuntimeOverview } from "./tauri";
+import type { AppOverview, RuntimeOverview } from "./types";
 
 const navItems = [
   { label: "Studios", icon: Sparkles },
@@ -31,8 +35,24 @@ function workflowLabel(workflow: string) {
     .join(" ");
 }
 
+function statusLabel(status: string) {
+  return status
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatMb(value?: number | null) {
+  if (!value) {
+    return "n/a";
+  }
+
+  return value >= 1024 ? `${Math.round(value / 1024)} GB` : `${value} MB`;
+}
+
 export function App() {
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
+  const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
 
   useEffect(() => {
     let active = true;
@@ -40,6 +60,12 @@ export function App() {
     loadAppOverview().then((nextOverview) => {
       if (active) {
         setOverview(nextOverview);
+      }
+    });
+
+    loadRuntimeOverview().then((nextRuntime) => {
+      if (active) {
+        setRuntime(nextRuntime);
       }
     });
 
@@ -168,6 +194,102 @@ export function App() {
                   <Cpu aria-hidden="true" size={16} />
                   <span>{workflowLabel(workflow.workflow)}</span>
                   <small>{workflow.defaultModelId}</small>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="panel runtime-panel">
+            <div className="panel-heading">
+              <h2>Worker Runtime</h2>
+              <span>{runtime.schemaVersion}</span>
+            </div>
+            <div className="runtime-summary" aria-label="Runtime status">
+              <div>
+                <PackageCheck aria-hidden="true" size={18} />
+                <strong>{runtime.statusCounts.installed}</strong>
+                <span>installed</span>
+              </div>
+              <div>
+                <HardDrive aria-hidden="true" size={18} />
+                <strong>{runtime.statusCounts.available}</strong>
+                <span>available</span>
+              </div>
+              <div>
+                <CircleAlert aria-hidden="true" size={18} />
+                <strong>{runtime.statusCounts.unavailable}</strong>
+                <span>unavailable</span>
+              </div>
+              <div>
+                <Cpu aria-hidden="true" size={18} />
+                <strong>{runtime.devices.length}</strong>
+                <span>devices</span>
+              </div>
+            </div>
+
+            <div className="runtime-policy">
+              <strong>{runtime.packagingPolicy.name}</strong>
+              <span>
+                Python runtime:{" "}
+                {runtime.packagingPolicy.productRuntimeAllowsPython
+                  ? "allowed"
+                  : "blocked"}
+              </span>
+              <small>
+                {runtime.packagingPolicy.shippedPlatforms
+                  .map(statusLabel)
+                  .join(" / ")}
+              </small>
+            </div>
+
+            <div className="runtime-columns">
+              <div className="runtime-stack">
+                <h3>Models</h3>
+                <ol className="runtime-list">
+                  {runtime.modelStates.map((model) => (
+                    <li key={`${model.providerId}-${model.modelId}`}>
+                      <span className={`runtime-dot ${model.availability}`} />
+                      <div>
+                        <strong>{model.modelName}</strong>
+                        <small>
+                          {statusLabel(model.availability)} /{" "}
+                          {statusLabel(model.installStatus)} /{" "}
+                          {formatMb(model.cache.diskUsageMb)}
+                        </small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="runtime-stack">
+                <h3>Jobs</h3>
+                <ol className="runtime-list">
+                  {runtime.jobs.map((job) => (
+                    <li key={job.id}>
+                      <span className={`runtime-dot ${job.status}`} />
+                      <div>
+                        <strong>{statusLabel(job.kind)}</strong>
+                        <small>
+                          {statusLabel(job.status)} /{" "}
+                          {Math.round(job.progress?.percent ?? 0)}% /{" "}
+                          {statusLabel(job.cancellation)}
+                        </small>
+                        {job.actionableError ? (
+                          <em>{job.actionableError.recovery}</em>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <ol className="validation-list" aria-label="Runtime checks">
+              {runtime.validationChecks.map((check) => (
+                <li key={check.id}>
+                  <CircleCheck aria-hidden="true" size={16} />
+                  <span>{check.summary}</span>
                 </li>
               ))}
             </ol>

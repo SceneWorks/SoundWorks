@@ -1,4 +1,4 @@
-use soundworks_core::{AppOverview, ProviderCatalog};
+use soundworks_core::{AppOverview, ProviderCatalog, RuntimeOverview};
 
 #[tauri::command]
 fn get_app_overview() -> AppOverview {
@@ -10,6 +10,11 @@ fn get_provider_catalog() -> ProviderCatalog {
     provider_catalog()
 }
 
+#[tauri::command]
+fn get_runtime_overview() -> RuntimeOverview {
+    runtime_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -18,12 +23,17 @@ pub fn provider_catalog() -> ProviderCatalog {
     ProviderCatalog::reference()
 }
 
+pub fn runtime_overview() -> RuntimeOverview {
+    RuntimeOverview::reference()
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_app_overview,
-            get_provider_catalog
+            get_provider_catalog,
+            get_runtime_overview
         ])
 }
 
@@ -36,7 +46,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{app_overview, provider_catalog};
+    use super::{app_overview, provider_catalog, runtime_overview};
 
     #[test]
     fn app_overview_command_returns_soundworks() {
@@ -52,5 +62,17 @@ mod tests {
 
         assert_eq!(catalog.schema_version, 1);
         assert_eq!(catalog.model_count(), 3);
+    }
+
+    #[test]
+    fn runtime_overview_command_returns_worker_state() {
+        let runtime = runtime_overview();
+
+        assert_eq!(runtime.schema_version, 1);
+        assert_eq!(runtime.status_counts.installed, 3);
+        assert!(runtime
+            .jobs
+            .iter()
+            .any(|job| job.id == "job-runtime-reference-generate"));
     }
 }

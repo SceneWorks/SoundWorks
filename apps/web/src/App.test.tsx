@@ -14,5 +14,13 @@ describe("App", () => {
     expect(screen.getByText("get_app_overview")).toBeInTheDocument();
     expect(screen.getByText("Provider Coverage")).toBeInTheDocument();
     expect(screen.getByText("Stem Separation")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Worker Runtime" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Python runtime: blocked")).toBeInTheDocument();
+    expect(screen.getByText("Reference Speech Suite")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Reinstall the provider package/i),
+    ).toBeInTheDocument();
   });
 });

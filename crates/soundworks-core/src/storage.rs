@@ -117,6 +117,41 @@ CREATE TABLE model_manifests (
 );
 ",
     },
+    SchemaMigration {
+        version: 4,
+        name: "worker_runtime_state",
+        sql: "
+CREATE TABLE runtime_model_states (
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  availability TEXT NOT NULL,
+  install_status TEXT NOT NULL,
+  cache_json TEXT NOT NULL,
+  compatibility_json TEXT NOT NULL,
+  health TEXT NOT NULL,
+  reasons_json TEXT NOT NULL,
+  PRIMARY KEY(provider_id, model_id)
+);
+CREATE TABLE runtime_jobs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  progress_json TEXT,
+  cancellation TEXT NOT NULL,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  log_tail_json TEXT NOT NULL,
+  actionable_error_json TEXT
+);
+CREATE TABLE runtime_validation_checks (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  recovery TEXT
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

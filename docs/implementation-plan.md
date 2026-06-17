@@ -58,10 +58,12 @@ Success criteria:
 Outcome:
 
 - Implement worker boundary, job execution contracts, model installation/discovery, and packaging strategy.
+- Enforce the shipped-product rule that desktop runtime paths do not depend on Python.
 
 Success criteria:
 
 - The app can discover installed model capabilities, queue jobs, report progress, cancel jobs, and register outputs.
+- Model install/cache state, device compatibility, validation checks, and actionable runtime errors are visible through the app boundary.
 
 ### `sc-6157` - Model Evaluation Harness And Scorecard
 
@@ -118,3 +120,4 @@ Success criteria:
 - Do not treat provider/model choice as done without source-backed evaluation.
 - Do not mark a story done until the repo artifacts and Shortcut story both reflect validation results.
 - Keep generated media and local model artifacts out of git unless a fixture is intentionally small and reviewed.
+- Keep shipped runtime paths Python-free; Python-only providers must stay research-only, API-only, or blocked before product enablement.

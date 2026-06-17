@@ -1,6 +1,7 @@
 import {
   Activity,
   Boxes,
+  Cpu,
   Library,
   Mic2,
   Music2,
@@ -22,6 +23,13 @@ const navItems = [
 ];
 
 const studioIcons = [Mic2, Radio, Waves, Boxes, Music2, Sparkles];
+
+function workflowLabel(workflow: string) {
+  return workflow
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export function App() {
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
@@ -137,6 +145,32 @@ export function App() {
                 </article>
               ))}
             </div>
+          </div>
+
+          <div className="panel provider-panel">
+            <div className="panel-heading">
+              <h2>Provider Coverage</h2>
+              <span>{overview.providerCatalog.capabilityCount}</span>
+            </div>
+            <div className="provider-metrics" aria-label="Provider catalog">
+              <div>
+                <strong>{overview.providerCatalog.providerCount}</strong>
+                <span>providers</span>
+              </div>
+              <div>
+                <strong>{overview.providerCatalog.modelCount}</strong>
+                <span>models</span>
+              </div>
+            </div>
+            <ol className="workflow-list">
+              {overview.providerCatalog.workflows.map((workflow) => (
+                <li key={workflow.workflow}>
+                  <Cpu aria-hidden="true" size={16} />
+                  <span>{workflowLabel(workflow.workflow)}</span>
+                  <small>{workflow.defaultModelId}</small>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
       </section>

@@ -37,11 +37,11 @@ Success criteria:
 
 Outcome:
 
-- Implement core Rust domain types and storage migrations for projects, assets, recipes, jobs, source references, provenance, and exports.
+- Implement core Rust domain types and storage migration contracts for projects, assets, versions, recipes, jobs, source references, provenance, rights/safety, compositions, and exports.
 
 Success criteria:
 
-- Domain validation and storage tests cover project creation, asset registration, recipe persistence, and generated-output metadata.
+- Domain validation and storage tests cover asset registration, versioned storage paths, recipe persistence/serialization, generated-output metadata, and fixture coverage for major audio asset types.
 
 ### `sc-6151` - Provider And Model Manifest System
 

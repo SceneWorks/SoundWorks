@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+pub mod domain;
+pub mod fixtures;
+pub mod storage;
+
+pub use domain::*;
+pub use fixtures::*;
+pub use storage::*;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppOverview {
@@ -131,6 +139,9 @@ impl StudioSurface {
 #[cfg(test)]
 mod tests {
     use super::{AppOverview, ScaffoldStatus};
+    use crate::domain::{AudioAssetKind, RecipeWorkflow};
+    use crate::fixtures::{composition_fixture, fixture_set, project_fixture};
+    use crate::storage::{StoragePathAllocator, SCHEMA_MIGRATIONS};
 
     #[test]
     fn baseline_contains_all_initial_studio_surfaces() {
@@ -176,5 +187,130 @@ mod tests {
 
         assert_eq!(payload["productName"], "SoundWorks");
         assert_eq!(payload["commands"][0]["name"], "get_app_overview");
+    }
+
+    #[test]
+    fn fixtures_cover_major_generated_asset_types() {
+        let fixtures = fixture_set().expect("fixtures allocate storage paths");
+        let asset_kinds: Vec<AudioAssetKind> =
+            fixtures.iter().map(|fixture| fixture.asset.kind).collect();
+        let workflows: Vec<RecipeWorkflow> = fixtures
+            .iter()
+            .map(|fixture| fixture.recipe.workflow)
+            .collect();
+
+        assert_eq!(
+            asset_kinds,
+            vec![
+                AudioAssetKind::VoiceClip,
+                AudioAssetKind::Sfx,
+                AudioAssetKind::InstrumentSample,
+                AudioAssetKind::Loop,
+                AudioAssetKind::Song,
+            ]
+        );
+        assert_eq!(
+            workflows,
+            vec![
+                RecipeWorkflow::Tts,
+                RecipeWorkflow::Sfx,
+                RecipeWorkflow::InstrumentSample,
+                RecipeWorkflow::Loop,
+                RecipeWorkflow::Song,
+            ]
+        );
+    }
+
+    #[test]
+    fn fixture_recipes_are_replayable_and_serializable() {
+        for fixture in fixture_set().expect("fixtures allocate storage paths") {
+            let summary = fixture.recipe.inspectable_summary();
+            let payload = serde_json::to_value(&fixture.recipe).expect("recipe serializes");
+
+            assert!(summary.replayable);
+            assert_eq!(summary.output_asset_count, 1);
+            assert!(payload["provider"]["modelVersion"].is_string());
+            assert_eq!(fixture.job.output_version_ids, vec![fixture.version.id]);
+        }
+    }
+
+    #[test]
+    fn storage_paths_are_versioned_and_collision_resistant() {
+        let fixtures = fixture_set().expect("fixtures allocate storage paths");
+        let first_path = fixtures[0].version.file.storage_path.clone();
+        let second_path = fixtures[1].version.file.storage_path.clone();
+
+        assert_ne!(first_path, second_path);
+        assert!(first_path.contains("/asset-voice-001/version-voice-001-a/media.wav"));
+        assert!(fixtures[0]
+            .version
+            .waveform_preview_cache
+            .as_deref()
+            .expect("waveform preview")
+            .contains("/previews/waveform.json"));
+    }
+
+    #[test]
+    fn storage_allocator_rejects_unsafe_segments() {
+        let allocator = StoragePathAllocator::new("soundworks-library");
+        let error = allocator
+            .allocate_asset_version(
+                &crate::domain::LibraryScope::GlobalLibrary,
+                AudioAssetKind::Sfx,
+                "../asset",
+                "version-1",
+                crate::domain::AudioFileFormat::Wav,
+            )
+            .expect_err("unsafe path rejected");
+
+        assert_eq!(
+            error,
+            crate::storage::StoragePathError::UnsafeSegment("../asset".to_string())
+        );
+    }
+
+    #[test]
+    fn schema_migrations_cover_required_domain_tables() {
+        let sql = SCHEMA_MIGRATIONS
+            .iter()
+            .map(|migration| migration.sql)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        for table in [
+            "projects",
+            "audio_assets",
+            "audio_asset_versions",
+            "generation_recipes",
+            "generation_jobs",
+            "voice_profiles",
+            "compositions",
+            "storage_paths",
+        ] {
+            assert!(
+                sql.contains(table),
+                "expected schema migrations to include {table}"
+            );
+        }
+    }
+
+    #[test]
+    fn project_and_composition_fixtures_capture_timeline_state() {
+        let project = project_fixture();
+        let composition = composition_fixture();
+        let timeline_payload = serde_json::to_value(&composition).expect("composition serializes");
+
+        assert_eq!(project.composition_ids, vec!["composition-demo"]);
+        assert_eq!(composition.tracks.len(), 2);
+        assert_eq!(composition.tracks[0].clips[0].source_range.start_ms, 250);
+        assert_eq!(composition.tracks[0].clips[0].fade_out_ms, 80);
+        assert_eq!(
+            timeline_payload["tracks"][0]["automation"][0]["target"],
+            "gain"
+        );
+        assert_eq!(
+            timeline_payload["exportHistory"][0]["presetId"],
+            "preset-sceneworks-video-track"
+        );
     }
 }

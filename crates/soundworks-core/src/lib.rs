@@ -2,10 +2,12 @@ use serde::{Deserialize, Serialize};
 
 pub mod domain;
 pub mod fixtures;
+pub mod manifests;
 pub mod storage;
 
 pub use domain::*;
 pub use fixtures::*;
+pub use manifests::*;
 pub use storage::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -15,6 +17,7 @@ pub struct AppOverview {
     pub architecture: ArchitectureOverview,
     pub studios: Vec<StudioSurface>,
     pub commands: Vec<CommandBoundary>,
+    pub provider_catalog: ProviderCatalogOverview,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +50,24 @@ pub struct CommandBoundary {
     pub name: String,
     pub direction: CommandDirection,
     pub purpose: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCatalogOverview {
+    pub schema_version: u32,
+    pub provider_count: usize,
+    pub model_count: usize,
+    pub capability_count: usize,
+    pub workflows: Vec<CapabilityWorkflowSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityWorkflowSummary {
+    pub workflow: CapabilityWorkflow,
+    pub default_provider_id: String,
+    pub default_model_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,13 +135,47 @@ impl AppOverview {
                     "/studios/video-to-audio",
                 ),
             ],
-            commands: vec![CommandBoundary {
-                name: "get_app_overview".to_string(),
-                direction: CommandDirection::UiToBackend,
-                purpose:
-                    "Load scaffolded architecture and workflow metadata from the Rust backend."
-                        .to_string(),
-            }],
+            commands: vec![
+                CommandBoundary {
+                    name: "get_app_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load scaffolded architecture and workflow metadata from the Rust backend."
+                            .to_string(),
+                },
+                CommandBoundary {
+                    name: "get_provider_catalog".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load provider/model manifests, capability defaults, and matching inputs."
+                            .to_string(),
+                },
+            ],
+            provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
+        }
+    }
+}
+
+impl ProviderCatalogOverview {
+    pub fn from_catalog(catalog: &ProviderCatalog) -> Self {
+        Self {
+            schema_version: catalog.schema_version,
+            provider_count: catalog.providers.len(),
+            model_count: catalog.model_count(),
+            capability_count: catalog.capability_count(),
+            workflows: catalog
+                .workflow_coverage()
+                .into_iter()
+                .filter_map(|workflow| {
+                    catalog
+                        .default_for(workflow)
+                        .map(|default| CapabilityWorkflowSummary {
+                            workflow,
+                            default_provider_id: default.provider_id,
+                            default_model_id: default.model_id,
+                        })
+                })
+                .collect(),
         }
     }
 }
@@ -187,6 +242,7 @@ mod tests {
 
         assert_eq!(payload["productName"], "SoundWorks");
         assert_eq!(payload["commands"][0]["name"], "get_app_overview");
+        assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
     }
 
     #[test]
@@ -286,6 +342,8 @@ mod tests {
             "voice_profiles",
             "compositions",
             "storage_paths",
+            "provider_manifests",
+            "model_manifests",
         ] {
             assert!(
                 sql.contains(table),
@@ -312,5 +370,23 @@ mod tests {
             timeline_payload["exportHistory"][0]["presetId"],
             "preset-sceneworks-video-track"
         );
+    }
+
+    #[test]
+    fn app_overview_summarizes_provider_capabilities() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.provider_catalog.provider_count, 1);
+        assert_eq!(overview.provider_catalog.model_count, 3);
+        assert_eq!(overview.provider_catalog.capability_count, 12);
+        assert_eq!(
+            overview.provider_catalog.workflows.len(),
+            crate::manifests::CapabilityWorkflow::all().len()
+        );
+        assert!(overview
+            .provider_catalog
+            .workflows
+            .iter()
+            .any(|workflow| workflow.default_model_id == "reference-generation-suite"));
     }
 }

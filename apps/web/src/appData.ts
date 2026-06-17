@@ -74,5 +74,79 @@ export const fallbackOverview: AppOverview = {
       purpose:
         "Load scaffolded architecture and workflow metadata from the Rust backend.",
     },
+    {
+      name: "get_provider_catalog",
+      direction: "ui-to-backend",
+      purpose:
+        "Load provider/model manifests, capability defaults, and matching inputs.",
+    },
   ],
+  providerCatalog: {
+    schemaVersion: 1,
+    providerCount: 1,
+    modelCount: 3,
+    capabilityCount: 12,
+    workflows: [
+      {
+        workflow: "tts",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-speech-suite",
+      },
+      {
+        workflow: "voice-clone",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-speech-suite",
+      },
+      {
+        workflow: "voice-conversion",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-speech-suite",
+      },
+      {
+        workflow: "sfx",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-generation-suite",
+      },
+      {
+        workflow: "ambience",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-generation-suite",
+      },
+      {
+        workflow: "instrument-sample",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-generation-suite",
+      },
+      {
+        workflow: "loop",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-generation-suite",
+      },
+      {
+        workflow: "song",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-generation-suite",
+      },
+      {
+        workflow: "stem-separation",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-utility-suite",
+      },
+      {
+        workflow: "video-to-audio",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-generation-suite",
+      },
+      {
+        workflow: "edit",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-utility-suite",
+      },
+      {
+        workflow: "composition-render",
+        defaultProviderId: "soundworks-reference",
+        defaultModelId: "reference-utility-suite",
+      },
+    ],
+  },
 };

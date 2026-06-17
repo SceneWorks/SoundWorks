@@ -26,11 +26,12 @@ SoundWorks covers the full audio creation surface tracked in the epic:
 - `docs/requirements.md` - implementation-ready product and platform requirements.
 - `docs/architecture-baseline.md` - target app architecture, subsystem boundaries, data flow, and confidence notes.
 - `docs/domain-contracts.md` - Rust domain, storage path, recipe, and fixture contract reference.
+- `docs/provider-manifests.md` - provider/model manifest schema, capability matching, defaults, and app boundary.
 - `docs/product-parity-map.md` - SceneWorks-to-SoundWorks parity map and story coverage.
 - `docs/implementation-plan.md` - Shortcut-backed implementation order and success criteria.
 - `apps/web/` - React/Vite UI workspace.
 - `apps/desktop/` - Tauri desktop shell and Rust command boundary.
-- `crates/soundworks-core/` - shared Rust contracts for the app shell, domain model, storage schema, recipe fixtures, jobs, provenance, and composition state.
+- `crates/soundworks-core/` - shared Rust contracts for the app shell, domain model, storage schema, provider manifests, recipe fixtures, jobs, provenance, and composition state.
 
 ## Development
 

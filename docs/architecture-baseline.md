@@ -53,7 +53,7 @@ The core crate should own stable types and validation:
 - Rights, consent, provenance, and safety metadata.
 - Export presets, render requests, stems, and metadata sidecars.
 
-Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, and `fixtures.rs` define these first-pass contracts and fixture coverage for TTS, SFX, instrument sample, loop, and song outputs.
+Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, `fixtures.rs`, and `manifests.rs` define these first-pass contracts, provider capability matching, and fixture coverage for TTS, SFX, instrument sample, loop, and song outputs.
 
 ### Persistence
 
@@ -88,6 +88,8 @@ Provider/model manifests should describe capabilities, constraints, and defaults
 - Output types: mono/stereo, stems, clips, loops, full mix, metadata.
 - Runtime needs: device, memory, dependencies, license, model source, install size.
 - Safety constraints: consent requirements, disallowed use cases, watermarking/provenance support.
+
+Current implementation: `crates/soundworks-core/src/manifests.rs` defines the manifest schema, built-in reference catalog, full initial capability workflow surface, matching queries, defaults, install metadata, and safety constraints. `docs/provider-manifests.md` captures the story-level contract.
 
 ### Export
 

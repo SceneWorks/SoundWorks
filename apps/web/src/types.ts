@@ -25,4 +25,33 @@ export type AppOverview = {
   };
   studios: StudioSurface[];
   commands: CommandBoundary[];
+  providerCatalog: ProviderCatalogOverview;
+};
+
+export type CapabilityWorkflow =
+  | "tts"
+  | "voice-clone"
+  | "voice-conversion"
+  | "sfx"
+  | "ambience"
+  | "instrument-sample"
+  | "loop"
+  | "song"
+  | "stem-separation"
+  | "video-to-audio"
+  | "edit"
+  | "composition-render";
+
+export type CapabilityWorkflowSummary = {
+  workflow: CapabilityWorkflow;
+  defaultProviderId: string;
+  defaultModelId: string;
+};
+
+export type ProviderCatalogOverview = {
+  schemaVersion: number;
+  providerCount: number;
+  modelCount: number;
+  capabilityCount: number;
+  workflows: CapabilityWorkflowSummary[];
 };

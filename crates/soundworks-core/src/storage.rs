@@ -96,6 +96,27 @@ CREATE TABLE storage_paths (
 );
 ",
     },
+    SchemaMigration {
+        version: 3,
+        name: "provider_model_manifests",
+        sql: "
+CREATE TABLE provider_manifests (
+  id TEXT PRIMARY KEY,
+  manifest_version TEXT NOT NULL,
+  source_json TEXT NOT NULL,
+  provider_json TEXT NOT NULL
+);
+CREATE TABLE model_manifests (
+  id TEXT PRIMARY KEY,
+  provider_id TEXT NOT NULL REFERENCES provider_manifests(id),
+  runtime TEXT NOT NULL,
+  install_json TEXT NOT NULL,
+  requirements_json TEXT NOT NULL,
+  capabilities_json TEXT NOT NULL,
+  default_priority INTEGER NOT NULL DEFAULT 0
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

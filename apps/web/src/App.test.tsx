@@ -12,5 +12,7 @@ describe("App", () => {
       await screen.findByRole("button", { name: /TTS Studio/i }),
     ).toBeInTheDocument();
     expect(screen.getByText("get_app_overview")).toBeInTheDocument();
+    expect(screen.getByText("Provider Coverage")).toBeInTheDocument();
+    expect(screen.getByText("Stem Separation")).toBeInTheDocument();
   });
 });

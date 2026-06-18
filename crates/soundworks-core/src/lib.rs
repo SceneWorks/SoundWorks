@@ -7,6 +7,7 @@ pub mod manifests;
 pub mod runtime;
 pub mod samples;
 pub mod sfx;
+pub mod songs;
 pub mod storage;
 pub mod tts;
 pub mod voice_lab;
@@ -18,6 +19,7 @@ pub use manifests::*;
 pub use runtime::*;
 pub use samples::*;
 pub use sfx::*;
+pub use songs::*;
 pub use storage::*;
 pub use tts::*;
 pub use voice_lab::*;
@@ -35,6 +37,7 @@ pub struct AppOverview {
     pub voice_lab: VoiceLabSummary,
     pub sfx_studio: SfxStudioSummary,
     pub samples_studio: SamplesStudioSummary,
+    pub song_studio: SongStudioSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -142,6 +145,22 @@ pub struct SamplesStudioSummary {
     pub saved_asset_kinds: Vec<AudioAssetKind>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SongStudioSummary {
+    pub schema_version: u32,
+    pub section_count: usize,
+    pub variant_count: usize,
+    pub saved_output_count: usize,
+    pub provider_count: usize,
+    pub scorecard_count: usize,
+    pub can_submit: bool,
+    pub selected_provider_id: String,
+    pub selected_model_id: String,
+    pub requested_stems: Vec<StemKind>,
+    pub saved_asset_kinds: Vec<AudioAssetKind>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandDirection {
@@ -200,7 +219,7 @@ impl AppOverview {
                 StudioSurface::scaffolded("voice-lab", "Voice Lab", "/studios/voice-lab"),
                 StudioSurface::scaffolded("sfx", "SFX + Ambience", "/studios/sfx"),
                 StudioSurface::scaffolded("loops", "Samples + Loops", "/studios/loops"),
-                StudioSurface::planned("songs", "Song Studio", "/studios/songs"),
+                StudioSurface::scaffolded("songs", "Song Studio", "/studios/songs"),
                 StudioSurface::planned(
                     "video-to-audio",
                     "Video to Audio",
@@ -264,6 +283,13 @@ impl AppOverview {
                         "Load instrument sample and loop controls, provider scorecards, sample-pack variants, QA checks, recipes, and saved outputs."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_song_studio_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load complete-song lyrics, structure, style controls, provider scorecards, variants, recipes, stems, export targets, and saved outputs."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
@@ -278,6 +304,9 @@ impl AppOverview {
             ),
             samples_studio: SamplesStudioSummary::from_overview(
                 &SamplesStudioOverview::reference().expect("reference Samples Studio is valid"),
+            ),
+            song_studio: SongStudioSummary::from_overview(
+                &SongStudioOverview::reference().expect("reference Song Studio is valid"),
             ),
         }
     }
@@ -342,6 +371,32 @@ impl SamplesStudioSummary {
             selected_provider_id: overview.selected_provider.provider_id.clone(),
             selected_model_id: overview.selected_provider.model_id.clone(),
             pack_collection_id: overview.pack.collection_id.clone(),
+            saved_asset_kinds,
+        }
+    }
+}
+
+impl SongStudioSummary {
+    pub fn from_overview(overview: &SongStudioOverview) -> Self {
+        let mut saved_asset_kinds = overview
+            .saved_outputs
+            .iter()
+            .map(|output| output.asset.kind)
+            .collect::<Vec<_>>();
+        saved_asset_kinds.sort_by_key(|kind| format!("{kind:?}"));
+        saved_asset_kinds.dedup();
+
+        Self {
+            schema_version: overview.schema_version,
+            section_count: overview.arrangement.section_count,
+            variant_count: overview.variants.len(),
+            saved_output_count: overview.saved_outputs.len(),
+            provider_count: overview.provider_options.len(),
+            scorecard_count: overview.provider_scorecards.len(),
+            can_submit: overview.submission.can_submit,
+            selected_provider_id: overview.selected_provider.provider_id.clone(),
+            selected_model_id: overview.selected_provider.model_id.clone(),
+            requested_stems: overview.controls.requested_stems.clone(),
             saved_asset_kinds,
         }
     }
@@ -471,8 +526,10 @@ mod tests {
         assert_eq!(payload["commands"][4]["name"], "get_tts_studio_overview");
         assert_eq!(payload["commands"][5]["name"], "get_voice_lab_overview");
         assert_eq!(payload["commands"][6]["name"], "get_sfx_studio_overview");
+        assert_eq!(payload["commands"][8]["name"], "get_song_studio_overview");
         assert_eq!(payload["voiceLab"]["modeCount"], 3);
         assert_eq!(payload["sfxStudio"]["variantCount"], 3);
+        assert_eq!(payload["songStudio"]["variantCount"], 2);
     }
 
     #[test]
@@ -595,6 +652,13 @@ mod tests {
             "samples_studio_provider_scorecards",
             "samples_studio_pack_collections",
             "samples_studio_qa_checks",
+            "song_studio_drafts",
+            "song_studio_sections",
+            "song_studio_variants",
+            "song_studio_submissions",
+            "song_studio_saved_outputs",
+            "song_studio_provider_scorecards",
+            "song_studio_export_targets",
         ] {
             assert!(
                 sql.contains(table),
@@ -713,5 +777,22 @@ mod tests {
             vec![AudioAssetKind::InstrumentSample, AudioAssetKind::Loop]
         );
         assert!(overview.samples_studio.can_submit);
+    }
+
+    #[test]
+    fn app_overview_summarizes_song_studio() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.studios[4].status, ScaffoldStatus::Scaffolded);
+        assert_eq!(overview.song_studio.section_count, 4);
+        assert_eq!(overview.song_studio.variant_count, 2);
+        assert_eq!(overview.song_studio.saved_output_count, 2);
+        assert_eq!(overview.song_studio.provider_count, 1);
+        assert_eq!(overview.song_studio.scorecard_count, 8);
+        assert_eq!(
+            overview.song_studio.saved_asset_kinds,
+            vec![AudioAssetKind::MusicClip, AudioAssetKind::Song]
+        );
+        assert!(overview.song_studio.can_submit);
     }
 }

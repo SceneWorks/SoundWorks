@@ -445,6 +445,87 @@ CREATE TABLE samples_studio_saved_outputs (
 );
 ",
     },
+    SchemaMigration {
+        version: 10,
+        name: "song_studio_workflow",
+        sql: "
+CREATE TABLE song_studio_drafts (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  lyrics TEXT NOT NULL,
+  style_tags_json TEXT NOT NULL,
+  language TEXT NOT NULL,
+  vocalist TEXT NOT NULL,
+  singer_hint TEXT,
+  reference_audio_asset_ids_json TEXT NOT NULL,
+  controls_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE song_studio_sections (
+  id TEXT PRIMARY KEY,
+  draft_id TEXT NOT NULL REFERENCES song_studio_drafts(id),
+  position INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  bars INTEGER NOT NULL,
+  lyrics TEXT,
+  regenerate_locked INTEGER NOT NULL,
+  UNIQUE(draft_id, position)
+);
+CREATE TABLE song_studio_variants (
+  id TEXT PRIMARY KEY,
+  draft_id TEXT NOT NULL REFERENCES song_studio_drafts(id),
+  label TEXT NOT NULL,
+  asset_kind TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  bpm REAL NOT NULL,
+  musical_key TEXT NOT NULL,
+  vocal_mode TEXT NOT NULL,
+  stem_kinds_json TEXT NOT NULL,
+  loudness_lufs REAL NOT NULL,
+  true_peak_dbfs REAL NOT NULL,
+  lyric_alignment_score INTEGER NOT NULL,
+  structure_match_score INTEGER NOT NULL,
+  tags_json TEXT NOT NULL,
+  selected_for_save INTEGER NOT NULL
+);
+CREATE TABLE song_studio_provider_scorecards (
+  candidate_id TEXT PRIMARY KEY REFERENCES model_evaluation_candidates(id),
+  readiness TEXT NOT NULL,
+  recommended INTEGER NOT NULL,
+  blockers_json TEXT NOT NULL,
+  notes TEXT NOT NULL
+);
+CREATE TABLE song_studio_submissions (
+  id TEXT PRIMARY KEY,
+  draft_id TEXT NOT NULL REFERENCES song_studio_drafts(id),
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  recipe_id TEXT NOT NULL REFERENCES generation_recipes(id),
+  job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+  can_submit INTEGER NOT NULL,
+  blocking_reasons_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL
+);
+CREATE TABLE song_studio_saved_outputs (
+  submission_id TEXT NOT NULL REFERENCES song_studio_submissions(id),
+  variant_id TEXT NOT NULL REFERENCES song_studio_variants(id),
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  export_ready INTEGER NOT NULL,
+  waveform_preview_ready INTEGER NOT NULL,
+  PRIMARY KEY(submission_id, variant_id)
+);
+CREATE TABLE song_studio_export_targets (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  formats_json TEXT NOT NULL,
+  includes_stems INTEGER NOT NULL,
+  includes_sidecar INTEGER NOT NULL,
+  summary TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

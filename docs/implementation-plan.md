@@ -83,7 +83,7 @@ Success criteria:
 - `sc-6177` - Voice Lab for cloning, fine-tuning, and conversion: consented profile management, distinct zero-shot/few-shot/conversion modes, RVC-style source-audio conversion, safety gates, provider scorecards, queued conversion preview, and saved project voice-clip output.
 - `sc-6153` - SFX and ambience generation: text-first prompt/category/duration/variation/intensity/style/loop controls, provider-capability-derived options, evaluation-backed scorecards, generated variant comparison, loop-point inspection, post-processing/export actions, recipe provenance, and saved project SFX/ambience outputs.
 - `sc-6154` - Instrument sample and loop generation: instrument/articulation/BPM/key/bar controls, provider-capability-derived options, evaluation-backed scorecards, one-shot and loop variants, sample-pack collection state, duplicate/favorite metadata, QA checks, recipe provenance, and saved project sample/loop outputs.
-- `sc-6155` - Complete song generation.
+- `sc-6155` - Complete song generation: lyrics/section/style/vocal/reference/duration/stem controls, provider-capability-derived options, evaluation-backed song scorecards, arrangement preview, full-mix and instrumental variants, export targets, recipe provenance, and saved project song/music-clip outputs.
 - `sc-6183` - Multimodal SFX and video-to-audio generation.
 
 Success criteria:

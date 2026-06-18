@@ -27,6 +27,7 @@ export type AppOverview = {
   commands: CommandBoundary[];
   providerCatalog: ProviderCatalogOverview;
   assetLibrary: AssetLibrarySummary;
+  exportWorkflow: ExportWorkflowSummary;
   modelEvaluation: ModelEvaluationOverview;
   ttsStudio: TtsStudioSummary;
   voiceLab: VoiceLabSummary;
@@ -177,6 +178,128 @@ export type AssetLibrarySummary = {
   archivedCount: number;
   selectedItemId: string;
   selectedItemType: LibraryItemType;
+};
+
+export type ExportSourceKind =
+  | "asset"
+  | "collection"
+  | "sample-pack"
+  | "loop-pack"
+  | "song"
+  | "stem-bundle"
+  | "composition";
+
+export type AudioFileFormat = "wav" | "flac" | "mp3" | "ogg" | "aiff";
+
+export type ExportWorkflowSummary = {
+  schemaVersion: number;
+  presetCount: number;
+  targetCount: number;
+  sidecarCount: number;
+  readyTargetCount: number;
+  selectedPresetId: string;
+  selectedSourceKind: ExportSourceKind;
+  selectedFormatCount: number;
+  canExportSelected: boolean;
+  writesDawBundle: boolean;
+  writesSceneWorksPackage: boolean;
+};
+
+export type ExportWorkflowOverview = {
+  schemaVersion: number;
+  presets: Array<{
+    preset: {
+      id: string;
+      name: string;
+      format: AudioFileFormat;
+      sampleRateHz: number;
+      bitDepth?: number | null;
+      includeSidecar: boolean;
+      includeStems: boolean;
+      target: string;
+    };
+    description: string;
+    sourceKinds: ExportSourceKind[];
+    assetKinds: string[];
+    formats: AudioFileFormat[];
+    packageArtifacts: string[];
+    normalizeLoudness: boolean;
+    targetLufs?: number | null;
+    preserveLoopMetadata: boolean;
+    preserveBpmKeyMetadata: boolean;
+    writesSidecar: boolean;
+  }>;
+  targets: Array<{
+    target: string;
+    label: string;
+    ready: boolean;
+    presetIds: string[];
+    notes: string[];
+  }>;
+  selectedExport: {
+    id: string;
+    presetId: string;
+    sourceKind: ExportSourceKind;
+    sourceId: string;
+    assetIds: string[];
+    collectionIds: string[];
+    formats: AudioFileFormat[];
+    canExport: boolean;
+    blockingReasons: string[];
+    warnings: string[];
+    outputPaths: string[];
+    sidecarPath: string;
+  };
+  sidecars: Array<{
+    id: string;
+    assetId: string;
+    assetKind: string;
+    target: string;
+    path: string;
+    includesRecipe: boolean;
+    includesModel: boolean;
+    includesSourceMedia: boolean;
+    includesRights: boolean;
+    includesEditChain: boolean;
+    disclosureRequired: boolean;
+    eventCount: number;
+  }>;
+  dawHandoff: {
+    id: string;
+    presetId: string;
+    packagePath: string;
+    normalizedFilenameTemplate: string;
+    includesZipBundle: boolean;
+    includesStems: boolean;
+    includesCueMarkers: boolean;
+    includesLoopMarkers: boolean;
+    includesBpmKeyMetadata: boolean;
+    includesLyricsText: boolean;
+    includesMidi: boolean;
+    stemKinds: string[];
+  };
+  sceneWorksHandoff: {
+    id: string;
+    presetId: string;
+    packagePath: string;
+    renderedMixdownPath: string;
+    provenanceSidecarPath: string;
+    includesOptionalStems: boolean;
+    intendedProjectId?: string | null;
+    intendedVideoAssetId?: string | null;
+    durationMs: number;
+    sampleRateHz: number;
+    channels: number;
+    loudnessLufs?: number | null;
+    truePeakDbfs?: number | null;
+    markerCount: number;
+    sectionCount: number;
+  };
+  validationChecks: Array<{
+    id: string;
+    passed: boolean;
+    summary: string;
+  }>;
 };
 
 export type LibraryScope =

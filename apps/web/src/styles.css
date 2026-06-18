@@ -213,6 +213,7 @@ h1 {
 
 .tts-studio-panel,
 .asset-library-panel,
+.export-workflow-panel,
 .voice-lab-panel,
 .sfx-studio-panel,
 .samples-studio-panel,
@@ -224,6 +225,7 @@ h1 {
 
 .tts-header,
 .library-header,
+.export-header,
 .voice-lab-header,
 .sfx-header,
 .samples-header {
@@ -235,6 +237,7 @@ h1 {
 
 .tts-header h2,
 .library-header h2,
+.export-header h2,
 .voice-lab-header h2,
 .sfx-header h2,
 .samples-header h2 {
@@ -320,8 +323,19 @@ h1 {
   background: #5f372f;
 }
 
+.export-action {
+  background: #565f35;
+  border-color: #48512b;
+}
+
+.export-action:not(:disabled):hover,
+.export-action:not(:disabled):focus-visible {
+  background: #48512b;
+}
+
 .tts-metrics,
 .library-metrics,
+.export-metrics,
 .voice-lab-metrics,
 .sfx-metrics,
 .samples-metrics {
@@ -332,6 +346,7 @@ h1 {
 
 .tts-metrics div,
 .library-metrics div,
+.export-metrics div,
 .voice-lab-metrics div,
 .sfx-metrics div,
 .samples-metrics div {
@@ -348,6 +363,7 @@ h1 {
 
 .tts-metrics strong,
 .library-metrics strong,
+.export-metrics strong,
 .voice-lab-metrics strong,
 .sfx-metrics strong,
 .samples-metrics strong {
@@ -359,6 +375,7 @@ h1 {
 
 .tts-metrics span,
 .library-metrics span,
+.export-metrics span,
 .voice-lab-metrics span,
 .sfx-metrics span,
 .samples-metrics span {
@@ -643,6 +660,82 @@ h1 {
 .secondary-action:focus-visible {
   border-color: #7c998f;
   outline: none;
+}
+
+.export-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.export-preset-grid,
+.export-detail,
+.sidecar-list {
+  display: grid;
+  gap: 10px;
+}
+
+.export-preset-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  color: #17342e;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.export-preset-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.export-preset-topline strong,
+.export-preset-topline span,
+.export-preset-card p,
+.sidecar-list strong,
+.sidecar-list small,
+.sidecar-list p {
+  overflow-wrap: anywhere;
+}
+
+.export-preset-topline span {
+  color: #5c665d;
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.export-preset-card p {
+  color: #4f6259;
+  line-height: 1.45;
+}
+
+.export-bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.sidecar-list article {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid #e4dfd4;
+}
+
+.sidecar-list article:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.sidecar-list small,
+.sidecar-list p {
+  color: #66726b;
 }
 
 .tts-layout,
@@ -1968,8 +2061,11 @@ h1 {
   .rights-review-grid,
   .library-layout,
   .library-bottom-grid,
+  .export-layout,
+  .export-bottom-grid,
   .voice-lab-layout,
   .voice-lab-metrics,
+  .export-metrics,
   .voice-mode-grid,
   .voice-review-grid,
   .tts-layout,
@@ -1979,6 +2075,7 @@ h1 {
 
   .tts-header,
   .library-header,
+  .export-header,
   .voice-lab-header,
   .sfx-header,
   .samples-header {

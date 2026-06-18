@@ -7,6 +7,8 @@ import {
   ClipboardCheck,
   Cpu,
   Disc3,
+  Download,
+  FileAudio,
   Gauge,
   HardDrive,
   Library,
@@ -26,6 +28,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fallbackOverview,
   fallbackAssetLibrary,
+  fallbackExportWorkflow,
   fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
@@ -38,6 +41,7 @@ import {
 import {
   loadAppOverview,
   loadAssetLibraryOverview,
+  loadExportWorkflowOverview,
   loadRightsSafetyOverview,
   loadReviewWorkspaceOverview,
   loadRuntimeOverview,
@@ -50,6 +54,7 @@ import {
 import type {
   AppOverview,
   AssetLibraryOverview,
+  ExportWorkflowOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -114,6 +119,9 @@ export function App() {
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
   const [assetLibrary, setAssetLibrary] =
     useState<AssetLibraryOverview>(fallbackAssetLibrary);
+  const [exportWorkflow, setExportWorkflow] = useState<ExportWorkflowOverview>(
+    fallbackExportWorkflow,
+  );
   const [ttsStudio, setTtsStudio] =
     useState<TtsStudioOverview>(fallbackTtsStudio);
   const [voiceLab, setVoiceLab] = useState<VoiceLabOverview>(fallbackVoiceLab);
@@ -147,6 +155,12 @@ export function App() {
     loadAssetLibraryOverview().then((nextAssetLibrary) => {
       if (active) {
         setAssetLibrary(nextAssetLibrary);
+      }
+    });
+
+    loadExportWorkflowOverview().then((nextExportWorkflow) => {
+      if (active) {
+        setExportWorkflow(nextExportWorkflow);
       }
     });
 
@@ -528,6 +542,189 @@ export function App() {
                     key={check.id}
                   >
                     <CircleCheck aria-hidden="true" size={16} />
+                    <span>{check.summary}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+        </section>
+
+        <section className="export-workflow-panel" aria-label="Export Workflow">
+          <div className="export-header">
+            <div>
+              <p className="eyebrow">Export</p>
+              <h2>Presets, stems, and handoff packages</h2>
+            </div>
+            <button
+              className="primary-action export-action"
+              disabled={!exportWorkflow.selectedExport.canExport}
+              title="Export selected composition"
+              type="button"
+            >
+              <Download aria-hidden="true" size={18} />
+              <span>
+                {exportWorkflow.selectedExport.canExport ? "Export" : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="export-metrics" aria-label="Export status">
+            <div>
+              <FileAudio aria-hidden="true" size={18} />
+              <strong>{overview.exportWorkflow.presetCount}</strong>
+              <span>presets</span>
+            </div>
+            <div>
+              <ShieldCheck aria-hidden="true" size={18} />
+              <strong>{overview.exportWorkflow.sidecarCount}</strong>
+              <span>sidecars</span>
+            </div>
+            <div>
+              <Boxes aria-hidden="true" size={18} />
+              <strong>{overview.exportWorkflow.readyTargetCount}</strong>
+              <span>targets ready</span>
+            </div>
+            <div>
+              <Save aria-hidden="true" size={18} />
+              <strong>{overview.exportWorkflow.selectedFormatCount}</strong>
+              <span>formats selected</span>
+            </div>
+          </div>
+
+          <div className="export-layout">
+            <div className="export-preset-grid" aria-label="Export presets">
+              {exportWorkflow.presets.map((preset) => (
+                <article className="export-preset-card" key={preset.preset.id}>
+                  <div className="export-preset-topline">
+                    <strong>{preset.preset.name}</strong>
+                    <span>{statusLabel(preset.preset.target)}</span>
+                  </div>
+                  <p>{preset.description}</p>
+                  <div className="asset-tag-row">
+                    {preset.formats.map((format) => (
+                      <span key={`${preset.preset.id}-${format}`}>
+                        {format}
+                      </span>
+                    ))}
+                    {preset.preset.includeStems ? <span>stems</span> : null}
+                    {preset.writesSidecar ? <span>sidecar</span> : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="export-detail" aria-label="Selected export detail">
+              <section className="tts-subpanel">
+                <div className="subpanel-heading">
+                  <h3>Selected export</h3>
+                  <span>
+                    {statusLabel(exportWorkflow.selectedExport.sourceKind)}
+                  </span>
+                </div>
+                <p>
+                  {exportWorkflow.selectedExport.presetId} /{" "}
+                  {exportWorkflow.selectedExport.sourceId}
+                </p>
+                <ol className="version-list">
+                  {exportWorkflow.selectedExport.outputPaths.map((path) => (
+                    <li key={path}>
+                      <CircleCheck aria-hidden="true" size={16} />
+                      <div>
+                        <strong>{path.split("/").pop()}</strong>
+                        <small>{path}</small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
+              <section className="tts-subpanel">
+                <div className="subpanel-heading">
+                  <h3>DAW bundle</h3>
+                  <span>{exportWorkflow.dawHandoff.stemKinds.length}</span>
+                </div>
+                <p>{exportWorkflow.dawHandoff.packagePath}</p>
+                <div className="asset-tag-row detail-tags">
+                  <span>zip bundle</span>
+                  <span>cue markers</span>
+                  <span>loop markers</span>
+                  <span>BPM/key</span>
+                  <span>lyrics</span>
+                </div>
+              </section>
+
+              <section className="tts-subpanel">
+                <div className="subpanel-heading">
+                  <h3>SceneWorks handoff</h3>
+                  <span>
+                    {formatDuration(
+                      exportWorkflow.sceneWorksHandoff.durationMs,
+                    )}
+                  </span>
+                </div>
+                <p>{exportWorkflow.sceneWorksHandoff.packagePath}</p>
+                <small>
+                  {exportWorkflow.sceneWorksHandoff.sampleRateHz} Hz /{" "}
+                  {exportWorkflow.sceneWorksHandoff.channels} channels /{" "}
+                  {exportWorkflow.sceneWorksHandoff.markerCount} marker
+                </small>
+              </section>
+            </div>
+          </div>
+
+          <div className="export-bottom-grid">
+            <section className="tts-subpanel" aria-label="Export targets">
+              <div className="subpanel-heading">
+                <h3>Targets</h3>
+                <span>{exportWorkflow.targets.length}</span>
+              </div>
+              <ol className="voice-checks">
+                {exportWorkflow.targets.map((target) => (
+                  <li
+                    className={target.ready ? "passed" : "failed"}
+                    key={target.target}
+                  >
+                    <CircleCheck aria-hidden="true" size={16} />
+                    <span>
+                      <strong>{target.label}</strong> {target.notes[0]}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Export sidecars">
+              <div className="subpanel-heading">
+                <h3>Sidecars</h3>
+                <span>{exportWorkflow.sidecars.length}</span>
+              </div>
+              <div className="sidecar-list">
+                {exportWorkflow.sidecars.map((sidecar) => (
+                  <article key={sidecar.id}>
+                    <strong>{sidecar.assetId}</strong>
+                    <small>
+                      {statusLabel(sidecar.target)} / {sidecar.eventCount}{" "}
+                      events
+                    </small>
+                    <p>{sidecar.path}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Export validation">
+              <div className="subpanel-heading">
+                <h3>Validation</h3>
+                <span>{exportWorkflow.validationChecks.length}</span>
+              </div>
+              <ol className="voice-checks">
+                {exportWorkflow.validationChecks.map((check) => (
+                  <li
+                    className={check.passed ? "passed" : "failed"}
+                    key={check.id}
+                  >
+                    <ClipboardCheck aria-hidden="true" size={16} />
                     <span>{check.summary}</span>
                   </li>
                 ))}

@@ -1,6 +1,7 @@
 use soundworks_core::{
-    AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview, SamplesStudioOverview,
-    SfxStudioOverview, SongStudioOverview, TtsStudioOverview, VoiceLabOverview,
+    AppOverview, ModelEvaluationCatalog, ProviderCatalog, ReviewWorkspaceOverview, RuntimeOverview,
+    SamplesStudioOverview, SfxStudioOverview, SongStudioOverview, TtsStudioOverview,
+    VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -48,6 +49,11 @@ fn get_song_studio_overview() -> SongStudioOverview {
     song_studio_overview()
 }
 
+#[tauri::command]
+fn get_review_workspace_overview() -> ReviewWorkspaceOverview {
+    review_workspace_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -84,6 +90,10 @@ pub fn song_studio_overview() -> SongStudioOverview {
     SongStudioOverview::reference().expect("reference Song Studio is valid")
 }
 
+pub fn review_workspace_overview() -> ReviewWorkspaceOverview {
+    ReviewWorkspaceOverview::reference().expect("reference Review workspace is valid")
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -96,7 +106,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_voice_lab_overview,
             get_sfx_studio_overview,
             get_samples_studio_overview,
-            get_song_studio_overview
+            get_song_studio_overview,
+            get_review_workspace_overview
         ])
 }
 
@@ -110,9 +121,9 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        app_overview, model_evaluation_catalog, provider_catalog, runtime_overview,
-        samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
-        voice_lab_overview,
+        app_overview, model_evaluation_catalog, provider_catalog, review_workspace_overview,
+        runtime_overview, samples_studio_overview, sfx_studio_overview, song_studio_overview,
+        tts_studio_overview, voice_lab_overview,
     };
 
     #[test]
@@ -208,5 +219,20 @@ mod tests {
         assert!(overview.submission.can_submit);
         assert_eq!(overview.saved_outputs.len(), 2);
         assert_eq!(overview.export_targets.len(), 3);
+    }
+
+    #[test]
+    fn review_workspace_command_returns_edit_contract() {
+        let overview = review_workspace_overview();
+
+        assert_eq!(overview.schema_version, 1);
+        assert_eq!(overview.assets.len(), 5);
+        assert_eq!(overview.edit_actions.len(), 8);
+        assert!(overview.edit_submission.can_save);
+        assert_eq!(
+            overview.edit_submission.saved_version.id,
+            "version-loop-001-b-review-edit"
+        );
+        assert!(overview.provenance.inspectable);
     }
 }

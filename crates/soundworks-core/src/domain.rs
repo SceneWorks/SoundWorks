@@ -493,9 +493,12 @@ pub enum PostProcessingOperation {
     Normalize,
     Trim,
     Fade,
+    RemoveSilence,
+    LoopCrossfade,
     Denoise,
     Master,
     ConvertFormat,
+    EditMetadata,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

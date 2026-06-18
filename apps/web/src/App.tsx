@@ -23,6 +23,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import {
   fallbackOverview,
+  fallbackReviewWorkspace,
   fallbackRuntime,
   fallbackSamplesStudio,
   fallbackSongStudio,
@@ -32,6 +33,7 @@ import {
 } from "./appData";
 import {
   loadAppOverview,
+  loadReviewWorkspaceOverview,
   loadRuntimeOverview,
   loadSamplesStudioOverview,
   loadSongStudioOverview,
@@ -41,6 +43,7 @@ import {
 } from "./tauri";
 import type {
   AppOverview,
+  ReviewWorkspaceOverview,
   RuntimeOverview,
   SamplesStudioOverview,
   SongStudioOverview,
@@ -56,7 +59,7 @@ const navItems = [
   { label: "Jobs", icon: Activity },
 ];
 
-const studioIcons = [Mic2, Radio, Waves, Boxes, Music2, Sparkles];
+const studioIcons = [Mic2, Radio, Waves, Boxes, Music2, ClipboardCheck, Sparkles];
 
 function workflowLabel(workflow: string) {
   return workflow
@@ -104,6 +107,8 @@ export function App() {
   );
   const [songStudio, setSongStudio] =
     useState<SongStudioOverview>(fallbackSongStudio);
+  const [reviewWorkspace, setReviewWorkspace] =
+    useState<ReviewWorkspaceOverview>(fallbackReviewWorkspace);
 
   useEffect(() => {
     let active = true;
@@ -147,6 +152,12 @@ export function App() {
     loadSongStudioOverview().then((nextSongStudio) => {
       if (active) {
         setSongStudio(nextSongStudio);
+      }
+    });
+
+    loadReviewWorkspaceOverview().then((nextReviewWorkspace) => {
+      if (active) {
+        setReviewWorkspace(nextReviewWorkspace);
       }
     });
 
@@ -1160,6 +1171,208 @@ export function App() {
                 <li className={check.status} key={check.id}>
                   <CircleCheck aria-hidden="true" size={16} />
                   <span>{check.summary}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="review-workspace-panel" aria-label="Waveform Review">
+          <div className="samples-header">
+            <div>
+              <p className="eyebrow">Waveform Review</p>
+              <h2>{reviewWorkspace.selectedAsset.asset.name}</h2>
+            </div>
+            <button
+              className="primary-action review-action"
+              disabled={!reviewWorkspace.editSubmission.canSave}
+              type="button"
+              title="Save edited audio version"
+            >
+              <Save aria-hidden="true" size={18} />
+              <span>
+                {reviewWorkspace.editSubmission.canSave ? "Save version" : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="samples-metrics" aria-label="Waveform review status">
+            <div>
+              <Library aria-hidden="true" size={18} />
+              <strong>{overview.reviewWorkspace.assetCount}</strong>
+              <span>assets</span>
+            </div>
+            <div>
+              <Waves aria-hidden="true" size={18} />
+              <strong>{overview.reviewWorkspace.previewableAssetCount}</strong>
+              <span>previewable</span>
+            </div>
+            <div>
+              <SlidersHorizontal aria-hidden="true" size={18} />
+              <strong>{overview.reviewWorkspace.editActionCount}</strong>
+              <span>edit actions</span>
+            </div>
+            <div>
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <strong>{overview.reviewWorkspace.comparisonCount}</strong>
+              <span>comparison</span>
+            </div>
+          </div>
+
+          <div className="review-layout">
+            <div className="review-main">
+              <section className="review-transport" aria-label="Waveform transport">
+                <div className="review-transport-topline">
+                  <button className="icon-control" type="button" title="Play or pause preview">
+                    <Play aria-hidden="true" size={18} />
+                  </button>
+                  <strong>
+                    {formatDuration(reviewWorkspace.transport.positionMs)} /{" "}
+                    {formatDuration(reviewWorkspace.transport.durationMs)}
+                  </strong>
+                  <span>{reviewWorkspace.transport.zoomPixelsPerSecond}px/s</span>
+                </div>
+                <div className="waveform-strip" aria-label="Cached waveform preview">
+                  {reviewWorkspace.waveform.peaks.map((peak, index) => (
+                    <span
+                      aria-hidden="true"
+                      className="waveform-bar"
+                      key={`${peak.min}-${peak.max}-${index}`}
+                      style={{ height: `${Math.max(20, peak.max * 86)}%` }}
+                    />
+                  ))}
+                </div>
+                <div className="transport-meta">
+                  <span>
+                    selection{" "}
+                    {formatDuration(reviewWorkspace.transport.selection?.startMs ?? 0)}-
+                    {formatDuration(reviewWorkspace.transport.selection?.endMs ?? 0)}
+                  </span>
+                  <span>
+                    loop{" "}
+                    {formatDuration(reviewWorkspace.transport.loopRegion?.startMs ?? 0)}-
+                    {formatDuration(reviewWorkspace.transport.loopRegion?.endMs ?? 0)}
+                  </span>
+                  <span>{reviewWorkspace.waveform.cachePath}</span>
+                </div>
+              </section>
+
+              <div className="review-asset-grid" aria-label="Reviewable assets">
+                {reviewWorkspace.assets.map((asset) => (
+                  <article
+                    className={
+                      asset.asset.id === reviewWorkspace.selectedAsset.asset.id
+                        ? "review-asset selected"
+                        : "review-asset"
+                    }
+                    key={asset.asset.id}
+                  >
+                    <div className="sfx-variant-title">
+                      <strong>{asset.asset.name}</strong>
+                      <span>{statusLabel(asset.asset.kind)}</span>
+                    </div>
+                    <small>
+                      {statusLabel(asset.sourceWorkflow)} / {asset.versions.length} version
+                    </small>
+                    <p>{asset.canPreview ? "waveform and spectrogram cached" : "preview pending"}</p>
+                  </article>
+                ))}
+              </div>
+
+              <div className="edit-action-grid" aria-label="Lightweight edit actions">
+                {reviewWorkspace.editActions.map((action) => (
+                  <button
+                    className={action.enabled ? "edit-action enabled" : "edit-action"}
+                    key={action.id}
+                    type="button"
+                    title={action.label}
+                  >
+                    <SlidersHorizontal aria-hidden="true" size={16} />
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="review-side">
+              <section className="tts-subpanel" aria-label="Version comparison">
+                <div className="subpanel-heading">
+                  <h3>Version comparison</h3>
+                  <span>{reviewWorkspace.versionComparison.mode}</span>
+                </div>
+                <div className="comparison-grid">
+                  {[reviewWorkspace.versionComparison.left, reviewWorkspace.versionComparison.right].map(
+                    (side) => (
+                      <article key={side.versionId}>
+                        <strong>{side.label}</strong>
+                        <small>{side.versionId}</small>
+                        <p>
+                          {formatDuration(side.durationMs)} / {side.loudnessLufs} LUFS /{" "}
+                          {side.truePeakDbfs} dBTP
+                        </p>
+                      </article>
+                    ),
+                  )}
+                </div>
+                <div className="comparison-metrics">
+                  <span>{reviewWorkspace.versionComparison.metrics.durationDeltaMs}ms</span>
+                  <span>
+                    {reviewWorkspace.versionComparison.metrics.loudnessDeltaLufs} LUFS
+                  </span>
+                  <span>
+                    diff {reviewWorkspace.versionComparison.metrics.waveformDifferenceScore}
+                  </span>
+                </div>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Edited version">
+                <div className="subpanel-heading">
+                  <h3>Edited version</h3>
+                  <span>{reviewWorkspace.editSubmission.job.status}</span>
+                </div>
+                <div className="output-card">
+                  <strong>{reviewWorkspace.editSubmission.savedVersion.id}</strong>
+                  <small>
+                    v{reviewWorkspace.editSubmission.savedVersion.versionIndex} /{" "}
+                    {reviewWorkspace.editSubmission.savedVersion.file.format}
+                  </small>
+                  <p>{reviewWorkspace.editSubmission.savedVersion.file.storagePath}</p>
+                </div>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Recipe provenance">
+                <div className="subpanel-heading">
+                  <h3>Provenance</h3>
+                  <span>{reviewWorkspace.provenance.inspectable ? "inspectable" : "blocked"}</span>
+                </div>
+                <div className="output-card">
+                  <strong>{reviewWorkspace.provenance.editRecipe.id}</strong>
+                  <small>
+                    {statusLabel(reviewWorkspace.provenance.originalRecipe.workflow)} to{" "}
+                    {statusLabel(reviewWorkspace.provenance.editRecipe.workflow)}
+                  </small>
+                  <p>{reviewWorkspace.provenance.sidecarPath}</p>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div className="samples-review-grid">
+            <ol className="voice-checks" aria-label="Review validation checks">
+              {reviewWorkspace.validationChecks.map((check) => (
+                <li className={check.status} key={check.id}>
+                  <CircleCheck aria-hidden="true" size={16} />
+                  <span>{check.summary}</span>
+                </li>
+              ))}
+            </ol>
+            <ol className="voice-checks" aria-label="Review shortcuts">
+              {reviewWorkspace.transport.keyboardShortcuts.map((shortcut) => (
+                <li className="ready" key={shortcut.id}>
+                  <ClipboardCheck aria-hidden="true" size={16} />
+                  <span>
+                    <strong>{shortcut.keys}</strong> {shortcut.action}
+                  </span>
                 </li>
               ))}
             </ol>

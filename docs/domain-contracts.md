@@ -14,6 +14,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - `crates/soundworks-core/src/sfx.rs` defines the SFX Studio workflow state for text-first sound effects and ambience generation, provider capability controls, variant comparison, loop inspection, post-processing, export state, scorecards, and saved outputs.
 - `crates/soundworks-core/src/samples.rs` defines the Samples + Loops workflow state for instrument one-shots, loop generation, BPM/key/bar controls, sample-pack organization, provider scorecards, post-processing, QA checks, and saved sample/loop outputs.
 - `crates/soundworks-core/src/songs.rs` defines the Song Studio workflow state for lyrics, song sections, style controls, vocal/instrumental generation, provider scorecards, arrangement previews, variants, stems, export targets, and saved song/music-clip outputs.
+- `crates/soundworks-core/src/review.rs` defines the Waveform Review workflow state for previewable generated assets, waveform/spectrogram caches, transport controls, lightweight edits, non-destructive edited versions, version comparison, and provenance inspection.
 
 ## Represented Concepts
 
@@ -30,6 +31,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - SFX Studio state: prompts, negative prompts, categories, tags, reference audio, provider-derived controls, SFX and ambience variants, selected saves, loop points, scorecards, post-processing actions, export state, and saved SFX/ambience outputs.
 - Samples + Loops state: instrument prompt controls, articulation, tempo/key/scale, bars/beats, one-shot and loop variants, sample-pack collections, favorites, duplicate/version handling, provider scorecards, QA checks, post-processing actions, and saved instrument sample/loop outputs.
 - Song Studio state: song drafts, lyrics, style tags, language, singer hints, reference audio, ordered sections, BPM/key/time-signature/duration controls, requested stems, provider scorecards, arrangement previews, song/music-clip variants, export targets, QA checks, and saved outputs.
+- Waveform Review state: all generated fixture asset kinds, waveform transport, seek/scrub/zoom/loop controls, keyboard shortcuts, cached waveform/spectrogram previews, lightweight edit action metadata, edited version saves, A/B version comparison, and recipe/provenance sidecars.
 
 ## Storage Contract
 
@@ -77,6 +79,12 @@ Structured metadata is intended for SQLite. The first schema contract covers:
 - `song_studio_submissions`
 - `song_studio_saved_outputs`
 - `song_studio_export_targets`
+- `review_workspace_assets`
+- `review_preview_caches`
+- `review_edit_actions`
+- `review_edit_submissions`
+- `review_version_comparisons`
+- `review_provenance_links`
 
 Media and derived files are stored outside SQLite. The path allocator emits version-specific paths:
 
@@ -104,3 +112,4 @@ Rust tests verify:
 - SFX Studio serialization, capability-driven controls, MOSS scorecard recommendation, multimodal boundary deferral, variant comparison, recipe provenance, saved SFX/ambience output linkage, and loop-point coverage.
 - Samples + Loops serialization, capability-driven controls, sample/loop scorecard readiness, separate sample and loop recipes, sample-pack collection membership, BPM/key metadata, loop points, and QA coverage for clipping/silence/loudness/duration/loop seams.
 - Song Studio serialization, capability-driven controls, complete-song scorecard readiness, lyrics/section/stem recipe preservation, saved song/music-clip output linkage, export target sidecars, and provider-gate QA coverage.
+- Waveform Review serialization, generated asset preview coverage, accessible transport controls, lightweight edit coverage, non-destructive edited-version saves, A/B comparison, and inspectable recipe/provenance linkage.

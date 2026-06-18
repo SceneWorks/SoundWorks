@@ -36,7 +36,7 @@ Confidence: medium. The map uses live Shortcut story coverage plus current high-
 | `sc-6154` | Instrument sample and loop generation | Samples, loops, tempo/key metadata |
 | `sc-6155` | Complete song generation | Song workflow, sections, stems, full mix |
 | `sc-6183` | Multimodal SFX and video-to-audio | Visual/video references, sync, semantic matching |
-| `sc-6156` | Waveform review, editing, version comparison | Review/edit surface |
+| `sc-6156` | Waveform review, editing, version comparison | Preview cache, edit-save versions, A/B comparison, provenance |
 | `sc-6190` | Multitrack composition editor and mixer | Composition timeline, mixer, stems |
 | `sc-6198` | Project/workspace model with global asset library | Project store and global library |
 | `sc-6160` | Audio asset library, tagging, collections, search | Library UI and metadata |

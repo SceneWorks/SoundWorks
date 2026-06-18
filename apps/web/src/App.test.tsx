@@ -38,7 +38,7 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: "Consented voice workflows" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Convert/i })).toBeEnabled();
+    expect(screen.getByTitle("Queue voice conversion")).toBeEnabled();
     expect(screen.getByText("Zero-shot clone")).toBeInTheDocument();
     expect(screen.getByText("Few-shot fine-tune")).toBeInTheDocument();
     expect(screen.getByText("Voice conversion")).toBeInTheDocument();
@@ -94,6 +94,21 @@ describe("App", () => {
     expect(
       screen.getByText(
         "Stable Audio 3 and ACE-Step need runnable Mac/Windows smoke evidence before product enablement.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Dusty trip-hop drums" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Save edited audio version")).toBeEnabled();
+    expect(screen.getByText("Trim selection")).toBeInTheDocument();
+    expect(screen.getByText("Loop crossfade")).toBeInTheDocument();
+    expect(screen.getByText("Version comparison")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("version-loop-001-b-review-edit").length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Edit recipe, source version, generated source recipe, and provenance sidecar remain inspectable.",
       ),
     ).toBeInTheDocument();
   });

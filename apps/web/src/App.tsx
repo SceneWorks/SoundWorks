@@ -23,6 +23,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import {
   fallbackOverview,
+  fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
   fallbackSamplesStudio,
@@ -33,6 +34,7 @@ import {
 } from "./appData";
 import {
   loadAppOverview,
+  loadRightsSafetyOverview,
   loadReviewWorkspaceOverview,
   loadRuntimeOverview,
   loadSamplesStudioOverview,
@@ -43,6 +45,7 @@ import {
 } from "./tauri";
 import type {
   AppOverview,
+  RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
   SamplesStudioOverview,
@@ -59,7 +62,15 @@ const navItems = [
   { label: "Jobs", icon: Activity },
 ];
 
-const studioIcons = [Mic2, Radio, Waves, Boxes, Music2, ClipboardCheck, Sparkles];
+const studioIcons = [
+  Mic2,
+  Radio,
+  Waves,
+  Boxes,
+  Music2,
+  ClipboardCheck,
+  Sparkles,
+];
 
 function workflowLabel(workflow: string) {
   return workflow
@@ -98,8 +109,7 @@ export function App() {
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
   const [ttsStudio, setTtsStudio] =
     useState<TtsStudioOverview>(fallbackTtsStudio);
-  const [voiceLab, setVoiceLab] =
-    useState<VoiceLabOverview>(fallbackVoiceLab);
+  const [voiceLab, setVoiceLab] = useState<VoiceLabOverview>(fallbackVoiceLab);
   const [sfxStudio, setSfxStudio] =
     useState<SfxStudioOverview>(fallbackSfxStudio);
   const [samplesStudio, setSamplesStudio] = useState<SamplesStudioOverview>(
@@ -109,6 +119,8 @@ export function App() {
     useState<SongStudioOverview>(fallbackSongStudio);
   const [reviewWorkspace, setReviewWorkspace] =
     useState<ReviewWorkspaceOverview>(fallbackReviewWorkspace);
+  const [rightsSafety, setRightsSafety] =
+    useState<RightsSafetyOverview>(fallbackRightsSafety);
 
   useEffect(() => {
     let active = true;
@@ -158,6 +170,12 @@ export function App() {
     loadReviewWorkspaceOverview().then((nextReviewWorkspace) => {
       if (active) {
         setReviewWorkspace(nextReviewWorkspace);
+      }
+    });
+
+    loadRightsSafetyOverview().then((nextRightsSafety) => {
+      if (active) {
+        setRightsSafety(nextRightsSafety);
       }
     });
 
@@ -464,12 +482,16 @@ export function App() {
           <div className="voice-lab-layout">
             <div className="voice-profile-column" aria-label="Voice profiles">
               {voiceLab.voiceProfiles.map((profile) => (
-                <article className="voice-profile-card" key={profile.profile.id}>
+                <article
+                  className="voice-profile-card"
+                  key={profile.profile.id}
+                >
                   <div className="voice-profile-topline">
                     <div>
                       <strong>{profile.profile.displayName}</strong>
                       <small>
-                        {profile.language} / {statusLabel(profile.profile.consent)}
+                        {profile.language} /{" "}
+                        {statusLabel(profile.profile.consent)}
                       </small>
                     </div>
                     <span
@@ -585,7 +607,9 @@ export function App() {
               title="Queue SFX generation"
             >
               <Play aria-hidden="true" size={18} />
-              <span>{sfxStudio.submission.canSubmit ? "Generate" : "Blocked"}</span>
+              <span>
+                {sfxStudio.submission.canSubmit ? "Generate" : "Blocked"}
+              </span>
             </button>
           </div>
 
@@ -608,7 +632,9 @@ export function App() {
             <div>
               <Gauge aria-hidden="true" size={18} />
               <strong>{formatDuration(sfxStudio.controls.durationMs)}</strong>
-              <span>{sfxStudio.controls.loopable ? "loopable" : "one-shot"}</span>
+              <span>
+                {sfxStudio.controls.loopable ? "loopable" : "one-shot"}
+              </span>
             </div>
           </div>
 
@@ -662,8 +688,8 @@ export function App() {
                       <span>{statusLabel(variant.assetKind)}</span>
                     </div>
                     <small>
-                      {formatDuration(variant.durationMs)} / {variant.loudnessLufs} LUFS /{" "}
-                      {variant.truePeakDbfs} dBTP
+                      {formatDuration(variant.durationMs)} /{" "}
+                      {variant.loudnessLufs} LUFS / {variant.truePeakDbfs} dBTP
                     </small>
                     <p>
                       {variant.loopPoints
@@ -681,7 +707,10 @@ export function App() {
             </div>
 
             <div className="sfx-side">
-              <section className="tts-subpanel" aria-label="SFX provider options">
+              <section
+                className="tts-subpanel"
+                aria-label="SFX provider options"
+              >
                 <div className="subpanel-heading">
                   <h3>Providers</h3>
                   <span>{sfxStudio.providerOptions.length}</span>
@@ -697,12 +726,17 @@ export function App() {
                       {statusLabel(provider.outputAssetKind)} /{" "}
                       {provider.sampleRateHz} Hz
                     </small>
-                    <p>{provider.supportedControls.map(statusLabel).join(" / ")}</p>
+                    <p>
+                      {provider.supportedControls.map(statusLabel).join(" / ")}
+                    </p>
                   </article>
                 ))}
               </section>
 
-              <section className="tts-subpanel" aria-label="SFX provider scorecards">
+              <section
+                className="tts-subpanel"
+                aria-label="SFX provider scorecards"
+              >
                 <div className="subpanel-heading">
                   <h3>Scorecards</h3>
                   <span>{sfxStudio.providerScorecards.length}</span>
@@ -748,7 +782,10 @@ export function App() {
           <div className="sfx-review-grid">
             <ol className="voice-checks" aria-label="SFX post-processing">
               {sfxStudio.postProcessingActions.map((action) => (
-                <li className={action.enabled ? "ready" : "warning"} key={action.id}>
+                <li
+                  className={action.enabled ? "ready" : "warning"}
+                  key={action.id}
+                >
                   <SlidersHorizontal aria-hidden="true" size={16} />
                   <span>{action.summary}</span>
                 </li>
@@ -765,7 +802,10 @@ export function App() {
           </div>
         </section>
 
-        <section className="samples-studio-panel" aria-label="Samples and Loops">
+        <section
+          className="samples-studio-panel"
+          aria-label="Samples and Loops"
+        >
           <div className="samples-header">
             <div>
               <p className="eyebrow">Samples + Loops</p>
@@ -823,7 +863,10 @@ export function App() {
                 </div>
               </section>
 
-              <div className="samples-control-grid" aria-label="Sample controls">
+              <div
+                className="samples-control-grid"
+                aria-label="Sample controls"
+              >
                 <div>
                   <strong>{samplesStudio.controls.bars} bars</strong>
                   <span>{samplesStudio.controls.beats}/4 grid</span>
@@ -842,7 +885,10 @@ export function App() {
                 </div>
               </div>
 
-              <div className="samples-variant-grid" aria-label="Sample variants">
+              <div
+                className="samples-variant-grid"
+                aria-label="Sample variants"
+              >
                 {samplesStudio.variants.map((variant) => (
                   <article
                     className={
@@ -893,12 +939,17 @@ export function App() {
                       {provider.sampleRateHz} Hz /{" "}
                       {provider.supportsLoopPoints ? "loop points" : "metadata"}
                     </small>
-                    <p>{provider.supportedControls.map(statusLabel).join(" / ")}</p>
+                    <p>
+                      {provider.supportedControls.map(statusLabel).join(" / ")}
+                    </p>
                   </article>
                 ))}
               </section>
 
-              <section className="tts-subpanel" aria-label="Sample provider scorecards">
+              <section
+                className="tts-subpanel"
+                aria-label="Sample provider scorecards"
+              >
                 <div className="subpanel-heading">
                   <h3>Scorecards</h3>
                   <span>{samplesStudio.providerScorecards.length}</span>
@@ -923,7 +974,10 @@ export function App() {
                 </div>
               </section>
 
-              <section className="tts-subpanel" aria-label="Sample pack outputs">
+              <section
+                className="tts-subpanel"
+                aria-label="Sample pack outputs"
+              >
                 <div className="subpanel-heading">
                   <h3>Pack</h3>
                   <span>{samplesStudio.pack.exportFormats.join(" / ")}</span>
@@ -947,7 +1001,10 @@ export function App() {
           <div className="samples-review-grid">
             <ol className="voice-checks" aria-label="Sample post-processing">
               {samplesStudio.postProcessingActions.map((action) => (
-                <li className={action.enabled ? "ready" : "warning"} key={action.id}>
+                <li
+                  className={action.enabled ? "ready" : "warning"}
+                  key={action.id}
+                >
                   <SlidersHorizontal aria-hidden="true" size={16} />
                   <span>{action.summary}</span>
                 </li>
@@ -964,7 +1021,10 @@ export function App() {
           </div>
         </section>
 
-        <section className="samples-studio-panel song-studio-panel" aria-label="Song Studio">
+        <section
+          className="samples-studio-panel song-studio-panel"
+          aria-label="Song Studio"
+        >
           <div className="samples-header">
             <div>
               <p className="eyebrow">Song Studio</p>
@@ -1028,7 +1088,9 @@ export function App() {
                   <span>{songStudio.controls.timeSignature}</span>
                 </div>
                 <div>
-                  <strong>{formatDuration(songStudio.arrangement.estimatedDurationMs)}</strong>
+                  <strong>
+                    {formatDuration(songStudio.arrangement.estimatedDurationMs)}
+                  </strong>
                   <span>arranged</span>
                 </div>
                 <div>
@@ -1043,7 +1105,10 @@ export function App() {
 
               <div className="samples-variant-grid" aria-label="Song sections">
                 {songStudio.arrangement.sections.map((section) => (
-                  <article className="samples-variant selected" key={section.id}>
+                  <article
+                    className="samples-variant selected"
+                    key={section.id}
+                  >
                     <div className="sfx-variant-title">
                       <strong>{section.label}</strong>
                       <span>{section.bars} bars</span>
@@ -1106,12 +1171,17 @@ export function App() {
                       {provider.supportsStems ? "stems" : "mixdown"} /{" "}
                       {provider.sampleRateHz} Hz
                     </small>
-                    <p>{provider.supportedControls.map(statusLabel).join(" / ")}</p>
+                    <p>
+                      {provider.supportedControls.map(statusLabel).join(" / ")}
+                    </p>
                   </article>
                 ))}
               </section>
 
-              <section className="tts-subpanel" aria-label="Song provider scorecards">
+              <section
+                className="tts-subpanel"
+                aria-label="Song provider scorecards"
+              >
                 <div className="subpanel-heading">
                   <h3>Scorecards</h3>
                   <span>{songStudio.providerScorecards.length}</span>
@@ -1177,7 +1247,10 @@ export function App() {
           </div>
         </section>
 
-        <section className="review-workspace-panel" aria-label="Waveform Review">
+        <section
+          className="review-workspace-panel"
+          aria-label="Waveform Review"
+        >
           <div className="samples-header">
             <div>
               <p className="eyebrow">Waveform Review</p>
@@ -1191,7 +1264,9 @@ export function App() {
             >
               <Save aria-hidden="true" size={18} />
               <span>
-                {reviewWorkspace.editSubmission.canSave ? "Save version" : "Blocked"}
+                {reviewWorkspace.editSubmission.canSave
+                  ? "Save version"
+                  : "Blocked"}
               </span>
             </button>
           </div>
@@ -1221,18 +1296,30 @@ export function App() {
 
           <div className="review-layout">
             <div className="review-main">
-              <section className="review-transport" aria-label="Waveform transport">
+              <section
+                className="review-transport"
+                aria-label="Waveform transport"
+              >
                 <div className="review-transport-topline">
-                  <button className="icon-control" type="button" title="Play or pause preview">
+                  <button
+                    className="icon-control"
+                    type="button"
+                    title="Play or pause preview"
+                  >
                     <Play aria-hidden="true" size={18} />
                   </button>
                   <strong>
                     {formatDuration(reviewWorkspace.transport.positionMs)} /{" "}
                     {formatDuration(reviewWorkspace.transport.durationMs)}
                   </strong>
-                  <span>{reviewWorkspace.transport.zoomPixelsPerSecond}px/s</span>
+                  <span>
+                    {reviewWorkspace.transport.zoomPixelsPerSecond}px/s
+                  </span>
                 </div>
-                <div className="waveform-strip" aria-label="Cached waveform preview">
+                <div
+                  className="waveform-strip"
+                  aria-label="Cached waveform preview"
+                >
                   {reviewWorkspace.waveform.peaks.map((peak, index) => (
                     <span
                       aria-hidden="true"
@@ -1245,13 +1332,23 @@ export function App() {
                 <div className="transport-meta">
                   <span>
                     selection{" "}
-                    {formatDuration(reviewWorkspace.transport.selection?.startMs ?? 0)}-
-                    {formatDuration(reviewWorkspace.transport.selection?.endMs ?? 0)}
+                    {formatDuration(
+                      reviewWorkspace.transport.selection?.startMs ?? 0,
+                    )}
+                    -
+                    {formatDuration(
+                      reviewWorkspace.transport.selection?.endMs ?? 0,
+                    )}
                   </span>
                   <span>
                     loop{" "}
-                    {formatDuration(reviewWorkspace.transport.loopRegion?.startMs ?? 0)}-
-                    {formatDuration(reviewWorkspace.transport.loopRegion?.endMs ?? 0)}
+                    {formatDuration(
+                      reviewWorkspace.transport.loopRegion?.startMs ?? 0,
+                    )}
+                    -
+                    {formatDuration(
+                      reviewWorkspace.transport.loopRegion?.endMs ?? 0,
+                    )}
                   </span>
                   <span>{reviewWorkspace.waveform.cachePath}</span>
                 </div>
@@ -1272,17 +1369,27 @@ export function App() {
                       <span>{statusLabel(asset.asset.kind)}</span>
                     </div>
                     <small>
-                      {statusLabel(asset.sourceWorkflow)} / {asset.versions.length} version
+                      {statusLabel(asset.sourceWorkflow)} /{" "}
+                      {asset.versions.length} version
                     </small>
-                    <p>{asset.canPreview ? "waveform and spectrogram cached" : "preview pending"}</p>
+                    <p>
+                      {asset.canPreview
+                        ? "waveform and spectrogram cached"
+                        : "preview pending"}
+                    </p>
                   </article>
                 ))}
               </div>
 
-              <div className="edit-action-grid" aria-label="Lightweight edit actions">
+              <div
+                className="edit-action-grid"
+                aria-label="Lightweight edit actions"
+              >
                 {reviewWorkspace.editActions.map((action) => (
                   <button
-                    className={action.enabled ? "edit-action enabled" : "edit-action"}
+                    className={
+                      action.enabled ? "edit-action enabled" : "edit-action"
+                    }
                     key={action.id}
                     type="button"
                     title={action.label}
@@ -1301,26 +1408,38 @@ export function App() {
                   <span>{reviewWorkspace.versionComparison.mode}</span>
                 </div>
                 <div className="comparison-grid">
-                  {[reviewWorkspace.versionComparison.left, reviewWorkspace.versionComparison.right].map(
-                    (side) => (
-                      <article key={side.versionId}>
-                        <strong>{side.label}</strong>
-                        <small>{side.versionId}</small>
-                        <p>
-                          {formatDuration(side.durationMs)} / {side.loudnessLufs} LUFS /{" "}
-                          {side.truePeakDbfs} dBTP
-                        </p>
-                      </article>
-                    ),
-                  )}
+                  {[
+                    reviewWorkspace.versionComparison.left,
+                    reviewWorkspace.versionComparison.right,
+                  ].map((side) => (
+                    <article key={side.versionId}>
+                      <strong>{side.label}</strong>
+                      <small>{side.versionId}</small>
+                      <p>
+                        {formatDuration(side.durationMs)} / {side.loudnessLufs}{" "}
+                        LUFS / {side.truePeakDbfs} dBTP
+                      </p>
+                    </article>
+                  ))}
                 </div>
                 <div className="comparison-metrics">
-                  <span>{reviewWorkspace.versionComparison.metrics.durationDeltaMs}ms</span>
                   <span>
-                    {reviewWorkspace.versionComparison.metrics.loudnessDeltaLufs} LUFS
+                    {reviewWorkspace.versionComparison.metrics.durationDeltaMs}
+                    ms
                   </span>
                   <span>
-                    diff {reviewWorkspace.versionComparison.metrics.waveformDifferenceScore}
+                    {
+                      reviewWorkspace.versionComparison.metrics
+                        .loudnessDeltaLufs
+                    }{" "}
+                    LUFS
+                  </span>
+                  <span>
+                    diff{" "}
+                    {
+                      reviewWorkspace.versionComparison.metrics
+                        .waveformDifferenceScore
+                    }
                   </span>
                 </div>
               </section>
@@ -1331,25 +1450,41 @@ export function App() {
                   <span>{reviewWorkspace.editSubmission.job.status}</span>
                 </div>
                 <div className="output-card">
-                  <strong>{reviewWorkspace.editSubmission.savedVersion.id}</strong>
+                  <strong>
+                    {reviewWorkspace.editSubmission.savedVersion.id}
+                  </strong>
                   <small>
-                    v{reviewWorkspace.editSubmission.savedVersion.versionIndex} /{" "}
-                    {reviewWorkspace.editSubmission.savedVersion.file.format}
+                    v{reviewWorkspace.editSubmission.savedVersion.versionIndex}{" "}
+                    / {reviewWorkspace.editSubmission.savedVersion.file.format}
                   </small>
-                  <p>{reviewWorkspace.editSubmission.savedVersion.file.storagePath}</p>
+                  <p>
+                    {
+                      reviewWorkspace.editSubmission.savedVersion.file
+                        .storagePath
+                    }
+                  </p>
                 </div>
               </section>
 
               <section className="tts-subpanel" aria-label="Recipe provenance">
                 <div className="subpanel-heading">
                   <h3>Provenance</h3>
-                  <span>{reviewWorkspace.provenance.inspectable ? "inspectable" : "blocked"}</span>
+                  <span>
+                    {reviewWorkspace.provenance.inspectable
+                      ? "inspectable"
+                      : "blocked"}
+                  </span>
                 </div>
                 <div className="output-card">
                   <strong>{reviewWorkspace.provenance.editRecipe.id}</strong>
                   <small>
-                    {statusLabel(reviewWorkspace.provenance.originalRecipe.workflow)} to{" "}
-                    {statusLabel(reviewWorkspace.provenance.editRecipe.workflow)}
+                    {statusLabel(
+                      reviewWorkspace.provenance.originalRecipe.workflow,
+                    )}{" "}
+                    to{" "}
+                    {statusLabel(
+                      reviewWorkspace.provenance.editRecipe.workflow,
+                    )}
                   </small>
                   <p>{reviewWorkspace.provenance.sidecarPath}</p>
                 </div>
@@ -1373,6 +1508,177 @@ export function App() {
                   <span>
                     <strong>{shortcut.keys}</strong> {shortcut.action}
                   </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="rights-safety-panel" aria-label="Rights and Safety">
+          <div className="samples-header">
+            <div>
+              <p className="eyebrow">Rights + Safety</p>
+              <h2>{rightsSafety.policy.name}</h2>
+            </div>
+            <button
+              className="primary-action safety-action"
+              disabled={!overview.rightsSafety.canExportCommercial}
+              type="button"
+              title="Commercial export gate"
+            >
+              <ShieldCheck aria-hidden="true" size={18} />
+              <span>
+                {overview.rightsSafety.canExportCommercial
+                  ? "Export"
+                  : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="samples-metrics" aria-label="Rights workflow status">
+            <div>
+              <ShieldCheck aria-hidden="true" size={18} />
+              <strong>{overview.rightsSafety.blockedConsentCount}</strong>
+              <span>consent blocks</span>
+            </div>
+            <div>
+              <CircleAlert aria-hidden="true" size={18} />
+              <strong>{overview.rightsSafety.blockedModelDecisionCount}</strong>
+              <span>model blocks</span>
+            </div>
+            <div>
+              <Save aria-hidden="true" size={18} />
+              <strong>{overview.rightsSafety.sidecarCount}</strong>
+              <span>sidecars</span>
+            </div>
+            <div>
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <strong>{overview.rightsSafety.disclosureCount}</strong>
+              <span>disclosures</span>
+            </div>
+          </div>
+
+          <div className="rights-layout">
+            <div className="rights-main">
+              <section className="tts-subpanel" aria-label="Consent checks">
+                <div className="subpanel-heading">
+                  <h3>Consent</h3>
+                  <span>{rightsSafety.consentChecks.length}</span>
+                </div>
+                <div className="rights-card-grid">
+                  {rightsSafety.consentChecks.map((check) => (
+                    <article
+                      className={`rights-card ${check.decision}`}
+                      key={check.id}
+                    >
+                      <div className="rights-card-title">
+                        <strong>{statusLabel(check.workflow)}</strong>
+                        <span>{statusLabel(check.decision)}</span>
+                      </div>
+                      <small>
+                        {check.voiceProfileId} /{" "}
+                        {statusLabel(check.consentStatus)}
+                      </small>
+                      <p>{check.summary}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section
+                className="tts-subpanel"
+                aria-label="Model export decisions"
+              >
+                <div className="subpanel-heading">
+                  <h3>Model export gates</h3>
+                  <span>{rightsSafety.modelUseDecisions.length}</span>
+                </div>
+                <div className="rights-card-grid model-gate-grid">
+                  {rightsSafety.modelUseDecisions.map((decision) => (
+                    <article
+                      className={`rights-card ${decision.decision}`}
+                      key={decision.candidateId}
+                    >
+                      <div className="rights-card-title">
+                        <strong>{decision.name}</strong>
+                        <span>{statusLabel(decision.decision)}</span>
+                      </div>
+                      <small>
+                        {statusLabel(decision.commercialUse)} /{" "}
+                        {statusLabel(decision.productEligibility)}
+                      </small>
+                      <p>{decision.reasons[0]}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <div className="rights-side">
+              <section
+                className="tts-subpanel"
+                aria-label="Export provenance sidecars"
+              >
+                <div className="subpanel-heading">
+                  <h3>Sidecars</h3>
+                  <span>
+                    {statusLabel(rightsSafety.policy.watermarkPolicy)}
+                  </span>
+                </div>
+                {rightsSafety.exportSidecars.map((sidecar) => (
+                  <div className="output-card" key={sidecar.id}>
+                    <strong>{sidecar.assetId}</strong>
+                    <small>
+                      {statusLabel(sidecar.target)} /{" "}
+                      {statusLabel(sidecar.watermark)}
+                    </small>
+                    <p>{sidecar.path}</p>
+                  </div>
+                ))}
+              </section>
+
+              <section
+                className="tts-subpanel"
+                aria-label="Policy requirements"
+              >
+                <div className="subpanel-heading">
+                  <h3>Commercial export</h3>
+                  <span>
+                    {rightsSafety.policy.provenanceSidecarRequired
+                      ? "sidecar"
+                      : "manual"}
+                  </span>
+                </div>
+                <ol className="policy-list">
+                  {rightsSafety.policy.commercialExportRequires.map(
+                    (requirement) => (
+                      <li key={requirement}>
+                        <CircleCheck aria-hidden="true" size={16} />
+                        <span>{requirement}</span>
+                      </li>
+                    ),
+                  )}
+                </ol>
+              </section>
+            </div>
+          </div>
+
+          <div className="rights-review-grid">
+            <ol className="voice-checks" aria-label="Content policy gates">
+              {rightsSafety.contentPolicyGates.map((gate) => (
+                <li className={gate.status} key={gate.id}>
+                  <ShieldCheck aria-hidden="true" size={16} />
+                  <span>
+                    <strong>{statusLabel(gate.category)}</strong> {gate.summary}
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <ol className="voice-checks" aria-label="Rights validation checks">
+              {rightsSafety.validationChecks.map((check) => (
+                <li className={check.status} key={check.id}>
+                  <ClipboardCheck aria-hidden="true" size={16} />
+                  <span>{check.summary}</span>
                 </li>
               ))}
             </ol>

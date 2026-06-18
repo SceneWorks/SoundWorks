@@ -583,6 +583,70 @@ CREATE TABLE review_provenance_links (
 );
 ",
     },
+    SchemaMigration {
+        version: 12,
+        name: "rights_safety_workflow",
+        sql: "
+CREATE TABLE rights_consent_checks (
+  id TEXT PRIMARY KEY,
+  workflow TEXT NOT NULL,
+  voice_profile_id TEXT NOT NULL,
+  consent_status TEXT NOT NULL,
+  allowed_use TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  stored_metadata_json TEXT NOT NULL
+);
+CREATE TABLE rights_model_use_decisions (
+  candidate_id TEXT PRIMARY KEY REFERENCES model_evaluation_candidates(id),
+  requested_workflow TEXT NOT NULL,
+  commercial_export INTEGER NOT NULL,
+  license TEXT NOT NULL,
+  commercial_use TEXT NOT NULL,
+  product_eligibility TEXT NOT NULL,
+  runtime_path TEXT NOT NULL,
+  requires_python_runtime INTEGER NOT NULL,
+  decision TEXT NOT NULL,
+  reasons_json TEXT NOT NULL
+);
+CREATE TABLE rights_content_policy_gates (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  status TEXT NOT NULL,
+  applies_to_json TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  enforcement TEXT NOT NULL
+);
+CREATE TABLE rights_export_sidecars (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  asset_kind TEXT NOT NULL,
+  target TEXT NOT NULL,
+  path TEXT NOT NULL UNIQUE,
+  includes_recipe INTEGER NOT NULL,
+  includes_model INTEGER NOT NULL,
+  includes_source_media INTEGER NOT NULL,
+  includes_rights INTEGER NOT NULL,
+  includes_edit_chain INTEGER NOT NULL,
+  disclosure_required INTEGER NOT NULL,
+  watermark TEXT NOT NULL,
+  rights_json TEXT NOT NULL,
+  provenance_json TEXT NOT NULL
+);
+CREATE TABLE rights_disclosure_checks (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  required INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  export_targets_json TEXT NOT NULL
+);
+CREATE TABLE rights_validation_checks (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  summary TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

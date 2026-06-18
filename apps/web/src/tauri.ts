@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   fallbackOverview,
+  fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
   fallbackSamplesStudio,
@@ -11,6 +12,7 @@ import {
 } from "./appData";
 import type {
   AppOverview,
+  RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
   SamplesStudioOverview,
@@ -78,8 +80,18 @@ export async function loadSongStudioOverview(): Promise<SongStudioOverview> {
 
 export async function loadReviewWorkspaceOverview(): Promise<ReviewWorkspaceOverview> {
   try {
-    return await invoke<ReviewWorkspaceOverview>("get_review_workspace_overview");
+    return await invoke<ReviewWorkspaceOverview>(
+      "get_review_workspace_overview",
+    );
   } catch {
     return fallbackReviewWorkspace;
+  }
+}
+
+export async function loadRightsSafetyOverview(): Promise<RightsSafetyOverview> {
+  try {
+    return await invoke<RightsSafetyOverview>("get_rights_safety_overview");
+  } catch {
+    return fallbackRightsSafety;
   }
 }

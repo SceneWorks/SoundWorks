@@ -49,7 +49,9 @@ describe("App", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Score as speech-to-speech voice conversion, not text-to-speech."),
+      screen.getByText(
+        "Score as speech-to-speech voice conversion, not text-to-speech.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Foley Impact" }),
@@ -73,7 +75,9 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByTitle("Queue sample and loop generation")).toBeEnabled();
     expect(screen.getAllByText("Bass pluck A1").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Four-bar chase bassline").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Four-bar chase bassline").length,
+    ).toBeGreaterThan(0);
     expect(screen.getAllByText("ACE-Step 1.5").length).toBeGreaterThan(0);
     expect(
       screen.getByText(
@@ -85,12 +89,14 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByTitle("Queue song generation")).toBeEnabled();
     expect(screen.getByText("Verse 1")).toBeInTheDocument();
-    expect(screen.getAllByText("City Lights full mix").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("City Lights full mix").length).toBeGreaterThan(
+      0,
+    );
     expect(
       screen.getAllByText("City Lights instrumental pass").length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText("Stable Audio 3")).toBeInTheDocument();
-    expect(screen.getByText("DiffRhythm 2")).toBeInTheDocument();
+    expect(screen.getAllByText("Stable Audio 3").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("DiffRhythm 2").length).toBeGreaterThan(0);
     expect(
       screen.getByText(
         "Stable Audio 3 and ACE-Step need runnable Mac/Windows smoke evidence before product enablement.",
@@ -109,6 +115,26 @@ describe("App", () => {
     expect(
       screen.getByText(
         "Edit recipe, source version, generated source recipe, and provenance sidecar remain inspectable.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "SoundWorks launch rights policy" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Commercial export gate")).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Guest voice conversion is blocked until the speaker consent record is completed.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("ChatTTS")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Noncommercial model terms block commercial SoundWorks export.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Export sidecars include recipe, model, source media, rights, disclosure, and edit-chain fields.",
       ),
     ).toBeInTheDocument();
   });

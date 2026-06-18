@@ -5,6 +5,7 @@ pub mod evaluation;
 pub mod fixtures;
 pub mod manifests;
 pub mod review;
+pub mod rights;
 pub mod runtime;
 pub mod samples;
 pub mod sfx;
@@ -18,6 +19,7 @@ pub use evaluation::*;
 pub use fixtures::*;
 pub use manifests::*;
 pub use review::*;
+pub use rights::*;
 pub use runtime::*;
 pub use samples::*;
 pub use sfx::*;
@@ -41,6 +43,7 @@ pub struct AppOverview {
     pub samples_studio: SamplesStudioSummary,
     pub song_studio: SongStudioSummary,
     pub review_workspace: ReviewWorkspaceSummary,
+    pub rights_safety: RightsSafetySummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,6 +181,22 @@ pub struct ReviewWorkspaceSummary {
     pub source_asset_kinds: Vec<AudioAssetKind>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RightsSafetySummary {
+    pub schema_version: u32,
+    pub consent_check_count: usize,
+    pub blocked_consent_count: usize,
+    pub model_decision_count: usize,
+    pub blocked_model_decision_count: usize,
+    pub policy_gate_count: usize,
+    pub blocked_gate_count: usize,
+    pub sidecar_count: usize,
+    pub disclosure_count: usize,
+    pub can_export_commercial: bool,
+    pub watermark_policy: WatermarkPolicy,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandDirection {
@@ -238,6 +257,7 @@ impl AppOverview {
                 StudioSurface::scaffolded("loops", "Samples + Loops", "/studios/loops"),
                 StudioSurface::scaffolded("songs", "Song Studio", "/studios/songs"),
                 StudioSurface::scaffolded("review", "Waveform Review", "/review"),
+                StudioSurface::scaffolded("rights-safety", "Rights + Safety", "/rights"),
                 StudioSurface::planned(
                     "video-to-audio",
                     "Video to Audio",
@@ -315,6 +335,13 @@ impl AppOverview {
                         "Load waveform review transport, preview caches, lightweight edit actions, non-destructive edited versions, comparison state, and recipe provenance."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_rights_safety_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load rights, consent, model-license, disclosure, watermark, and export provenance policy gates."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
@@ -336,6 +363,7 @@ impl AppOverview {
             review_workspace: ReviewWorkspaceSummary::from_overview(
                 &ReviewWorkspaceOverview::reference().expect("reference Review workspace is valid"),
             ),
+            rights_safety: RightsSafetySummary::from_overview(&RightsSafetyOverview::reference()),
         }
     }
 }
@@ -478,6 +506,40 @@ impl ReviewWorkspaceSummary {
     }
 }
 
+impl RightsSafetySummary {
+    pub fn from_overview(overview: &RightsSafetyOverview) -> Self {
+        Self {
+            schema_version: overview.schema_version,
+            consent_check_count: overview.consent_checks.len(),
+            blocked_consent_count: overview
+                .consent_checks
+                .iter()
+                .filter(|check| check.decision == PolicyDecision::Blocked)
+                .count(),
+            model_decision_count: overview.model_use_decisions.len(),
+            blocked_model_decision_count: overview
+                .model_use_decisions
+                .iter()
+                .filter(|decision| decision.decision == PolicyDecision::Blocked)
+                .count(),
+            policy_gate_count: overview.content_policy_gates.len(),
+            blocked_gate_count: overview
+                .content_policy_gates
+                .iter()
+                .filter(|gate| gate.status == PolicyGateStatus::Blocked)
+                .count(),
+            sidecar_count: overview.export_sidecars.len(),
+            disclosure_count: overview
+                .disclosure_checks
+                .iter()
+                .filter(|check| check.required)
+                .count(),
+            can_export_commercial: overview.can_export_commercial(),
+            watermark_policy: overview.policy.watermark_policy,
+        }
+    }
+}
+
 impl ProviderCatalogOverview {
     pub fn from_catalog(catalog: &ProviderCatalog) -> Self {
         Self {
@@ -547,6 +609,7 @@ mod tests {
                 "loops",
                 "songs",
                 "review",
+                "rights-safety",
                 "video-to-audio"
             ]
         );

@@ -1,5 +1,6 @@
 import type {
   AppOverview,
+  RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
   SamplesStudioOverview,
@@ -307,7 +308,26 @@ export const fallbackOverview: AppOverview = {
     canSaveEdit: true,
     activeAssetId: "asset-loop-001",
     editedVersionId: "version-loop-001-b-review-edit",
-    sourceAssetKinds: ["instrument-sample", "loop", "sfx", "song", "voice-clip"],
+    sourceAssetKinds: [
+      "instrument-sample",
+      "loop",
+      "sfx",
+      "song",
+      "voice-clip",
+    ],
+  },
+  rightsSafety: {
+    schemaVersion: 1,
+    consentCheckCount: 3,
+    blockedConsentCount: 2,
+    modelDecisionCount: 4,
+    blockedModelDecisionCount: 2,
+    policyGateCount: 5,
+    blockedGateCount: 2,
+    sidecarCount: 2,
+    disclosureCount: 2,
+    canExportCommercial: false,
+    watermarkPolicy: "advisory-until-provider-support",
   },
 };
 
@@ -370,9 +390,7 @@ function reviewVersion(
       bpm: kind === "loops" ? 86 : null,
       musicalKey: kind === "songs" ? "A major" : null,
       loopPoints:
-        kind === "loops"
-          ? { startSample: 0, endSample: 492288 }
-          : null,
+        kind === "loops" ? { startSample: 0, endSample: 492288 } : null,
     },
     createdBy:
       index === 1
@@ -417,7 +435,10 @@ const reviewLoopAsset = {
     "version-loop-001-b-review-edit",
   ),
   versionIds: ["version-loop-001-a", "version-loop-001-b-review-edit"],
-  provenanceIds: ["provenance-asset-loop-001", "provenance-review-edit-loop-001"],
+  provenanceIds: [
+    "provenance-asset-loop-001",
+    "provenance-review-edit-loop-001",
+  ],
 };
 const reviewSongAsset = reviewAsset(
   "asset-song-001",
@@ -445,7 +466,12 @@ export const fallbackReviewWorkspace: ReviewWorkspaceOverview = {
     {
       asset: reviewVoiceAsset,
       versions: [
-        reviewVersion("asset-voice-001", "version-voice-001-a", "voice-clips", 4200),
+        reviewVersion(
+          "asset-voice-001",
+          "version-voice-001-a",
+          "voice-clips",
+          4200,
+        ),
       ],
       sourceWorkflow: "tts",
       canPreview: true,
@@ -453,7 +479,9 @@ export const fallbackReviewWorkspace: ReviewWorkspaceOverview = {
     },
     {
       asset: reviewSfxAsset,
-      versions: [reviewVersion("asset-sfx-001", "version-sfx-001-a", "sfx", 1800)],
+      versions: [
+        reviewVersion("asset-sfx-001", "version-sfx-001-a", "sfx", 1800),
+      ],
       sourceWorkflow: "sfx",
       canPreview: true,
       previewStatus: "ready",
@@ -481,7 +509,9 @@ export const fallbackReviewWorkspace: ReviewWorkspaceOverview = {
     },
     {
       asset: reviewSongAsset,
-      versions: [reviewVersion("asset-song-001", "version-song-001-a", "songs", 132000)],
+      versions: [
+        reviewVersion("asset-song-001", "version-song-001-a", "songs", 132000),
+      ],
       sourceWorkflow: "song",
       canPreview: true,
       previewStatus: "ready",
@@ -660,7 +690,10 @@ export const fallbackReviewWorkspace: ReviewWorkspaceOverview = {
     },
     sourceVersionId: "version-loop-001-a",
     editedVersionId: "version-loop-001-b-review-edit",
-    provenanceIds: ["provenance-asset-loop-001", "provenance-review-edit-loop-001"],
+    provenanceIds: [
+      "provenance-asset-loop-001",
+      "provenance-review-edit-loop-001",
+    ],
     sidecarPath:
       "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-b-review-edit/metadata/recipe-provenance.json",
   },
@@ -688,6 +721,354 @@ export const fallbackReviewWorkspace: ReviewWorkspaceOverview = {
       status: "passed",
       summary:
         "Edit recipe, source version, generated source recipe, and provenance sidecar remain inspectable.",
+    },
+  ],
+};
+
+const consentRights = {
+  licenseStatus: "user-owned",
+  commercialUse: "allowed",
+  voiceConsent: "explicit-consent-recorded",
+  aiDisclosureRequired: true,
+  watermark: "sidecar-only",
+  referenceMediaOwnership: "speaker-signed profile release",
+} as const;
+
+const blockedVoiceRights = {
+  licenseStatus: "restricted",
+  commercialUse: "disallowed",
+  voiceConsent: "prohibited",
+  aiDisclosureRequired: true,
+  watermark: "unsupported",
+  referenceMediaOwnership: "unauthorized identity reference",
+} as const;
+
+export const fallbackRightsSafety: RightsSafetyOverview = {
+  schemaVersion: 1,
+  policy: {
+    name: "SoundWorks launch rights policy",
+    voiceConsentRequiredFor: [
+      "voice-clone",
+      "voice-conversion",
+      "few-shot-fine-tune",
+    ],
+    commercialExportRequires: [
+      "explicit voice consent when voice material is used",
+      "commercial-use-allowed or provider-terms-reviewed model license",
+      "provenance sidecar with model, prompt, source media, recipe, and edit chain",
+      "AI disclosure flag when generated or AI-edited audio leaves SoundWorks",
+    ],
+    blockedPromptCategories: [
+      "public-figure-voice-clone",
+      "unauthorized-voice-reference",
+      "noncommercial-model-commercial-export",
+    ],
+    warningPromptCategories: [
+      "artist-style-imitation",
+      "copyrighted-lyrics",
+      "watermark-unavailable",
+    ],
+    watermarkPolicy: "advisory-until-provider-support",
+    provenanceSidecarRequired: true,
+  },
+  consentChecks: [
+    {
+      id: "consent.voice-clone.narrator",
+      workflow: "voice-clone",
+      voiceProfileId: "voice-profile-narrator",
+      consentStatus: "explicit-consent-recorded",
+      allowedUse: "commercial voice clone and conversion",
+      decision: "allowed",
+      summary:
+        "Narrator profile can queue clone, fine-tune, and conversion workflows because explicit consent metadata is stored.",
+      storedMetadata: consentRights,
+    },
+    {
+      id: "consent.voice-conversion.guest",
+      workflow: "voice-conversion",
+      voiceProfileId: "voice-profile-guest-review",
+      consentStatus: "requires-review",
+      allowedUse: "review-only voice conversion",
+      decision: "blocked",
+      summary:
+        "Guest voice conversion is blocked until the speaker consent record is completed.",
+      storedMetadata: {
+        ...blockedVoiceRights,
+        licenseStatus: "unknown",
+        commercialUse: "requires-review",
+        voiceConsent: "requires-review",
+        referenceMediaOwnership: "pending speaker attestation",
+      },
+    },
+    {
+      id: "consent.public-figure.clone",
+      workflow: "voice-clone",
+      voiceProfileId: "voice-profile-public-figure-blocked",
+      consentStatus: "prohibited",
+      allowedUse: "none",
+      decision: "blocked",
+      summary:
+        "Public-figure or celebrity voice cloning is blocked rather than queued for review.",
+      storedMetadata: blockedVoiceRights,
+    },
+  ],
+  modelUseDecisions: [
+    {
+      candidateId: "kokoro-82m",
+      name: "Kokoro 82M",
+      requestedWorkflow: "Tts",
+      commercialExport: true,
+      license: "Apache-licensed weights",
+      commercialUse: "allowed",
+      productEligibility: "product-candidate",
+      runtimePath: "rust-native",
+      requiresPythonRuntime: false,
+      decision: "allowed",
+      reasons: ["License evidence allows commercial product consideration."],
+    },
+    {
+      candidateId: "chattts",
+      name: "ChatTTS",
+      requestedWorkflow: "Tts",
+      commercialExport: true,
+      license: "AGPLv3+ code / CC BY-NC 4.0 model",
+      commercialUse: "non-commercial",
+      productEligibility: "research-only",
+      runtimePath: "python-poc-only",
+      requiresPythonRuntime: true,
+      decision: "blocked",
+      reasons: [
+        "Noncommercial model terms block commercial SoundWorks export.",
+        "Research-only or blocked candidates cannot be product export choices.",
+        "Python runtime dependency is not allowed in shipped SoundWorks export paths.",
+      ],
+    },
+    {
+      candidateId: "diffrhythm-2",
+      name: "DiffRhythm 2",
+      requestedWorkflow: "Song",
+      commercialExport: true,
+      license: "Source-backed license review required",
+      commercialUse: "unknown",
+      productEligibility: "research-only",
+      runtimePath: "python-poc-only",
+      requiresPythonRuntime: true,
+      decision: "blocked",
+      reasons: [
+        "Unknown commercial-use terms block commercial export until reviewed.",
+        "Research-only or blocked candidates cannot be product export choices.",
+        "Python runtime dependency is not allowed in shipped SoundWorks export paths.",
+      ],
+    },
+    {
+      candidateId: "stable-audio-3",
+      name: "Stable Audio 3",
+      requestedWorkflow: "Song",
+      commercialExport: true,
+      license: "Stability AI Community License / Enterprise terms",
+      commercialUse: "provider-terms",
+      productEligibility: "needs-runtime-port",
+      runtimePath: "managed-api",
+      requiresPythonRuntime: false,
+      decision: "warn",
+      reasons: [
+        "Provider terms must be accepted and attached before commercial export.",
+      ],
+    },
+  ],
+  contentPolicyGates: [
+    {
+      id: "gate.voice.public-figure",
+      category: "public-figure-voice-clone",
+      status: "blocked",
+      appliesTo: ["voice-clone", "voice-conversion"],
+      summary:
+        "Public-figure or celebrity voice imitation cannot be submitted.",
+      enforcement:
+        "Disable generation and require a new, consented voice profile.",
+    },
+    {
+      id: "gate.voice.reference-rights",
+      category: "unauthorized-voice-reference",
+      status: "blocked",
+      appliesTo: ["source-voice", "reference-audio"],
+      summary:
+        "Voice references without owner attestation are blocked before queueing.",
+      enforcement:
+        "Require consent metadata on the voice profile and generated output.",
+    },
+    {
+      id: "gate.music.style-imitation",
+      category: "artist-style-imitation",
+      status: "warning",
+      appliesTo: ["song", "loop", "instrument-sample"],
+      summary:
+        "Artist/style imitation prompts require visible review and provenance notes.",
+      enforcement:
+        "Warn before generation and include the reviewed prompt in the sidecar.",
+    },
+    {
+      id: "gate.music.copyrighted-lyrics",
+      category: "copyrighted-lyrics",
+      status: "warning",
+      appliesTo: ["song"],
+      summary:
+        "Copyrighted or third-party lyrics require rights review before export.",
+      enforcement:
+        "Allow draft generation only; block commercial export until cleared.",
+    },
+    {
+      id: "gate.disclosure.ai-audio",
+      category: "ai-disclosure",
+      status: "passed",
+      appliesTo: ["export", "sidecar"],
+      summary:
+        "Generated and edited audio carries an AI disclosure flag in export metadata.",
+      enforcement:
+        "Write disclosureRequired=true into every generated export sidecar.",
+    },
+  ],
+  exportSidecars: [
+    {
+      id: "sidecar-voice-commercial-export",
+      assetId: "asset-voice-lab-conversion-reference",
+      assetKind: "voice-clip",
+      target: "audio-file",
+      path: "soundworks-library/projects/project-demo/voice-clips/asset-voice-lab-conversion-reference/version-voice-lab-conversion-reference-a/metadata/recipe-provenance.json",
+      includesRecipe: true,
+      includesModel: true,
+      includesSourceMedia: true,
+      includesRights: true,
+      includesEditChain: false,
+      disclosureRequired: true,
+      watermark: "sidecar-only",
+      rights: consentRights,
+      provenance: {
+        id: "provenance-voice-commercial-export",
+        subjectId: "asset-voice-lab-conversion-reference",
+        events: [
+          {
+            eventType: "rights-reviewed",
+            actor: "system",
+            summary:
+              "Explicit voice consent and commercial use rights checked.",
+            metadata: { author: "soundworks-policy" },
+          },
+          {
+            eventType: "generated",
+            actor: "system",
+            summary:
+              "RVC-style conversion recipe and source audio IDs attached.",
+            metadata: { author: "soundworks-policy" },
+          },
+          {
+            eventType: "exported",
+            actor: "system",
+            summary:
+              "WAV export wrote recipe, model, source media, rights, and disclosure metadata.",
+            metadata: { author: "soundworks-policy" },
+          },
+        ],
+      },
+    },
+    {
+      id: "sidecar-song-stem-export",
+      assetId: "asset-song-city-lights-full",
+      assetKind: "song",
+      target: "stem-folder",
+      path: "soundworks-library/projects/project-demo/songs/asset-song-city-lights-full/version-song-city-lights-full-a/metadata/recipe-provenance.json",
+      includesRecipe: true,
+      includesModel: true,
+      includesSourceMedia: true,
+      includesRights: true,
+      includesEditChain: true,
+      disclosureRequired: true,
+      watermark: "sidecar-only",
+      rights: {
+        licenseStatus: "provider-licensed",
+        commercialUse: "requires-review",
+        voiceConsent: "not-voice-material",
+        aiDisclosureRequired: true,
+        watermark: "sidecar-only",
+        referenceMediaOwnership:
+          "original prompt and lyrics drafted inside SoundWorks",
+      },
+      provenance: {
+        id: "provenance-song-stem-export",
+        subjectId: "asset-song-city-lights-full",
+        events: [
+          {
+            eventType: "rights-reviewed",
+            actor: "system",
+            summary:
+              "Provider terms and originality disclosure reviewed before export.",
+            metadata: { author: "soundworks-policy" },
+          },
+          {
+            eventType: "generated",
+            actor: "system",
+            summary:
+              "Song recipe, sections, lyrics, stems, and model ID attached.",
+            metadata: { author: "soundworks-policy" },
+          },
+          {
+            eventType: "edited",
+            actor: "system",
+            summary: "Review workspace normalization and trim chain attached.",
+            metadata: { author: "soundworks-policy" },
+          },
+          {
+            eventType: "exported",
+            actor: "system",
+            summary: "Stem folder export wrote rights and provenance sidecar.",
+            metadata: { author: "soundworks-policy" },
+          },
+        ],
+      },
+    },
+  ],
+  disclosureChecks: [
+    {
+      id: "disclosure.voice.generated",
+      assetId: "asset-voice-lab-conversion-reference",
+      required: true,
+      reason:
+        "Voice conversion output is generated from a source clip and consented target profile.",
+      exportTargets: ["audio-file", "sceneworks-video-track"],
+    },
+    {
+      id: "disclosure.song.generated",
+      assetId: "asset-song-city-lights-full",
+      required: true,
+      reason:
+        "Full-song and stem exports need AI-generation disclosure and model provenance.",
+      exportTargets: ["stem-folder", "daw-handoff"],
+    },
+  ],
+  validationChecks: [
+    {
+      id: "validation.voice-consent",
+      status: "passed",
+      summary:
+        "Voice clone and conversion requests have allow/block decisions derived from consent metadata.",
+    },
+    {
+      id: "validation.model-license",
+      status: "passed",
+      summary:
+        "Commercial export decisions include model license, product eligibility, and runtime dependency blockers.",
+    },
+    {
+      id: "validation.provenance-sidecar",
+      status: "passed",
+      summary:
+        "Export sidecars include recipe, model, source media, rights, disclosure, and edit-chain fields.",
+    },
+    {
+      id: "validation.watermark-policy",
+      status: "warning",
+      summary:
+        "Watermark embedding remains advisory until provider support is selected; sidecar disclosure is mandatory now.",
     },
   ],
 };
@@ -1250,7 +1631,9 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       runtimePath: "external-executable",
       commercialUse: "allowed",
       recommended: true,
-      blockers: ["Need no-Python product path and watermark/provenance validation"],
+      blockers: [
+        "Need no-Python product path and watermark/provenance validation",
+      ],
       notes: "Strong voice candidate for a packaged provider spike.",
     },
     {
@@ -1268,7 +1651,8 @@ export const fallbackVoiceLab: VoiceLabOverview = {
         "Need SoundWorks-owned realtime latency measurements",
         "Candidate is tracked for TTS only and is not a Voice Lab provider.",
       ],
-      notes: "Track separately from base Chatterbox because latency is the product question.",
+      notes:
+        "Track separately from base Chatterbox because latency is the product question.",
     },
     {
       candidateId: "gpt-sovits",
@@ -1282,7 +1666,8 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       commercialUse: "unknown",
       recommended: false,
       blockers: ["No product-safe no-Python runtime path yet"],
-      notes: "Useful zero/few-shot voice baseline; research-only until isolated runtime strategy exists.",
+      notes:
+        "Useful zero/few-shot voice baseline; research-only until isolated runtime strategy exists.",
     },
     {
       candidateId: "f5-tts",
@@ -1296,7 +1681,8 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       commercialUse: "non-commercial",
       recommended: false,
       blockers: ["Pretrained model non-commercial license blocks product use"],
-      notes: "Use only as a research comparison unless commercially trainable weights are produced.",
+      notes:
+        "Use only as a research comparison unless commercially trainable weights are produced.",
     },
     {
       candidateId: "cosyvoice-2",
@@ -1310,7 +1696,8 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       commercialUse: "unknown",
       recommended: false,
       blockers: ["License and packaged runtime path unresolved"],
-      notes: "Evaluate for quality and streaming behavior, not as first product provider.",
+      notes:
+        "Evaluate for quality and streaming behavior, not as first product provider.",
     },
     {
       candidateId: "openvoice-v2",
@@ -1324,7 +1711,8 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       commercialUse: "allowed",
       recommended: false,
       blockers: ["Need consent UX and executable packaging proof"],
-      notes: "Good voice-clone/conversion candidate once consent and packaging are in place.",
+      notes:
+        "Good voice-clone/conversion candidate once consent and packaging are in place.",
     },
     {
       candidateId: "rvc",
@@ -1337,7 +1725,9 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       runtimePath: "external-executable",
       commercialUse: "allowed",
       recommended: true,
-      blockers: ["Must be routed only as voice conversion and gated by consent"],
+      blockers: [
+        "Must be routed only as voice conversion and gated by consent",
+      ],
       notes: "Score as speech-to-speech voice conversion, not text-to-speech.",
     },
     {
@@ -1457,7 +1847,8 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       id: "qa.artifacts",
       label: "Artifacts",
       status: "needs-review",
-      target: "Review pitch tracking, breaths, and metallic artifacts before export.",
+      target:
+        "Review pitch tracking, breaths, and metallic artifacts before export.",
     },
   ],
 };
@@ -1787,7 +2178,10 @@ export const fallbackSfxStudio: SfxStudioOverview = {
     selectedVariantId: "sfx-variant-impact-tight",
     variantCount: 3,
     loopableVariantIds: ["sfx-variant-engine-room-bed"],
-    savedVariantIds: ["sfx-variant-impact-tight", "sfx-variant-engine-room-bed"],
+    savedVariantIds: [
+      "sfx-variant-impact-tight",
+      "sfx-variant-engine-room-bed",
+    ],
   },
   submission: {
     canSubmit: true,
@@ -1899,7 +2293,8 @@ export const fallbackSfxStudio: SfxStudioOverview = {
       id: "convert-export",
       operation: "convert-format",
       enabled: true,
-      summary: "Export WAV assets with metadata sidecars and recipe provenance.",
+      summary:
+        "Export WAV assets with metadata sidecars and recipe provenance.",
     },
   ],
   validationChecks: [
@@ -2051,7 +2446,8 @@ export const fallbackSamplesStudio: SamplesStudioOverview = {
         "Local product runtime path needs validation",
         "Candidate is tracked for adjacent audio lanes, not as a primary sample/loop provider.",
       ],
-      notes: "Useful comparison baseline, but not enough isolated-sample evidence yet.",
+      notes:
+        "Useful comparison baseline, but not enough isolated-sample evidence yet.",
     },
     {
       candidateId: "ace-step-1-5",
@@ -2093,7 +2489,8 @@ export const fallbackSamplesStudio: SamplesStudioOverview = {
       commercialUse: "unknown",
       recommended: false,
       blockers: ["No isolated sample evidence yet"],
-      notes: "Long-form song control is useful context, not the first sample-pack path.",
+      notes:
+        "Long-form song control is useful context, not the first sample-pack path.",
     },
     {
       candidateId: "stable-audio-open-1",
@@ -2209,9 +2606,18 @@ export const fallbackSamplesStudio: SamplesStudioOverview = {
       "sample-variant-bass-stab-c2",
       "loop-variant-bassline-120a",
     ],
-    favoriteVariantIds: ["sample-variant-bass-pluck-a", "loop-variant-bassline-120a"],
-    loopVariantIds: ["loop-variant-bassline-120a", "loop-variant-bassline-drier"],
-    oneShotVariantIds: ["sample-variant-bass-pluck-a", "sample-variant-bass-stab-c2"],
+    favoriteVariantIds: [
+      "sample-variant-bass-pluck-a",
+      "loop-variant-bassline-120a",
+    ],
+    loopVariantIds: [
+      "loop-variant-bassline-120a",
+      "loop-variant-bassline-drier",
+    ],
+    oneShotVariantIds: [
+      "sample-variant-bass-pluck-a",
+      "sample-variant-bass-stab-c2",
+    ],
     exportFormats: ["wav", "flac"],
   },
   submission: {
@@ -2370,7 +2776,8 @@ export const fallbackSamplesStudio: SamplesStudioOverview = {
       id: "pack-export",
       operation: "convert-format",
       enabled: true,
-      summary: "Export sample-pack WAV/FLAC files with BPM/key/provenance sidecars.",
+      summary:
+        "Export sample-pack WAV/FLAC files with BPM/key/provenance sidecars.",
     },
   ],
   qaChecks: [
@@ -2600,7 +3007,8 @@ export const fallbackSongStudio: SongStudioOverview = {
       commercialUse: "unknown",
       recommended: false,
       blockers: ["License and runtime isolation are unresolved"],
-      notes: "Promising full-song system for comparison, not a product candidate yet.",
+      notes:
+        "Promising full-song system for comparison, not a product candidate yet.",
     },
     {
       candidateId: "heartmula",
@@ -2684,7 +3092,14 @@ export const fallbackSongStudio: SongStudioOverview = {
       truePeakDbfs: -1,
       lyricAlignmentScore: 86,
       structureMatchScore: 91,
-      tags: ["120-bpm", "cinematic", "complete", "female-vocal", "song", "synth-pop"],
+      tags: [
+        "120-bpm",
+        "cinematic",
+        "complete",
+        "female-vocal",
+        "song",
+        "synth-pop",
+      ],
       selectedForSave: true,
     },
     {
@@ -2700,7 +3115,14 @@ export const fallbackSongStudio: SongStudioOverview = {
       truePeakDbfs: -1.4,
       lyricAlignmentScore: 0,
       structureMatchScore: 88,
-      tags: ["120-bpm", "alternate", "cinematic", "female-vocal", "instrumental", "synth-pop"],
+      tags: [
+        "120-bpm",
+        "alternate",
+        "cinematic",
+        "female-vocal",
+        "instrumental",
+        "synth-pop",
+      ],
       selectedForSave: true,
     },
   ],
@@ -2737,7 +3159,14 @@ export const fallbackSongStudio: SongStudioOverview = {
         id: "asset-song-variant-city-lights-main",
         kind: "song",
         name: "City Lights full mix",
-        tags: ["120-bpm", "cinematic", "complete", "female-vocal", "song", "synth-pop"],
+        tags: [
+          "120-bpm",
+          "cinematic",
+          "complete",
+          "female-vocal",
+          "song",
+          "synth-pop",
+        ],
         currentVersionId: "version-song-variant-city-lights-main-a",
       },
       version: {
@@ -2766,7 +3195,13 @@ export const fallbackSongStudio: SongStudioOverview = {
         id: "asset-song-variant-city-lights-instrumental",
         kind: "music-clip",
         name: "City Lights instrumental pass",
-        tags: ["120-bpm", "alternate", "cinematic", "instrumental", "synth-pop"],
+        tags: [
+          "120-bpm",
+          "alternate",
+          "cinematic",
+          "instrumental",
+          "synth-pop",
+        ],
         currentVersionId: "version-song-variant-city-lights-instrumental-a",
       },
       version: {

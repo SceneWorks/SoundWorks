@@ -1,7 +1,7 @@
 use soundworks_core::{
-    AppOverview, ModelEvaluationCatalog, ProviderCatalog, ReviewWorkspaceOverview, RuntimeOverview,
-    SamplesStudioOverview, SfxStudioOverview, SongStudioOverview, TtsStudioOverview,
-    VoiceLabOverview,
+    AppOverview, ModelEvaluationCatalog, ProviderCatalog, ReviewWorkspaceOverview,
+    RightsSafetyOverview, RuntimeOverview, SamplesStudioOverview, SfxStudioOverview,
+    SongStudioOverview, TtsStudioOverview, VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -54,6 +54,11 @@ fn get_review_workspace_overview() -> ReviewWorkspaceOverview {
     review_workspace_overview()
 }
 
+#[tauri::command]
+fn get_rights_safety_overview() -> RightsSafetyOverview {
+    rights_safety_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -94,6 +99,10 @@ pub fn review_workspace_overview() -> ReviewWorkspaceOverview {
     ReviewWorkspaceOverview::reference().expect("reference Review workspace is valid")
 }
 
+pub fn rights_safety_overview() -> RightsSafetyOverview {
+    RightsSafetyOverview::reference()
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -107,7 +116,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_sfx_studio_overview,
             get_samples_studio_overview,
             get_song_studio_overview,
-            get_review_workspace_overview
+            get_review_workspace_overview,
+            get_rights_safety_overview
         ])
 }
 
@@ -122,8 +132,8 @@ pub fn run() {
 mod tests {
     use super::{
         app_overview, model_evaluation_catalog, provider_catalog, review_workspace_overview,
-        runtime_overview, samples_studio_overview, sfx_studio_overview, song_studio_overview,
-        tts_studio_overview, voice_lab_overview,
+        rights_safety_overview, runtime_overview, samples_studio_overview, sfx_studio_overview,
+        song_studio_overview, tts_studio_overview, voice_lab_overview,
     };
 
     #[test]
@@ -234,5 +244,20 @@ mod tests {
             "version-loop-001-b-review-edit"
         );
         assert!(overview.provenance.inspectable);
+    }
+
+    #[test]
+    fn rights_safety_command_returns_policy_contract() {
+        let overview = rights_safety_overview();
+
+        assert_eq!(overview.schema_version, 1);
+        assert!(overview
+            .consent_checks
+            .iter()
+            .any(|check| check.decision == soundworks_core::PolicyDecision::Blocked));
+        assert!(overview
+            .export_sidecars
+            .iter()
+            .all(|sidecar| sidecar.includes_rights));
     }
 }

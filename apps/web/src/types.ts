@@ -33,6 +33,7 @@ export type AppOverview = {
   samplesStudio: SamplesStudioSummary;
   songStudio: SongStudioSummary;
   reviewWorkspace: ReviewWorkspaceSummary;
+  rightsSafety: RightsSafetySummary;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -229,6 +230,115 @@ export type ReviewWorkspaceSummary = {
   activeAssetId: string;
   editedVersionId: string;
   sourceAssetKinds: string[];
+};
+
+export type RightsSafetySummary = {
+  schemaVersion: number;
+  consentCheckCount: number;
+  blockedConsentCount: number;
+  modelDecisionCount: number;
+  blockedModelDecisionCount: number;
+  policyGateCount: number;
+  blockedGateCount: number;
+  sidecarCount: number;
+  disclosureCount: number;
+  canExportCommercial: boolean;
+  watermarkPolicy: string;
+};
+
+export type RightsSafetyOverview = {
+  schemaVersion: number;
+  policy: {
+    name: string;
+    voiceConsentRequiredFor: string[];
+    commercialExportRequires: string[];
+    blockedPromptCategories: string[];
+    warningPromptCategories: string[];
+    watermarkPolicy: string;
+    provenanceSidecarRequired: boolean;
+  };
+  consentChecks: Array<{
+    id: string;
+    workflow: string;
+    voiceProfileId: string;
+    consentStatus: VoiceConsentStatus;
+    allowedUse: string;
+    decision: "allowed" | "warn" | "blocked";
+    summary: string;
+    storedMetadata: {
+      licenseStatus: string;
+      commercialUse: string;
+      voiceConsent: VoiceConsentStatus;
+      aiDisclosureRequired: boolean;
+      watermark: string;
+      referenceMediaOwnership?: string | null;
+    };
+  }>;
+  modelUseDecisions: Array<{
+    candidateId: string;
+    name: string;
+    requestedWorkflow: string;
+    commercialExport: boolean;
+    license: string;
+    commercialUse: string;
+    productEligibility: string;
+    runtimePath: string;
+    requiresPythonRuntime: boolean;
+    decision: "allowed" | "warn" | "blocked";
+    reasons: string[];
+  }>;
+  contentPolicyGates: Array<{
+    id: string;
+    category: string;
+    status: "passed" | "warning" | "blocked";
+    appliesTo: string[];
+    summary: string;
+    enforcement: string;
+  }>;
+  exportSidecars: Array<{
+    id: string;
+    assetId: string;
+    assetKind: string;
+    target: string;
+    path: string;
+    includesRecipe: boolean;
+    includesModel: boolean;
+    includesSourceMedia: boolean;
+    includesRights: boolean;
+    includesEditChain: boolean;
+    disclosureRequired: boolean;
+    watermark: string;
+    rights: {
+      licenseStatus: string;
+      commercialUse: string;
+      voiceConsent: VoiceConsentStatus;
+      aiDisclosureRequired: boolean;
+      watermark: string;
+      referenceMediaOwnership?: string | null;
+    };
+    provenance: {
+      id: string;
+      subjectId: string;
+      events: Array<{
+        eventType: string;
+        actor: string;
+        summary: string;
+        metadata: Record<string, unknown>;
+      }>;
+    };
+  }>;
+  disclosureChecks: Array<{
+    id: string;
+    assetId: string;
+    required: boolean;
+    reason: string;
+    exportTargets: string[];
+  }>;
+  validationChecks: Array<{
+    id: string;
+    status: "passed" | "warning" | "failed";
+    summary: string;
+  }>;
 };
 
 export type ReviewAsset = {

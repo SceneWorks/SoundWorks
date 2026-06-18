@@ -187,6 +187,58 @@ CREATE TABLE model_evaluation_recommendations (
 );
 ",
     },
+    SchemaMigration {
+        version: 6,
+        name: "tts_studio_workflow",
+        sql: "
+CREATE TABLE tts_scripts (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  language TEXT NOT NULL,
+  pronunciation_dictionary_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE tts_script_segments (
+  id TEXT PRIMARY KEY,
+  script_id TEXT NOT NULL REFERENCES tts_scripts(id),
+  position INTEGER NOT NULL,
+  speaker_label TEXT NOT NULL,
+  text TEXT NOT NULL,
+  scene_label TEXT,
+  target_duration_ms INTEGER,
+  regenerate_policy TEXT NOT NULL,
+  UNIQUE(script_id, position)
+);
+CREATE TABLE tts_speakers (
+  script_id TEXT NOT NULL REFERENCES tts_scripts(id),
+  label TEXT NOT NULL,
+  role TEXT NOT NULL,
+  voice_profile_id TEXT NOT NULL REFERENCES voice_profiles(id),
+  language TEXT NOT NULL,
+  consent_required INTEGER NOT NULL,
+  consent_status TEXT NOT NULL,
+  PRIMARY KEY(script_id, label)
+);
+CREATE TABLE tts_generation_submissions (
+  id TEXT PRIMARY KEY,
+  script_id TEXT NOT NULL REFERENCES tts_scripts(id),
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  recipe_id TEXT NOT NULL REFERENCES generation_recipes(id),
+  job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+  can_submit INTEGER NOT NULL,
+  blocking_reasons_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL
+);
+CREATE TABLE tts_saved_outputs (
+  submission_id TEXT PRIMARY KEY REFERENCES tts_generation_submissions(id),
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  promoted_to_project_library INTEGER NOT NULL,
+  waveform_preview_ready INTEGER NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

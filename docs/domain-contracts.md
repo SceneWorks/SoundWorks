@@ -9,6 +9,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - `crates/soundworks-core/src/domain.rs` defines stable serializable domain types.
 - `crates/soundworks-core/src/storage.rs` defines schema migration contracts and collision-resistant media/preview/sidecar paths.
 - `crates/soundworks-core/src/fixtures.rs` defines canonical fixture outputs for TTS, SFX, instrument samples, loops, songs, projects, and timeline compositions.
+- `crates/soundworks-core/src/tts.rs` defines the Text-to-Speech Studio workflow state layered over the shared domain, recipe, provider, runtime, and storage contracts.
 
 ## Represented Concepts
 
@@ -20,6 +21,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - Rights and safety metadata for license state, commercial-use eligibility, voice consent, AI disclosure, watermarking, and ownership notes.
 - Source references, post-processing steps, prompt presets, voice profiles, collections, generation jobs, export presets, and provenance records.
 - Multitrack composition state: tracks, clips, source trims, fades, gain, pan, mute/solo, automation, markers, sections, and export history.
+- TTS Studio state: scripts, ordered speaker segments, pronunciation entries, voice-profile assignments, provider limitations, consent gates, chunking/stitching plans, submission previews, and saved voice-clip outputs.
 
 ## Storage Contract
 
@@ -35,6 +37,11 @@ Structured metadata is intended for SQLite. The first schema contract covers:
 - `collections`
 - `prompt_presets`
 - `storage_paths`
+- `tts_scripts`
+- `tts_script_segments`
+- `tts_speakers`
+- `tts_generation_submissions`
+- `tts_saved_outputs`
 
 Media and derived files are stored outside SQLite. The path allocator emits version-specific paths:
 
@@ -57,3 +64,4 @@ Rust tests verify:
 - Version-specific storage paths and preview/sidecar locations.
 - Rejection of unsafe storage path segments.
 - Migration coverage for the required domain tables.
+- TTS Studio serialization, consent/provider gating, generation-plan chunking, and saved voice-clip output linkage.

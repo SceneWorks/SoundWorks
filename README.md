@@ -2,7 +2,7 @@
 
 SoundWorks is the audio-first sister product to SceneWorks. It is planned as a local-first creative desktop app for generating, organizing, editing, and exporting AI-assisted audio assets and compositions.
 
-Current status: architecture baseline, initial Rust/React/Tauri scaffold, Rust audio domain/storage/recipe contracts, provider manifests, worker runtime/packaging contracts, and source-backed model evaluation scorecards. The implementation source of truth is Shortcut epic [6148](https://app.shortcut.com/trefry/epic/6148), with the initial baseline captured in this repository.
+Current status: architecture baseline, initial Rust/React/Tauri scaffold, Rust audio domain/storage/recipe contracts, provider manifests, worker runtime/packaging contracts, source-backed model evaluation scorecards, and the first Text-to-Speech Studio workflow contract. The implementation source of truth is Shortcut epic [6148](https://app.shortcut.com/trefry/epic/6148), with the initial baseline captured in this repository.
 
 ## Product Scope
 
@@ -29,11 +29,12 @@ SoundWorks covers the full audio creation surface tracked in the epic:
 - `docs/provider-manifests.md` - provider/model manifest schema, capability matching, defaults, and app boundary.
 - `docs/runtime-packaging.md` - worker runtime, model install/cache, job progress/cancellation, and no-Python shipped runtime contract.
 - `docs/model-evaluation.md` - source-backed candidate model scorecards, fixtures, status gates, and first spike recommendations.
+- `docs/tts-studio.md` - TTS Studio script, speaker, consent, provider-limit, submission, and saved-output workflow contract.
 - `docs/product-parity-map.md` - SceneWorks-to-SoundWorks parity map and story coverage.
 - `docs/implementation-plan.md` - Shortcut-backed implementation order and success criteria.
 - `apps/web/` - React/Vite UI workspace.
 - `apps/desktop/` - Tauri desktop shell and Rust command boundary.
-- `crates/soundworks-core/` - shared Rust contracts for the app shell, domain model, storage schema, provider manifests, worker runtime state, model evaluation scorecards, recipe fixtures, jobs, provenance, and composition state.
+- `crates/soundworks-core/` - shared Rust contracts for the app shell, domain model, storage schema, provider manifests, worker runtime state, model evaluation scorecards, TTS Studio, recipe fixtures, jobs, provenance, and composition state.
 
 ## Development
 

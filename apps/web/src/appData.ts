@@ -1,4 +1,4 @@
-import type { AppOverview, RuntimeOverview } from "./types";
+import type { AppOverview, RuntimeOverview, TtsStudioOverview } from "./types";
 
 export const fallbackOverview: AppOverview = {
   productName: "SoundWorks",
@@ -35,7 +35,12 @@ export const fallbackOverview: AppOverview = {
     ],
   },
   studios: [
-    { id: "tts", name: "TTS Studio", route: "/studios/tts", status: "planned" },
+    {
+      id: "tts",
+      name: "TTS Studio",
+      route: "/studios/tts",
+      status: "scaffolded",
+    },
     {
       id: "voice-lab",
       name: "Voice Lab",
@@ -91,6 +96,12 @@ export const fallbackOverview: AppOverview = {
       direction: "ui-to-backend",
       purpose:
         "Load source-backed model scorecards, fixtures, recommendation status, and product eligibility gates.",
+    },
+    {
+      name: "get_tts_studio_overview",
+      direction: "ui-to-backend",
+      purpose:
+        "Load TTS script segmentation, voice consent gates, provider limits, submission preview, and saved voice-clip output.",
     },
   ],
   providerCatalog: {
@@ -185,6 +196,16 @@ export const fallbackOverview: AppOverview = {
       "ace-step-1-5",
       "mmaudio",
     ],
+  },
+  ttsStudio: {
+    schemaVersion: 1,
+    segmentCount: 3,
+    speakerCount: 2,
+    providerCount: 1,
+    canSubmit: true,
+    selectedProviderId: "soundworks-reference",
+    selectedModelId: "reference-speech-suite",
+    savedAssetKind: "voice-clip",
   },
 };
 
@@ -368,6 +389,227 @@ export const fallbackRuntime: RuntimeOverview = {
       id: "runtime.devices",
       status: "passed",
       summary: "Runtime device inventory can report available accelerators.",
+    },
+  ],
+};
+
+export const fallbackTtsStudio: TtsStudioOverview = {
+  schemaVersion: 1,
+  script: {
+    id: "script-launch-read",
+    title: "Launch read",
+    language: "en-US",
+    segments: [
+      {
+        id: "seg-001",
+        position: 1,
+        speakerLabel: "Narrator",
+        text: "SoundWorks keeps the voice pass close to the edit.",
+        sceneLabel: "Intro",
+        targetDurationMs: 3100,
+        regeneratePolicy: "keep-timing-with-neighbors",
+      },
+      {
+        id: "seg-002",
+        position: 2,
+        speakerLabel: "Producer",
+        text: "Try the warmer take, but keep the last phrase locked to picture.",
+        sceneLabel: "Direction",
+        targetDurationMs: 3900,
+        regeneratePolicy: "regenerate-independently",
+      },
+      {
+        id: "seg-003",
+        position: 3,
+        speakerLabel: "Narrator",
+        text: "When it lands, save it as a project voice clip with the recipe attached.",
+        sceneLabel: "Outro",
+        targetDurationMs: 4300,
+        regeneratePolicy: "keep-timing-with-neighbors",
+      },
+    ],
+    pronunciationDictionary: [
+      {
+        term: "SoundWorks",
+        pronunciation: "sound works",
+        appliesToLanguage: "en-US",
+      },
+    ],
+  },
+  speakers: [
+    {
+      label: "Narrator",
+      role: "Primary narration",
+      voiceProfileId: "voice-profile-narrator",
+      language: "en-US",
+      consentRequired: true,
+      consentStatus: "explicit-consent-recorded",
+    },
+    {
+      label: "Producer",
+      role: "Direction callout",
+      voiceProfileId: "voice-profile-producer",
+      language: "en-US",
+      consentRequired: true,
+      consentStatus: "explicit-consent-recorded",
+    },
+  ],
+  voiceProfiles: [
+    {
+      id: "voice-profile-narrator",
+      displayName: "Narrator consented profile",
+      consent: "explicit-consent-recorded",
+      allowedUses: ["tts", "project-only", "commercial"],
+    },
+    {
+      id: "voice-profile-producer",
+      displayName: "Producer consented profile",
+      consent: "explicit-consent-recorded",
+      allowedUses: ["tts", "project-only", "commercial"],
+    },
+  ],
+  providerOptions: [
+    {
+      providerId: "soundworks-reference",
+      modelId: "reference-speech-suite",
+      modelVersion: "0.1.0",
+      displayName:
+        "SoundWorks Reference Capability Registry / Reference Speech Suite",
+      runtime: "local",
+      installStatus: "packaged",
+      runnable: true,
+      outputFormat: "wav",
+      sampleRateHz: 48000,
+      channelLayout: "mono",
+      supportedLanguages: [],
+      maxSpeakers: null,
+      maxDurationMs: null,
+      commercialUseAllowed: true,
+      requiresVoiceConsent: true,
+      watermark: "sidecar-only",
+      limitations: ["Voice profile consent is required before generation."],
+    },
+  ],
+  selectedProvider: {
+    providerId: "soundworks-reference",
+    modelId: "reference-speech-suite",
+    modelVersion: "0.1.0",
+    runtime: "local",
+    accepted: true,
+    blocker: "Voice profile consent is required before generation.",
+  },
+  controls: {
+    speed: 1,
+    style: "clear narration",
+    emotion: "warm",
+    targetLoudnessLufs: -18,
+    normalizeOutput: true,
+    preserveSegmentTiming: true,
+    promoteToProjectLibrary: true,
+  },
+  generationPlan: {
+    chunks: [
+      {
+        id: "chunk-seg-001",
+        segmentIds: ["seg-001"],
+        speakerLabel: "Narrator",
+        voiceProfileId: "voice-profile-narrator",
+        targetDurationMs: 3100,
+        regeneratePolicy: "keep-timing-with-neighbors",
+      },
+      {
+        id: "chunk-seg-002",
+        segmentIds: ["seg-002"],
+        speakerLabel: "Producer",
+        voiceProfileId: "voice-profile-producer",
+        targetDurationMs: 3900,
+        regeneratePolicy: "regenerate-independently",
+      },
+      {
+        id: "chunk-seg-003",
+        segmentIds: ["seg-003"],
+        speakerLabel: "Narrator",
+        voiceProfileId: "voice-profile-narrator",
+        targetDurationMs: 4300,
+        regeneratePolicy: "keep-timing-with-neighbors",
+      },
+    ],
+    stitching: {
+      crossfadeMs: 35,
+      preserveSegmentTiming: true,
+      silenceTrim: true,
+      normalizeLoudnessLufs: -18,
+    },
+    estimatedTotalDurationMs: 11300,
+    preservesSpeakerConsistency: true,
+  },
+  submission: {
+    canSubmit: true,
+    job: {
+      id: "job-tts-studio-reference",
+      recipeId: "recipe-tts-studio-reference",
+      kind: "generate-audio",
+      status: "queued",
+      progress: {
+        percent: 0,
+        message: "Ready to queue TTS generation.",
+      },
+      outputVersionIds: ["version-tts-studio-reference-a"],
+      error: null,
+    },
+    recipe: {
+      id: "recipe-tts-studio-reference",
+      workflow: "tts",
+      outputAssetIds: ["asset-tts-studio-reference"],
+    },
+    blockingReasons: [],
+    warnings: [
+      "Post-processing will normalize dialogue loudness after stitching.",
+    ],
+  },
+  savedOutput: {
+    asset: {
+      id: "asset-tts-studio-reference",
+      kind: "voice-clip",
+      name: "TTS Studio narration draft",
+      tags: ["voice-clips", "tts", "multi-speaker"],
+      currentVersionId: "version-tts-studio-reference-a",
+    },
+    version: {
+      id: "version-tts-studio-reference-a",
+      file: {
+        storagePath:
+          "soundworks-library/projects/project-demo/voice-clips/asset-tts-studio-reference/version-tts-studio-reference-a/media.wav",
+        format: "wav",
+      },
+      technical: {
+        sampleRateHz: 48000,
+        channels: 1,
+        durationMs: 11300,
+        loudnessLufs: -18,
+      },
+    },
+    promotedToProjectLibrary: true,
+    waveformPreviewReady: true,
+  },
+  validationChecks: [
+    {
+      id: "tts.script_segments",
+      status: "passed",
+      summary:
+        "Script is segmented by speaker and scene for per-segment regeneration.",
+    },
+    {
+      id: "tts.consent_gate",
+      status: "passed",
+      summary:
+        "Voice-clone capable generation requires explicit consent before submission.",
+    },
+    {
+      id: "tts.asset_promotion",
+      status: "passed",
+      summary:
+        "Successful output is represented as a project Voice clip with recipe provenance.",
     },
   ],
 };

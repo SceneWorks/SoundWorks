@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fallbackOverview, fallbackRuntime } from "./appData";
-import type { AppOverview, RuntimeOverview } from "./types";
+import {
+  fallbackOverview,
+  fallbackRuntime,
+  fallbackTtsStudio,
+} from "./appData";
+import type { AppOverview, RuntimeOverview, TtsStudioOverview } from "./types";
 
 export async function loadAppOverview(): Promise<AppOverview> {
   try {
@@ -15,5 +19,13 @@ export async function loadRuntimeOverview(): Promise<RuntimeOverview> {
     return await invoke<RuntimeOverview>("get_runtime_overview");
   } catch {
     return fallbackRuntime;
+  }
+}
+
+export async function loadTtsStudioOverview(): Promise<TtsStudioOverview> {
+  try {
+    return await invoke<TtsStudioOverview>("get_tts_studio_overview");
+  } catch {
+    return fallbackTtsStudio;
   }
 }

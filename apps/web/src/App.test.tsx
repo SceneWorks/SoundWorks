@@ -51,5 +51,22 @@ describe("App", () => {
     expect(
       screen.getByText("Score as speech-to-speech voice conversion, not text-to-speech."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Foley Impact" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Generate/i })).toBeEnabled();
+    expect(screen.getAllByText("Tight hatch impact").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Engine room bed").length).toBeGreaterThan(0);
+    expect(screen.getByText("MOSS-SoundEffect")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Best first SFX spike because an Apache-licensed MLX path exists for local Mac validation.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "AudioX, MMAudio, and ThinkSound remain deferred to the video-to-audio story.",
+      ),
+    ).toBeInTheDocument();
   });
 });

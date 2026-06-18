@@ -5,6 +5,7 @@ pub mod evaluation;
 pub mod fixtures;
 pub mod manifests;
 pub mod runtime;
+pub mod sfx;
 pub mod storage;
 pub mod tts;
 pub mod voice_lab;
@@ -14,6 +15,7 @@ pub use evaluation::*;
 pub use fixtures::*;
 pub use manifests::*;
 pub use runtime::*;
+pub use sfx::*;
 pub use storage::*;
 pub use tts::*;
 pub use voice_lab::*;
@@ -29,6 +31,7 @@ pub struct AppOverview {
     pub model_evaluation: ModelEvaluationOverview,
     pub tts_studio: TtsStudioSummary,
     pub voice_lab: VoiceLabSummary,
+    pub sfx_studio: SfxStudioSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +110,20 @@ pub struct VoiceLabSummary {
     pub saved_asset_kind: AudioAssetKind,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SfxStudioSummary {
+    pub schema_version: u32,
+    pub variant_count: usize,
+    pub saved_output_count: usize,
+    pub provider_count: usize,
+    pub scorecard_count: usize,
+    pub can_submit: bool,
+    pub selected_provider_id: String,
+    pub selected_model_id: String,
+    pub saved_asset_kinds: Vec<AudioAssetKind>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandDirection {
@@ -163,7 +180,7 @@ impl AppOverview {
             studios: vec![
                 StudioSurface::scaffolded("tts", "TTS Studio", "/studios/tts"),
                 StudioSurface::scaffolded("voice-lab", "Voice Lab", "/studios/voice-lab"),
-                StudioSurface::planned("sfx", "SFX + Ambience", "/studios/sfx"),
+                StudioSurface::scaffolded("sfx", "SFX + Ambience", "/studios/sfx"),
                 StudioSurface::planned("loops", "Samples + Loops", "/studios/loops"),
                 StudioSurface::planned("songs", "Song Studio", "/studios/songs"),
                 StudioSurface::planned(
@@ -215,6 +232,13 @@ impl AppOverview {
                         "Load voice profile consent state, clone/fine-tune/conversion modes, provider scorecards, safety gates, and saved conversion output."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_sfx_studio_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load SFX and ambience prompts, capability-driven controls, variant previews, provider scorecards, loop checks, post-processing, and saved outputs."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
@@ -223,6 +247,9 @@ impl AppOverview {
             ),
             voice_lab: VoiceLabSummary::from_overview(
                 &VoiceLabOverview::reference().expect("reference Voice Lab is valid"),
+            ),
+            sfx_studio: SfxStudioSummary::from_overview(
+                &SfxStudioOverview::reference().expect("reference SFX Studio is valid"),
             ),
         }
     }
@@ -239,6 +266,26 @@ impl TtsStudioSummary {
             selected_provider_id: overview.selected_provider.provider_id.clone(),
             selected_model_id: overview.selected_provider.model_id.clone(),
             saved_asset_kind: overview.saved_output.asset.kind,
+        }
+    }
+}
+
+impl SfxStudioSummary {
+    pub fn from_overview(overview: &SfxStudioOverview) -> Self {
+        Self {
+            schema_version: overview.schema_version,
+            variant_count: overview.variants.len(),
+            saved_output_count: overview.saved_outputs.len(),
+            provider_count: overview.provider_options.len(),
+            scorecard_count: overview.provider_scorecards.len(),
+            can_submit: overview.submission.can_submit,
+            selected_provider_id: overview.selected_provider.provider_id.clone(),
+            selected_model_id: overview.selected_provider.model_id.clone(),
+            saved_asset_kinds: overview
+                .saved_outputs
+                .iter()
+                .map(|output| output.asset.kind)
+                .collect(),
         }
     }
 }
@@ -366,7 +413,9 @@ mod tests {
         assert_eq!(payload["ttsStudio"]["segmentCount"], 3);
         assert_eq!(payload["commands"][4]["name"], "get_tts_studio_overview");
         assert_eq!(payload["commands"][5]["name"], "get_voice_lab_overview");
+        assert_eq!(payload["commands"][6]["name"], "get_sfx_studio_overview");
         assert_eq!(payload["voiceLab"]["modeCount"], 3);
+        assert_eq!(payload["sfxStudio"]["variantCount"], 3);
     }
 
     #[test]
@@ -476,6 +525,12 @@ mod tests {
             "voice_lab_provider_scorecards",
             "voice_lab_safety_gates",
             "voice_lab_conversion_submissions",
+            "sfx_studio_prompts",
+            "sfx_studio_variants",
+            "sfx_studio_submissions",
+            "sfx_studio_saved_outputs",
+            "sfx_studio_provider_scorecards",
+            "sfx_studio_post_processing_actions",
         ] {
             assert!(
                 sql.contains(table),
@@ -562,5 +617,21 @@ mod tests {
             AudioAssetKind::VoiceClip
         );
         assert!(overview.voice_lab.can_submit_conversion);
+    }
+
+    #[test]
+    fn app_overview_summarizes_sfx_studio() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.studios[2].status, ScaffoldStatus::Scaffolded);
+        assert_eq!(overview.sfx_studio.variant_count, 3);
+        assert_eq!(overview.sfx_studio.saved_output_count, 2);
+        assert_eq!(overview.sfx_studio.provider_count, 2);
+        assert_eq!(overview.sfx_studio.scorecard_count, 9);
+        assert_eq!(
+            overview.sfx_studio.saved_asset_kinds,
+            vec![AudioAssetKind::Sfx, AudioAssetKind::Ambience]
+        );
+        assert!(overview.sfx_studio.can_submit);
     }
 }

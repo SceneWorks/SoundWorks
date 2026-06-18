@@ -23,18 +23,21 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fallbackOverview,
   fallbackRuntime,
+  fallbackSfxStudio,
   fallbackTtsStudio,
   fallbackVoiceLab,
 } from "./appData";
 import {
   loadAppOverview,
   loadRuntimeOverview,
+  loadSfxStudioOverview,
   loadTtsStudioOverview,
   loadVoiceLabOverview,
 } from "./tauri";
 import type {
   AppOverview,
   RuntimeOverview,
+  SfxStudioOverview,
   TtsStudioOverview,
   VoiceLabOverview,
 } from "./types";
@@ -87,6 +90,8 @@ export function App() {
     useState<TtsStudioOverview>(fallbackTtsStudio);
   const [voiceLab, setVoiceLab] =
     useState<VoiceLabOverview>(fallbackVoiceLab);
+  const [sfxStudio, setSfxStudio] =
+    useState<SfxStudioOverview>(fallbackSfxStudio);
 
   useEffect(() => {
     let active = true;
@@ -115,6 +120,12 @@ export function App() {
       }
     });
 
+    loadSfxStudioOverview().then((nextSfxStudio) => {
+      if (active) {
+        setSfxStudio(nextSfxStudio);
+      }
+    });
+
     return () => {
       active = false;
     };
@@ -135,6 +146,15 @@ export function App() {
         ),
       ),
     [voiceLab.providerScorecards],
+  );
+  const sfxCandidateFocus = useMemo(
+    () =>
+      sfxStudio.providerScorecards.filter((scorecard) =>
+        ["moss-soundeffect", "stable-audio-open-1", "mmaudio"].includes(
+          scorecard.candidateId,
+        ),
+      ),
+    [sfxStudio.providerScorecards],
   );
 
   return (
@@ -493,6 +513,199 @@ export function App() {
                   <span>
                     <strong>{check.label}</strong> {check.target}
                   </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="sfx-studio-panel" aria-label="SFX and Ambience">
+          <div className="sfx-header">
+            <div>
+              <p className="eyebrow">SFX + Ambience</p>
+              <h2>{statusLabel(sfxStudio.prompt.category)}</h2>
+            </div>
+            <button
+              className="primary-action sfx-action"
+              disabled={!sfxStudio.submission.canSubmit}
+              type="button"
+              title="Queue SFX generation"
+            >
+              <Play aria-hidden="true" size={18} />
+              <span>{sfxStudio.submission.canSubmit ? "Generate" : "Blocked"}</span>
+            </button>
+          </div>
+
+          <div className="sfx-metrics" aria-label="SFX workflow status">
+            <div>
+              <Waves aria-hidden="true" size={18} />
+              <strong>{overview.sfxStudio.variantCount}</strong>
+              <span>variants</span>
+            </div>
+            <div>
+              <Save aria-hidden="true" size={18} />
+              <strong>{overview.sfxStudio.savedOutputCount}</strong>
+              <span>saved</span>
+            </div>
+            <div>
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <strong>{overview.sfxStudio.scorecardCount}</strong>
+              <span>scorecards</span>
+            </div>
+            <div>
+              <Gauge aria-hidden="true" size={18} />
+              <strong>{formatDuration(sfxStudio.controls.durationMs)}</strong>
+              <span>{sfxStudio.controls.loopable ? "loopable" : "one-shot"}</span>
+            </div>
+          </div>
+
+          <div className="sfx-layout">
+            <div className="sfx-main">
+              <section className="sfx-prompt-panel" aria-label="SFX prompt">
+                <div className="subpanel-heading">
+                  <h3>Prompt</h3>
+                  <span>{sfxStudio.prompt.tags.length}</span>
+                </div>
+                <p>{sfxStudio.prompt.text}</p>
+                <small>{sfxStudio.prompt.negativePrompt}</small>
+                <div className="candidate-strip">
+                  {sfxStudio.prompt.tags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+              </section>
+
+              <div className="sfx-control-grid" aria-label="SFX controls">
+                <div>
+                  <strong>{sfxStudio.controls.variationCount}</strong>
+                  <span>batch</span>
+                </div>
+                <div>
+                  <strong>{sfxStudio.controls.intensity}</strong>
+                  <span>intensity</span>
+                </div>
+                <div>
+                  <strong>{sfxStudio.controls.realism}</strong>
+                  <span>realism</span>
+                </div>
+                <div>
+                  <strong>{sfxStudio.controls.loopCrossfadeMs}ms</strong>
+                  <span>crossfade</span>
+                </div>
+              </div>
+
+              <div className="sfx-variant-grid" aria-label="Generated variants">
+                {sfxStudio.variants.map((variant) => (
+                  <article
+                    className={
+                      variant.selectedForSave
+                        ? "sfx-variant selected"
+                        : "sfx-variant"
+                    }
+                    key={variant.id}
+                  >
+                    <div className="sfx-variant-title">
+                      <strong>{variant.label}</strong>
+                      <span>{statusLabel(variant.assetKind)}</span>
+                    </div>
+                    <small>
+                      {formatDuration(variant.durationMs)} / {variant.loudnessLufs} LUFS /{" "}
+                      {variant.truePeakDbfs} dBTP
+                    </small>
+                    <p>
+                      {variant.loopPoints
+                        ? `loop ${variant.loopPoints.startSample}-${variant.loopPoints.endSample}`
+                        : "one-shot preview"}
+                    </p>
+                    <div className="candidate-strip">
+                      {variant.tags.slice(0, 4).map((tag) => (
+                        <span key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div className="sfx-side">
+              <section className="tts-subpanel" aria-label="SFX provider options">
+                <div className="subpanel-heading">
+                  <h3>Providers</h3>
+                  <span>{sfxStudio.providerOptions.length}</span>
+                </div>
+                {sfxStudio.providerOptions.map((provider) => (
+                  <article
+                    className="sfx-provider-option"
+                    key={`${provider.workflow}-${provider.modelId}`}
+                  >
+                    <strong>{workflowLabel(provider.workflow)}</strong>
+                    <small>
+                      {statusLabel(provider.installStatus)} /{" "}
+                      {statusLabel(provider.outputAssetKind)} /{" "}
+                      {provider.sampleRateHz} Hz
+                    </small>
+                    <p>{provider.supportedControls.map(statusLabel).join(" / ")}</p>
+                  </article>
+                ))}
+              </section>
+
+              <section className="tts-subpanel" aria-label="SFX provider scorecards">
+                <div className="subpanel-heading">
+                  <h3>Scorecards</h3>
+                  <span>{sfxStudio.providerScorecards.length}</span>
+                </div>
+                <div className="voice-provider-list">
+                  {sfxCandidateFocus.map((scorecard) => (
+                    <article
+                      className={`voice-provider ${scorecard.readiness}`}
+                      key={scorecard.candidateId}
+                    >
+                      <div>
+                        <strong>{scorecard.name}</strong>
+                        <small>
+                          {statusLabel(scorecard.readiness)} /{" "}
+                          {scorecard.lanes.map(workflowLabel).join(" / ")}
+                        </small>
+                        <p>{scorecard.notes}</p>
+                      </div>
+                      {scorecard.recommended ? <span>pick</span> : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Saved SFX outputs">
+                <div className="subpanel-heading">
+                  <h3>Outputs</h3>
+                  <span>{sfxStudio.submission.job.status}</span>
+                </div>
+                {sfxStudio.savedOutputs.map((output) => (
+                  <div className="output-card" key={output.variantId}>
+                    <strong>{output.asset.name}</strong>
+                    <small>
+                      {output.asset.kind} / {output.asset.currentVersionId}
+                    </small>
+                    <p>{output.version.file.storagePath}</p>
+                  </div>
+                ))}
+              </section>
+            </div>
+          </div>
+
+          <div className="sfx-review-grid">
+            <ol className="voice-checks" aria-label="SFX post-processing">
+              {sfxStudio.postProcessingActions.map((action) => (
+                <li className={action.enabled ? "ready" : "warning"} key={action.id}>
+                  <SlidersHorizontal aria-hidden="true" size={16} />
+                  <span>{action.summary}</span>
+                </li>
+              ))}
+            </ol>
+            <ol className="voice-checks" aria-label="SFX validation checks">
+              {sfxStudio.validationChecks.map((check) => (
+                <li className={check.status} key={check.id}>
+                  <CircleCheck aria-hidden="true" size={16} />
+                  <span>{check.summary}</span>
                 </li>
               ))}
             </ol>

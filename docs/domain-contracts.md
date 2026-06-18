@@ -11,6 +11,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - `crates/soundworks-core/src/fixtures.rs` defines canonical fixture outputs for TTS, SFX, instrument samples, loops, songs, projects, and timeline compositions.
 - `crates/soundworks-core/src/tts.rs` defines the Text-to-Speech Studio workflow state layered over the shared domain, recipe, provider, runtime, and storage contracts.
 - `crates/soundworks-core/src/voice_lab.rs` defines the Voice Lab workflow state for consented profiles, clone/fine-tune/conversion modes, source-audio conversion, safety gates, provider scorecards, and saved voice-clip outputs.
+- `crates/soundworks-core/src/sfx.rs` defines the SFX Studio workflow state for text-first sound effects and ambience generation, provider capability controls, variant comparison, loop inspection, post-processing, export state, scorecards, and saved outputs.
 
 ## Represented Concepts
 
@@ -24,6 +25,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - Multitrack composition state: tracks, clips, source trims, fades, gain, pan, mute/solo, automation, markers, sections, and export history.
 - TTS Studio state: scripts, ordered speaker segments, pronunciation entries, voice-profile assignments, provider limitations, consent gates, chunking/stitching plans, submission previews, and saved voice-clip outputs.
 - Voice Lab state: zero-shot clone, few-shot fine-tune, and voice conversion modes; consented voice profile readiness; reference clips; RVC-style source-audio conversion previews; provider readiness scorecards; safety gates; QA checks; and saved converted voice clips.
+- SFX Studio state: prompts, negative prompts, categories, tags, reference audio, provider-derived controls, SFX and ambience variants, selected saves, loop points, scorecards, post-processing actions, export state, and saved SFX/ambience outputs.
 
 ## Storage Contract
 
@@ -50,6 +52,12 @@ Structured metadata is intended for SQLite. The first schema contract covers:
 - `voice_lab_safety_gates`
 - `voice_lab_qa_checks`
 - `voice_lab_conversion_submissions`
+- `sfx_studio_prompts`
+- `sfx_studio_variants`
+- `sfx_studio_provider_scorecards`
+- `sfx_studio_post_processing_actions`
+- `sfx_studio_submissions`
+- `sfx_studio_saved_outputs`
 
 Media and derived files are stored outside SQLite. The path allocator emits version-specific paths:
 
@@ -74,3 +82,4 @@ Rust tests verify:
 - Migration coverage for the required domain tables.
 - TTS Studio serialization, consent/provider gating, generation-plan chunking, and saved voice-clip output linkage.
 - Voice Lab serialization, distinct mode coverage, RVC voice-conversion routing, consent/provider gating, and saved converted voice-clip output linkage.
+- SFX Studio serialization, capability-driven controls, MOSS scorecard recommendation, multimodal boundary deferral, variant comparison, recipe provenance, saved SFX/ambience output linkage, and loop-point coverage.

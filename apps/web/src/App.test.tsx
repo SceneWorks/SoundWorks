@@ -26,5 +26,14 @@ describe("App", () => {
       screen.getByRole("heading", { name: "Evaluation Scorecard" }),
     ).toBeInTheDocument();
     expect(screen.getByText("moss-soundeffect")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Launch read" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Producer").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Voice profile consent is required before generation."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("TTS Studio narration draft")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Queue/i })).toBeEnabled();
   });
 });

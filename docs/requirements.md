@@ -16,7 +16,7 @@ Success means a user can move from an idea or source reference to generated audi
 
 ### Studios And Workflows
 
-- Text-to-speech studio with voice selection, prompt/script input, generation settings, replayable recipes, and version comparison.
+- Text-to-speech studio with script segmentation, speaker labels, voice selection, pronunciation entries, generation settings, provider limitation visibility, consent-gated voice cloning, replayable recipes, generated previews, saved voice-clip assets, and version comparison.
 - Voice Lab for cloning, fine-tuning, voice conversion, consent tracking, source management, and generated voice artifact review.
 - SFX and ambience workflow for prompt-driven effects, environmental beds, one-shots, loops, and variations.
 - Instrument sample and loop workflow for pitched samples, rhythmic loops, tempo/key-aware outputs, and reusable instrument assets.

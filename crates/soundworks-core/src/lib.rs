@@ -6,6 +6,7 @@ pub mod fixtures;
 pub mod manifests;
 pub mod runtime;
 pub mod storage;
+pub mod tts;
 
 pub use domain::*;
 pub use evaluation::*;
@@ -13,6 +14,7 @@ pub use fixtures::*;
 pub use manifests::*;
 pub use runtime::*;
 pub use storage::*;
+pub use tts::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +25,7 @@ pub struct AppOverview {
     pub commands: Vec<CommandBoundary>,
     pub provider_catalog: ProviderCatalogOverview,
     pub model_evaluation: ModelEvaluationOverview,
+    pub tts_studio: TtsStudioSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,6 +76,19 @@ pub struct CapabilityWorkflowSummary {
     pub workflow: CapabilityWorkflow,
     pub default_provider_id: String,
     pub default_model_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TtsStudioSummary {
+    pub schema_version: u32,
+    pub segment_count: usize,
+    pub speaker_count: usize,
+    pub provider_count: usize,
+    pub can_submit: bool,
+    pub selected_provider_id: String,
+    pub selected_model_id: String,
+    pub saved_asset_kind: AudioAssetKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,7 +145,7 @@ impl AppOverview {
                 ],
             },
             studios: vec![
-                StudioSurface::planned("tts", "TTS Studio", "/studios/tts"),
+                StudioSurface::scaffolded("tts", "TTS Studio", "/studios/tts"),
                 StudioSurface::planned("voice-lab", "Voice Lab", "/studios/voice-lab"),
                 StudioSurface::planned("sfx", "SFX + Ambience", "/studios/sfx"),
                 StudioSurface::planned("loops", "Samples + Loops", "/studios/loops"),
@@ -169,9 +185,34 @@ impl AppOverview {
                         "Load source-backed model scorecards, fixtures, recommendation status, and product eligibility gates."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_tts_studio_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load TTS script segmentation, voice consent gates, provider limits, submission preview, and saved voice-clip output."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
+            tts_studio: TtsStudioSummary::from_overview(
+                &TtsStudioOverview::reference().expect("reference TTS studio is valid"),
+            ),
+        }
+    }
+}
+
+impl TtsStudioSummary {
+    pub fn from_overview(overview: &TtsStudioOverview) -> Self {
+        Self {
+            schema_version: overview.schema_version,
+            segment_count: overview.script.segments.len(),
+            speaker_count: overview.speakers.len(),
+            provider_count: overview.provider_options.len(),
+            can_submit: overview.submission.can_submit,
+            selected_provider_id: overview.selected_provider.provider_id.clone(),
+            selected_model_id: overview.selected_provider.model_id.clone(),
+            saved_asset_kind: overview.saved_output.asset.kind,
         }
     }
 }
@@ -207,6 +248,15 @@ impl StudioSurface {
             name: name.to_string(),
             route: route.to_string(),
             status: ScaffoldStatus::Planned,
+        }
+    }
+
+    fn scaffolded(id: &str, name: &str, route: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            route: route.to_string(),
+            status: ScaffoldStatus::Scaffolded,
         }
     }
 }
@@ -267,6 +317,8 @@ mod tests {
         );
         assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
         assert_eq!(payload["modelEvaluation"]["candidateCount"], 28);
+        assert_eq!(payload["ttsStudio"]["segmentCount"], 3);
+        assert_eq!(payload["commands"][4]["name"], "get_tts_studio_overview");
     }
 
     #[test]
@@ -427,5 +479,19 @@ mod tests {
             .model_evaluation
             .recommended_candidate_ids
             .contains(&"moss-soundeffect".to_string()));
+    }
+
+    #[test]
+    fn app_overview_summarizes_tts_studio() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.studios[0].status, ScaffoldStatus::Scaffolded);
+        assert_eq!(overview.tts_studio.segment_count, 3);
+        assert_eq!(overview.tts_studio.speaker_count, 2);
+        assert_eq!(
+            overview.tts_studio.saved_asset_kind,
+            AudioAssetKind::VoiceClip
+        );
+        assert!(overview.tts_studio.can_submit);
     }
 }

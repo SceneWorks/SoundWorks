@@ -5,20 +5,32 @@ import {
   CircleCheck,
   ClipboardCheck,
   Cpu,
+  Gauge,
   HardDrive,
   Library,
   Mic2,
   Music2,
   PackageCheck,
+  Play,
   Radio,
+  Save,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Waves,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { fallbackOverview, fallbackRuntime } from "./appData";
-import { loadAppOverview, loadRuntimeOverview } from "./tauri";
-import type { AppOverview, RuntimeOverview } from "./types";
+import {
+  fallbackOverview,
+  fallbackRuntime,
+  fallbackTtsStudio,
+} from "./appData";
+import {
+  loadAppOverview,
+  loadRuntimeOverview,
+  loadTtsStudioOverview,
+} from "./tauri";
+import type { AppOverview, RuntimeOverview, TtsStudioOverview } from "./types";
 
 const navItems = [
   { label: "Studios", icon: Sparkles },
@@ -51,6 +63,12 @@ function formatMb(value?: number | null) {
   return value >= 1024 ? `${Math.round(value / 1024)} GB` : `${value} MB`;
 }
 
+function formatDuration(ms: number) {
+  const seconds = Math.round(ms / 100) / 10;
+
+  return `${seconds}s`;
+}
+
 function countFor(counts: Record<string, number>, key: string) {
   return counts[key] ?? 0;
 }
@@ -58,6 +76,8 @@ function countFor(counts: Record<string, number>, key: string) {
 export function App() {
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
+  const [ttsStudio, setTtsStudio] =
+    useState<TtsStudioOverview>(fallbackTtsStudio);
 
   useEffect(() => {
     let active = true;
@@ -71,6 +91,12 @@ export function App() {
     loadRuntimeOverview().then((nextRuntime) => {
       if (active) {
         setRuntime(nextRuntime);
+      }
+    });
+
+    loadTtsStudioOverview().then((nextTtsStudio) => {
+      if (active) {
+        setTtsStudio(nextTtsStudio);
       }
     });
 
@@ -141,6 +167,139 @@ export function App() {
               </button>
             );
           })}
+        </section>
+
+        <section className="tts-studio-panel" aria-label="TTS Studio">
+          <div className="tts-header">
+            <div>
+              <p className="eyebrow">TTS Studio</p>
+              <h2>{ttsStudio.script.title}</h2>
+            </div>
+            <button
+              className="primary-action"
+              disabled={!ttsStudio.submission.canSubmit}
+              type="button"
+              title="Queue TTS generation"
+            >
+              <Play aria-hidden="true" size={18} />
+              <span>
+                {ttsStudio.submission.canSubmit ? "Queue" : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="tts-metrics" aria-label="TTS workflow status">
+            <div>
+              <Mic2 aria-hidden="true" size={18} />
+              <strong>{overview.ttsStudio.segmentCount}</strong>
+              <span>segments</span>
+            </div>
+            <div>
+              <ShieldCheck aria-hidden="true" size={18} />
+              <strong>{overview.ttsStudio.speakerCount}</strong>
+              <span>voices</span>
+            </div>
+            <div>
+              <Gauge aria-hidden="true" size={18} />
+              <strong>
+                {formatDuration(
+                  ttsStudio.generationPlan.estimatedTotalDurationMs,
+                )}
+              </strong>
+              <span>estimate</span>
+            </div>
+            <div>
+              <Save aria-hidden="true" size={18} />
+              <strong>{ttsStudio.savedOutput.version.file.format}</strong>
+              <span>{ttsStudio.savedOutput.asset.kind}</span>
+            </div>
+          </div>
+
+          <div className="tts-layout">
+            <div className="tts-script" aria-label="Script segments">
+              {ttsStudio.script.segments.map((segment) => (
+                <article className="segment-row" key={segment.id}>
+                  <span className="segment-index">{segment.position}</span>
+                  <div>
+                    <div className="segment-meta">
+                      <strong>{segment.speakerLabel}</strong>
+                      <span>{segment.sceneLabel}</span>
+                      <small>
+                        {formatDuration(segment.targetDurationMs ?? 0)}
+                      </small>
+                    </div>
+                    <p>{segment.text}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="tts-side">
+              <section className="tts-subpanel" aria-label="Voice consent">
+                <div className="subpanel-heading">
+                  <h3>Voices</h3>
+                  <span>{ttsStudio.voiceProfiles.length}</span>
+                </div>
+                <ol className="voice-list">
+                  {ttsStudio.speakers.map((speaker) => (
+                    <li key={speaker.voiceProfileId}>
+                      <ShieldCheck aria-hidden="true" size={16} />
+                      <div>
+                        <strong>{speaker.label}</strong>
+                        <small>
+                          {speaker.language} /{" "}
+                          {statusLabel(speaker.consentStatus)}
+                        </small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Provider limits">
+                <div className="subpanel-heading">
+                  <h3>Provider</h3>
+                  <span>{ttsStudio.providerOptions.length}</span>
+                </div>
+                {ttsStudio.providerOptions.map((provider) => (
+                  <article className="provider-option" key={provider.modelId}>
+                    <strong>{provider.modelId}</strong>
+                    <small>
+                      {statusLabel(provider.installStatus)} /{" "}
+                      {statusLabel(provider.runtime)} / {provider.sampleRateHz}{" "}
+                      Hz
+                    </small>
+                    <ul>
+                      {provider.limitations.map((limitation) => (
+                        <li key={limitation}>{limitation}</li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
+              </section>
+
+              <section className="tts-subpanel" aria-label="Saved output">
+                <div className="subpanel-heading">
+                  <h3>Output</h3>
+                  <span>{ttsStudio.submission.job.status}</span>
+                </div>
+                <div className="output-card">
+                  <strong>{ttsStudio.savedOutput.asset.name}</strong>
+                  <small>{ttsStudio.savedOutput.asset.currentVersionId}</small>
+                  <p>{ttsStudio.savedOutput.version.file.storagePath}</p>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <ol className="tts-checks" aria-label="TTS checks">
+            {ttsStudio.validationChecks.map((check) => (
+              <li key={check.id}>
+                <CircleCheck aria-hidden="true" size={16} />
+                <span>{check.summary}</span>
+              </li>
+            ))}
+          </ol>
         </section>
 
         <section className="system-grid" aria-label="Architecture">

@@ -1,4 +1,6 @@
-use soundworks_core::{AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview};
+use soundworks_core::{
+    AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview, TtsStudioOverview,
+};
 
 #[tauri::command]
 fn get_app_overview() -> AppOverview {
@@ -20,6 +22,11 @@ fn get_model_evaluation_catalog() -> ModelEvaluationCatalog {
     model_evaluation_catalog()
 }
 
+#[tauri::command]
+fn get_tts_studio_overview() -> TtsStudioOverview {
+    tts_studio_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -36,6 +43,10 @@ pub fn model_evaluation_catalog() -> ModelEvaluationCatalog {
     ModelEvaluationCatalog::reference()
 }
 
+pub fn tts_studio_overview() -> TtsStudioOverview {
+    TtsStudioOverview::reference().expect("reference TTS studio is valid")
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -43,7 +54,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_app_overview,
             get_provider_catalog,
             get_runtime_overview,
-            get_model_evaluation_catalog
+            get_model_evaluation_catalog,
+            get_tts_studio_overview
         ])
 }
 
@@ -56,7 +68,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{app_overview, model_evaluation_catalog, provider_catalog, runtime_overview};
+    use super::{
+        app_overview, model_evaluation_catalog, provider_catalog, runtime_overview,
+        tts_studio_overview,
+    };
 
     #[test]
     fn app_overview_command_returns_soundworks() {
@@ -96,5 +111,15 @@ mod tests {
             .recommendations
             .iter()
             .any(|recommendation| recommendation.candidate_id == "kokoro-82m"));
+    }
+
+    #[test]
+    fn tts_studio_command_returns_submission_contract() {
+        let overview = tts_studio_overview();
+
+        assert_eq!(overview.schema_version, 1);
+        assert!(overview.submission.can_submit);
+        assert_eq!(overview.script.segments.len(), 3);
+        assert_eq!(overview.saved_output.asset.id, "asset-tts-studio-reference");
     }
 }

@@ -1,6 +1,6 @@
 use soundworks_core::{
-    AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview, SfxStudioOverview,
-    TtsStudioOverview, VoiceLabOverview,
+    AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview, SamplesStudioOverview,
+    SfxStudioOverview, TtsStudioOverview, VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -38,6 +38,11 @@ fn get_sfx_studio_overview() -> SfxStudioOverview {
     sfx_studio_overview()
 }
 
+#[tauri::command]
+fn get_samples_studio_overview() -> SamplesStudioOverview {
+    samples_studio_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -66,6 +71,10 @@ pub fn sfx_studio_overview() -> SfxStudioOverview {
     SfxStudioOverview::reference().expect("reference SFX Studio is valid")
 }
 
+pub fn samples_studio_overview() -> SamplesStudioOverview {
+    SamplesStudioOverview::reference().expect("reference Samples Studio is valid")
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -76,7 +85,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_model_evaluation_catalog,
             get_tts_studio_overview,
             get_voice_lab_overview,
-            get_sfx_studio_overview
+            get_sfx_studio_overview,
+            get_samples_studio_overview
         ])
 }
 
@@ -91,7 +101,7 @@ pub fn run() {
 mod tests {
     use super::{
         app_overview, model_evaluation_catalog, provider_catalog, runtime_overview,
-        sfx_studio_overview, tts_studio_overview, voice_lab_overview,
+        samples_studio_overview, sfx_studio_overview, tts_studio_overview, voice_lab_overview,
     };
 
     #[test]
@@ -165,5 +175,16 @@ mod tests {
         assert_eq!(overview.variants.len(), 3);
         assert!(overview.submission.can_submit);
         assert_eq!(overview.saved_outputs.len(), 2);
+    }
+
+    #[test]
+    fn samples_studio_command_returns_pack_contract() {
+        let overview = samples_studio_overview();
+
+        assert_eq!(overview.schema_version, 1);
+        assert_eq!(overview.variants.len(), 4);
+        assert!(overview.submission.can_submit);
+        assert_eq!(overview.saved_outputs.len(), 3);
+        assert_eq!(overview.pack.collection_id, "collection-neon-bass-pack");
     }
 }

@@ -30,6 +30,7 @@ export type AppOverview = {
   ttsStudio: TtsStudioSummary;
   voiceLab: VoiceLabSummary;
   sfxStudio: SfxStudioSummary;
+  samplesStudio: SamplesStudioSummary;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -186,6 +187,19 @@ export type SfxStudioSummary = {
   canSubmit: boolean;
   selectedProviderId: string;
   selectedModelId: string;
+  savedAssetKinds: string[];
+};
+
+export type SamplesStudioSummary = {
+  schemaVersion: number;
+  variantCount: number;
+  savedOutputCount: number;
+  providerCount: number;
+  scorecardCount: number;
+  canSubmit: boolean;
+  selectedProviderId: string;
+  selectedModelId: string;
+  packCollectionId: string;
   savedAssetKinds: string[];
 };
 
@@ -634,6 +648,184 @@ export type SfxStudioOverview = {
     summary: string;
   }>;
   validationChecks: Array<{
+    id: string;
+    status: "passed" | "warning" | "failed";
+    summary: string;
+  }>;
+};
+
+export type InstrumentFamily =
+  | "drums"
+  | "bass"
+  | "synth-bass"
+  | "guitar"
+  | "keys"
+  | "strings"
+  | "brass"
+  | "texture";
+
+export type SamplesStudioOverview = {
+  schemaVersion: number;
+  prompt: {
+    id: string;
+    text: string;
+    negativePrompt: string;
+    instrumentFamily: InstrumentFamily;
+    articulation: string;
+    genreTags: string[];
+    referenceAudioAssetId?: string | null;
+  };
+  controls: {
+    musicalKey: string;
+    scale: string;
+    bpm: number;
+    bars: number;
+    beats: number;
+    loopable: boolean;
+    dryWetAmbience: number;
+    velocityEnergy: number;
+    variationCount: number;
+    batchSize: number;
+    promoteToProjectLibrary: boolean;
+  };
+  providerOptions: Array<{
+    providerId: string;
+    modelId: string;
+    modelVersion?: string | null;
+    displayName: string;
+    workflow: CapabilityWorkflow;
+    runtime: string;
+    installStatus: string;
+    runnable: boolean;
+    outputAssetKind: string;
+    outputFormat: string;
+    sampleRateHz: number;
+    channelLayout: string;
+    minDurationMs?: number | null;
+    maxDurationMs?: number | null;
+    supportsReferenceAudio: boolean;
+    supportsTempo: boolean;
+    supportsKey: boolean;
+    supportsLoopPoints: boolean;
+    commercialUseAllowed: boolean;
+    watermark: string;
+    supportedControls: string[];
+    limitations: string[];
+  }>;
+  selectedProvider: {
+    providerId: string;
+    modelId: string;
+    modelVersion?: string | null;
+    workflow: CapabilityWorkflow;
+    runtime: string;
+    accepted: boolean;
+    blocker?: string | null;
+  };
+  providerScorecards: Array<{
+    candidateId: string;
+    name: string;
+    provider: string;
+    lanes: string[];
+    status: string;
+    productEligibility: string;
+    readiness: string;
+    runtimePath: string;
+    commercialUse: string;
+    recommended: boolean;
+    blockers: string[];
+    notes: string;
+  }>;
+  variants: Array<{
+    id: string;
+    label: string;
+    workflow: CapabilityWorkflow;
+    assetKind: string;
+    instrumentFamily: InstrumentFamily;
+    articulation: string;
+    durationMs: number;
+    bpm?: number | null;
+    musicalKey?: string | null;
+    timeSignature?: string | null;
+    loopPoints?: {
+      startSample: number;
+      endSample: number;
+    } | null;
+    transientOneShot: boolean;
+    loudnessLufs: number;
+    truePeakDbfs: number;
+    hasClipping: boolean;
+    tags: string[];
+    collectionId: string;
+    selectedForPack: boolean;
+    favorite: boolean;
+    duplicateOfVariantId?: string | null;
+  }>;
+  pack: {
+    collectionId: string;
+    name: string;
+    variantCount: number;
+    selectedVariantIds: string[];
+    favoriteVariantIds: string[];
+    loopVariantIds: string[];
+    oneShotVariantIds: string[];
+    exportFormats: string[];
+  };
+  submission: {
+    canSubmit: boolean;
+    jobs: Array<{
+      id: string;
+      recipeId: string;
+      kind: string;
+      status: string;
+      outputVersionIds: string[];
+      error?: string | null;
+    }>;
+    recipes: Array<{
+      id: string;
+      workflow: string;
+      outputAssetIds: string[];
+    }>;
+    blockingReasons: string[];
+    warnings: string[];
+  };
+  savedOutputs: Array<{
+    variantId: string;
+    asset: {
+      id: string;
+      kind: string;
+      name: string;
+      tags: string[];
+      currentVersionId: string;
+    };
+    version: {
+      id: string;
+      file: {
+        storagePath: string;
+        format: string;
+      };
+      technical: {
+        sampleRateHz: number;
+        channels: number;
+        durationMs: number;
+        loudnessLufs?: number | null;
+        bpm?: number | null;
+        musicalKey?: string | null;
+        loopPoints?: {
+          startSample: number;
+          endSample: number;
+        } | null;
+      };
+    };
+    exported: boolean;
+    waveformPreviewReady: boolean;
+  }>;
+  postProcessingActions: Array<{
+    id: string;
+    operation: string;
+    enabled: boolean;
+    summary: string;
+  }>;
+  qaChecks: Array<{
     id: string;
     status: "passed" | "warning" | "failed";
     summary: string;

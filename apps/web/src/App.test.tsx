@@ -54,7 +54,7 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: "Foley Impact" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Generate/i })).toBeEnabled();
+    expect(screen.getByTitle("Queue SFX generation")).toBeEnabled();
     expect(screen.getAllByText("Tight hatch impact").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Engine room bed").length).toBeGreaterThan(0);
     expect(screen.getByText("MOSS-SoundEffect")).toBeInTheDocument();
@@ -66,6 +66,18 @@ describe("App", () => {
     expect(
       screen.getByText(
         "AudioX, MMAudio, and ThinkSound remain deferred to the video-to-audio story.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Neon bass starter pack" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Queue sample and loop generation")).toBeEnabled();
+    expect(screen.getAllByText("Bass pluck A1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Four-bar chase bassline").length).toBeGreaterThan(0);
+    expect(screen.getByText("ACE-Step 1.5")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Loop variants include BPM, key, bar count, and inspectable loop points.",
       ),
     ).toBeInTheDocument();
   });

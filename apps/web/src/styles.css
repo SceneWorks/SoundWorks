@@ -212,13 +212,15 @@ h1 {
 }
 
 .tts-studio-panel,
-.voice-lab-panel {
+.voice-lab-panel,
+.sfx-studio-panel {
   display: grid;
   gap: 14px;
 }
 
 .tts-header,
-.voice-lab-header {
+.voice-lab-header,
+.sfx-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -226,7 +228,8 @@ h1 {
 }
 
 .tts-header h2,
-.voice-lab-header h2 {
+.voice-lab-header h2,
+.sfx-header h2 {
   color: #12231f;
   font-size: 1.35rem;
 }
@@ -269,15 +272,27 @@ h1 {
   background: #633044;
 }
 
+.sfx-action {
+  background: #55602d;
+  border-color: #485226;
+}
+
+.sfx-action:not(:disabled):hover,
+.sfx-action:not(:disabled):focus-visible {
+  background: #465024;
+}
+
 .tts-metrics,
-.voice-lab-metrics {
+.voice-lab-metrics,
+.sfx-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 .tts-metrics div,
-.voice-lab-metrics div {
+.voice-lab-metrics div,
+.sfx-metrics div {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
   gap: 2px 8px;
@@ -290,7 +305,8 @@ h1 {
 }
 
 .tts-metrics strong,
-.voice-lab-metrics strong {
+.voice-lab-metrics strong,
+.sfx-metrics strong {
   color: #17342e;
   font-size: 1.22rem;
   line-height: 1;
@@ -298,7 +314,8 @@ h1 {
 }
 
 .tts-metrics span,
-.voice-lab-metrics span {
+.voice-lab-metrics span,
+.sfx-metrics span {
   grid-column: 2;
   color: #626e68;
   font-size: 0.78rem;
@@ -307,11 +324,150 @@ h1 {
 }
 
 .tts-layout,
-.voice-lab-layout {
+.voice-lab-layout,
+.sfx-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
   gap: 16px;
   align-items: start;
+}
+
+.sfx-main,
+.sfx-side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sfx-prompt-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  color: #17231f;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.sfx-prompt-panel p,
+.sfx-prompt-panel small {
+  overflow-wrap: anywhere;
+}
+
+.sfx-prompt-panel p {
+  line-height: 1.45;
+}
+
+.sfx-prompt-panel small {
+  color: #66726b;
+}
+
+.sfx-control-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sfx-control-grid div {
+  display: grid;
+  gap: 4px;
+  min-height: 64px;
+  padding: 12px;
+  color: #18312b;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.sfx-control-grid strong {
+  color: #17342e;
+  font-size: 1.25rem;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.sfx-control-grid span {
+  color: #626e68;
+  font-size: 0.78rem;
+  font-weight: 720;
+  overflow-wrap: anywhere;
+}
+
+.sfx-variant-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sfx-variant {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px;
+  color: #17231f;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.sfx-variant.selected {
+  border-color: #9aa569;
+  background: #fffef8;
+}
+
+.sfx-variant-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.sfx-variant-title strong,
+.sfx-variant-title span,
+.sfx-variant small,
+.sfx-variant p,
+.sfx-provider-option strong,
+.sfx-provider-option small,
+.sfx-provider-option p {
+  overflow-wrap: anywhere;
+}
+
+.sfx-variant-title span {
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  color: #4d552b;
+  font-size: 0.72rem;
+  font-weight: 760;
+  background: #eef2d4;
+  border-radius: 8px;
+}
+
+.sfx-variant small,
+.sfx-variant p,
+.sfx-provider-option small,
+.sfx-provider-option p {
+  color: #66726b;
+}
+
+.sfx-provider-option {
+  min-width: 0;
+  padding: 10px;
+  background: #fbfaf5;
+  border: 1px solid #e4dfd4;
+  border-radius: 8px;
+}
+
+.sfx-provider-option small,
+.sfx-provider-option p {
+  display: block;
+  margin-top: 4px;
+}
+
+.sfx-review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
 }
 
 .voice-mode-grid {
@@ -1170,6 +1326,11 @@ h1 {
   .runtime-columns,
   .runtime-policy,
   .evaluation-summary,
+  .sfx-layout,
+  .sfx-metrics,
+  .sfx-control-grid,
+  .sfx-variant-grid,
+  .sfx-review-grid,
   .voice-lab-layout,
   .voice-lab-metrics,
   .voice-mode-grid,
@@ -1180,7 +1341,8 @@ h1 {
   }
 
   .tts-header,
-  .voice-lab-header {
+  .voice-lab-header,
+  .sfx-header {
     display: grid;
     justify-items: start;
   }

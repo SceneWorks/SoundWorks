@@ -1,6 +1,6 @@
 use soundworks_core::{
-    AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview, TtsStudioOverview,
-    VoiceLabOverview,
+    AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview, SfxStudioOverview,
+    TtsStudioOverview, VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -33,6 +33,11 @@ fn get_voice_lab_overview() -> VoiceLabOverview {
     voice_lab_overview()
 }
 
+#[tauri::command]
+fn get_sfx_studio_overview() -> SfxStudioOverview {
+    sfx_studio_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -57,6 +62,10 @@ pub fn voice_lab_overview() -> VoiceLabOverview {
     VoiceLabOverview::reference().expect("reference Voice Lab is valid")
 }
 
+pub fn sfx_studio_overview() -> SfxStudioOverview {
+    SfxStudioOverview::reference().expect("reference SFX Studio is valid")
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -66,7 +75,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_runtime_overview,
             get_model_evaluation_catalog,
             get_tts_studio_overview,
-            get_voice_lab_overview
+            get_voice_lab_overview,
+            get_sfx_studio_overview
         ])
 }
 
@@ -81,7 +91,7 @@ pub fn run() {
 mod tests {
     use super::{
         app_overview, model_evaluation_catalog, provider_catalog, runtime_overview,
-        tts_studio_overview, voice_lab_overview,
+        sfx_studio_overview, tts_studio_overview, voice_lab_overview,
     };
 
     #[test]
@@ -145,5 +155,15 @@ mod tests {
             overview.saved_output.asset.id,
             "asset-voice-lab-conversion-reference"
         );
+    }
+
+    #[test]
+    fn sfx_studio_command_returns_variant_contract() {
+        let overview = sfx_studio_overview();
+
+        assert_eq!(overview.schema_version, 1);
+        assert_eq!(overview.variants.len(), 3);
+        assert!(overview.submission.can_submit);
+        assert_eq!(overview.saved_outputs.len(), 2);
     }
 }

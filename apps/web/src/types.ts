@@ -29,6 +29,7 @@ export type AppOverview = {
   modelEvaluation: ModelEvaluationOverview;
   ttsStudio: TtsStudioSummary;
   voiceLab: VoiceLabSummary;
+  sfxStudio: SfxStudioSummary;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -174,6 +175,18 @@ export type VoiceLabSummary = {
   canSubmitConversion: boolean;
   selectedConversionCandidateId: string;
   savedAssetKind: string;
+};
+
+export type SfxStudioSummary = {
+  schemaVersion: number;
+  variantCount: number;
+  savedOutputCount: number;
+  providerCount: number;
+  scorecardCount: number;
+  canSubmit: boolean;
+  selectedProviderId: string;
+  selectedModelId: string;
+  savedAssetKinds: string[];
 };
 
 export type VoiceConsentStatus =
@@ -457,5 +470,172 @@ export type VoiceLabOverview = {
     label: string;
     status: "ready" | "needs-review";
     target: string;
+  }>;
+};
+
+export type SfxCategory =
+  | "foley-impact"
+  | "ambience-bed"
+  | "transition"
+  | "ui-sound"
+  | "creature"
+  | "weather";
+
+export type SfxStudioOverview = {
+  schemaVersion: number;
+  prompt: {
+    id: string;
+    text: string;
+    negativePrompt: string;
+    category: SfxCategory;
+    tags: string[];
+    referenceAudioAssetId?: string | null;
+  };
+  controls: {
+    durationMs: number;
+    variationCount: number;
+    intensity: number;
+    realism: number;
+    loopable: boolean;
+    trimSilence: boolean;
+    normalizeLoudnessLufs: number;
+    fadeInMs: number;
+    fadeOutMs: number;
+    loopCrossfadeMs: number;
+    promoteToProjectLibrary: boolean;
+  };
+  categoryPresets: Array<{
+    category: SfxCategory;
+    label: string;
+    defaultDurationMs: number;
+    loopableDefault: boolean;
+    outputKind: string;
+  }>;
+  providerOptions: Array<{
+    providerId: string;
+    modelId: string;
+    modelVersion?: string | null;
+    displayName: string;
+    workflow: CapabilityWorkflow;
+    runtime: string;
+    installStatus: string;
+    runnable: boolean;
+    outputAssetKind: string;
+    outputFormat: string;
+    sampleRateHz: number;
+    channelLayout: string;
+    minDurationMs?: number | null;
+    maxDurationMs?: number | null;
+    supportsReferenceAudio: boolean;
+    supportsLooping: boolean;
+    commercialUseAllowed: boolean;
+    watermark: string;
+    supportedControls: string[];
+    limitations: string[];
+  }>;
+  selectedProvider: {
+    providerId: string;
+    modelId: string;
+    modelVersion?: string | null;
+    workflow: CapabilityWorkflow;
+    runtime: string;
+    accepted: boolean;
+    blocker?: string | null;
+  };
+  providerScorecards: Array<{
+    candidateId: string;
+    name: string;
+    provider: string;
+    lanes: string[];
+    status: string;
+    productEligibility: string;
+    readiness: string;
+    runtimePath: string;
+    commercialUse: string;
+    recommended: boolean;
+    blockers: string[];
+    notes: string;
+  }>;
+  deferredMultimodalCandidateIds: string[];
+  variants: Array<{
+    id: string;
+    label: string;
+    workflow: CapabilityWorkflow;
+    assetKind: string;
+    category: SfxCategory;
+    durationMs: number;
+    loudnessLufs: number;
+    truePeakDbfs: number;
+    loopable: boolean;
+    loopPoints?: {
+      startSample: number;
+      endSample: number;
+    } | null;
+    tags: string[];
+    selectedForSave: boolean;
+  }>;
+  comparison: {
+    selectedVariantId: string;
+    variantCount: number;
+    loopableVariantIds: string[];
+    savedVariantIds: string[];
+  };
+  submission: {
+    canSubmit: boolean;
+    job: {
+      id: string;
+      recipeId: string;
+      kind: string;
+      status: string;
+      outputVersionIds: string[];
+      error?: string | null;
+    };
+    recipe: {
+      id: string;
+      workflow: string;
+      outputAssetIds: string[];
+    };
+    blockingReasons: string[];
+    warnings: string[];
+  };
+  savedOutputs: Array<{
+    variantId: string;
+    asset: {
+      id: string;
+      kind: string;
+      name: string;
+      tags: string[];
+      currentVersionId: string;
+    };
+    version: {
+      id: string;
+      file: {
+        storagePath: string;
+        format: string;
+      };
+      technical: {
+        sampleRateHz: number;
+        channels: number;
+        durationMs: number;
+        loudnessLufs?: number | null;
+        loopPoints?: {
+          startSample: number;
+          endSample: number;
+        } | null;
+      };
+    };
+    exported: boolean;
+    waveformPreviewReady: boolean;
+  }>;
+  postProcessingActions: Array<{
+    id: string;
+    operation: string;
+    enabled: boolean;
+    summary: string;
+  }>;
+  validationChecks: Array<{
+    id: string;
+    status: "passed" | "warning" | "failed";
+    summary: string;
   }>;
 };

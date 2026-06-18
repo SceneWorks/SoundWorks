@@ -2,12 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   fallbackOverview,
   fallbackRuntime,
+  fallbackSfxStudio,
   fallbackTtsStudio,
   fallbackVoiceLab,
 } from "./appData";
 import type {
   AppOverview,
   RuntimeOverview,
+  SfxStudioOverview,
   TtsStudioOverview,
   VoiceLabOverview,
 } from "./types";
@@ -41,5 +43,13 @@ export async function loadVoiceLabOverview(): Promise<VoiceLabOverview> {
     return await invoke<VoiceLabOverview>("get_voice_lab_overview");
   } catch {
     return fallbackVoiceLab;
+  }
+}
+
+export async function loadSfxStudioOverview(): Promise<SfxStudioOverview> {
+  try {
+    return await invoke<SfxStudioOverview>("get_sfx_studio_overview");
+  } catch {
+    return fallbackSfxStudio;
   }
 }

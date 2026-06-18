@@ -294,6 +294,70 @@ CREATE TABLE voice_lab_conversion_submissions (
 );
 ",
     },
+    SchemaMigration {
+        version: 8,
+        name: "sfx_studio_workflow",
+        sql: "
+CREATE TABLE sfx_studio_prompts (
+  id TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  negative_prompt TEXT NOT NULL,
+  category TEXT NOT NULL,
+  tags_json TEXT NOT NULL,
+  reference_audio_asset_id TEXT REFERENCES audio_assets(id),
+  controls_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE sfx_studio_variants (
+  id TEXT PRIMARY KEY,
+  prompt_id TEXT NOT NULL REFERENCES sfx_studio_prompts(id),
+  label TEXT NOT NULL,
+  workflow TEXT NOT NULL,
+  asset_kind TEXT NOT NULL,
+  category TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  loudness_lufs REAL NOT NULL,
+  true_peak_dbfs REAL NOT NULL,
+  loopable INTEGER NOT NULL,
+  loop_points_json TEXT,
+  tags_json TEXT NOT NULL,
+  selected_for_save INTEGER NOT NULL
+);
+CREATE TABLE sfx_studio_provider_scorecards (
+  candidate_id TEXT PRIMARY KEY REFERENCES model_evaluation_candidates(id),
+  readiness TEXT NOT NULL,
+  recommended INTEGER NOT NULL,
+  blockers_json TEXT NOT NULL,
+  notes TEXT NOT NULL
+);
+CREATE TABLE sfx_studio_post_processing_actions (
+  id TEXT PRIMARY KEY,
+  operation TEXT NOT NULL,
+  enabled INTEGER NOT NULL,
+  summary TEXT NOT NULL
+);
+CREATE TABLE sfx_studio_submissions (
+  id TEXT PRIMARY KEY,
+  prompt_id TEXT NOT NULL REFERENCES sfx_studio_prompts(id),
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  recipe_id TEXT NOT NULL REFERENCES generation_recipes(id),
+  job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+  can_submit INTEGER NOT NULL,
+  blocking_reasons_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL
+);
+CREATE TABLE sfx_studio_saved_outputs (
+  submission_id TEXT NOT NULL REFERENCES sfx_studio_submissions(id),
+  variant_id TEXT NOT NULL REFERENCES sfx_studio_variants(id),
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  exported INTEGER NOT NULL,
+  waveform_preview_ready INTEGER NOT NULL,
+  PRIMARY KEY(submission_id, variant_id)
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

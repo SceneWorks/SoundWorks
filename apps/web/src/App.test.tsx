@@ -131,6 +131,25 @@ describe("App", () => {
     expect(
       screen.getByText(/Filter model includes type, tags, duration, BPM/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Presets, stems, and handoff packages",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Export selected composition")).toBeEnabled();
+    expect(screen.getByText("Podcast/dialogue")).toBeInTheDocument();
+    expect(screen.getByText("Sample pack")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("SceneWorks video track").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("DAW bundle")).toBeInTheDocument();
+    expect(screen.getAllByText("Sidecars").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Export presets cover WAV, FLAC, MP3, and OGG."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Loop and sample pack exports preserve BPM, key/i),
+    ).toBeInTheDocument();
     expect(screen.getByTitle("SoundWorks export gate")).toBeDisabled();
     expect(
       screen.getByText(

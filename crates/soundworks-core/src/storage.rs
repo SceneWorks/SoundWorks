@@ -706,6 +706,90 @@ CREATE TABLE asset_library_reuse_events (
 );
 ",
     },
+    SchemaMigration {
+        version: 14,
+        name: "export_workflow",
+        sql: "
+CREATE TABLE export_presets (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  target TEXT NOT NULL,
+  default_format TEXT NOT NULL,
+  formats_json TEXT NOT NULL,
+  source_kinds_json TEXT NOT NULL,
+  asset_kinds_json TEXT NOT NULL,
+  package_artifacts_json TEXT NOT NULL,
+  sample_rate_hz INTEGER NOT NULL,
+  bit_depth INTEGER,
+  include_sidecar INTEGER NOT NULL,
+  include_stems INTEGER NOT NULL,
+  normalize_loudness INTEGER NOT NULL,
+  target_lufs REAL,
+  preserve_loop_metadata INTEGER NOT NULL,
+  preserve_bpm_key_metadata INTEGER NOT NULL
+);
+CREATE TABLE export_submissions (
+  id TEXT PRIMARY KEY,
+  preset_id TEXT NOT NULL REFERENCES export_presets(id),
+  source_kind TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  asset_ids_json TEXT NOT NULL,
+  collection_ids_json TEXT NOT NULL,
+  formats_json TEXT NOT NULL,
+  can_export INTEGER NOT NULL,
+  blocking_reasons_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL,
+  output_paths_json TEXT NOT NULL,
+  sidecar_path TEXT NOT NULL
+);
+CREATE TABLE export_sidecars (
+  id TEXT PRIMARY KEY,
+  submission_id TEXT NOT NULL REFERENCES export_submissions(id),
+  asset_id TEXT NOT NULL,
+  asset_kind TEXT NOT NULL,
+  target TEXT NOT NULL,
+  path TEXT NOT NULL UNIQUE,
+  includes_recipe INTEGER NOT NULL,
+  includes_model INTEGER NOT NULL,
+  includes_source_media INTEGER NOT NULL,
+  includes_rights INTEGER NOT NULL,
+  includes_edit_chain INTEGER NOT NULL,
+  disclosure_required INTEGER NOT NULL,
+  event_count INTEGER NOT NULL
+);
+CREATE TABLE export_daw_handoffs (
+  id TEXT PRIMARY KEY,
+  preset_id TEXT NOT NULL REFERENCES export_presets(id),
+  package_path TEXT NOT NULL UNIQUE,
+  normalized_filename_template TEXT NOT NULL,
+  includes_zip_bundle INTEGER NOT NULL,
+  includes_stems INTEGER NOT NULL,
+  includes_cue_markers INTEGER NOT NULL,
+  includes_loop_markers INTEGER NOT NULL,
+  includes_bpm_key_metadata INTEGER NOT NULL,
+  includes_lyrics_text INTEGER NOT NULL,
+  includes_midi INTEGER NOT NULL,
+  stem_kinds_json TEXT NOT NULL
+);
+CREATE TABLE export_sceneworks_handoffs (
+  id TEXT PRIMARY KEY,
+  preset_id TEXT NOT NULL REFERENCES export_presets(id),
+  package_path TEXT NOT NULL UNIQUE,
+  rendered_mixdown_path TEXT NOT NULL,
+  provenance_sidecar_path TEXT NOT NULL,
+  includes_optional_stems INTEGER NOT NULL,
+  intended_project_id TEXT,
+  intended_video_asset_id TEXT,
+  duration_ms INTEGER NOT NULL,
+  sample_rate_hz INTEGER NOT NULL,
+  channels INTEGER NOT NULL,
+  loudness_lufs REAL,
+  true_peak_dbfs REAL,
+  marker_count INTEGER NOT NULL,
+  section_count INTEGER NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

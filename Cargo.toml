@@ -7,7 +7,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-license = "UNLICENSED"
+license = "PolyForm-Noncommercial-1.0.0"
 repository = "https://github.com/SceneWorks/SoundWorks"
 
 [workspace.dependencies]

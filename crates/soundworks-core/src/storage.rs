@@ -600,7 +600,7 @@ CREATE TABLE rights_consent_checks (
 CREATE TABLE rights_model_use_decisions (
   candidate_id TEXT PRIMARY KEY REFERENCES model_evaluation_candidates(id),
   requested_workflow TEXT NOT NULL,
-  commercial_export INTEGER NOT NULL,
+  export_candidate INTEGER NOT NULL,
   license TEXT NOT NULL,
   commercial_use TEXT NOT NULL,
   product_eligibility TEXT NOT NULL,

@@ -193,7 +193,7 @@ pub struct RightsSafetySummary {
     pub blocked_gate_count: usize,
     pub sidecar_count: usize,
     pub disclosure_count: usize,
-    pub can_export_commercial: bool,
+    pub can_export: bool,
     pub watermark_policy: WatermarkPolicy,
 }
 
@@ -534,7 +534,7 @@ impl RightsSafetySummary {
                 .iter()
                 .filter(|check| check.required)
                 .count(),
-            can_export_commercial: overview.can_export_commercial(),
+            can_export: overview.can_export(),
             watermark_policy: overview.policy.watermark_policy,
         }
     }

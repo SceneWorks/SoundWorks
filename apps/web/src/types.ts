@@ -242,7 +242,7 @@ export type RightsSafetySummary = {
   blockedGateCount: number;
   sidecarCount: number;
   disclosureCount: number;
-  canExportCommercial: boolean;
+  canExport: boolean;
   watermarkPolicy: string;
 };
 
@@ -251,7 +251,7 @@ export type RightsSafetyOverview = {
   policy: {
     name: string;
     voiceConsentRequiredFor: string[];
-    commercialExportRequires: string[];
+    exportRequires: string[];
     blockedPromptCategories: string[];
     warningPromptCategories: string[];
     watermarkPolicy: string;
@@ -278,7 +278,7 @@ export type RightsSafetyOverview = {
     candidateId: string;
     name: string;
     requestedWorkflow: string;
-    commercialExport: boolean;
+    exportCandidate: boolean;
     license: string;
     commercialUse: string;
     productEligibility: string;

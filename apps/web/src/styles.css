@@ -212,6 +212,7 @@ h1 {
 }
 
 .tts-studio-panel,
+.asset-library-panel,
 .voice-lab-panel,
 .sfx-studio-panel,
 .samples-studio-panel,
@@ -222,6 +223,7 @@ h1 {
 }
 
 .tts-header,
+.library-header,
 .voice-lab-header,
 .sfx-header,
 .samples-header {
@@ -232,6 +234,7 @@ h1 {
 }
 
 .tts-header h2,
+.library-header h2,
 .voice-lab-header h2,
 .sfx-header h2,
 .samples-header h2 {
@@ -318,6 +321,7 @@ h1 {
 }
 
 .tts-metrics,
+.library-metrics,
 .voice-lab-metrics,
 .sfx-metrics,
 .samples-metrics {
@@ -327,6 +331,7 @@ h1 {
 }
 
 .tts-metrics div,
+.library-metrics div,
 .voice-lab-metrics div,
 .sfx-metrics div,
 .samples-metrics div {
@@ -342,6 +347,7 @@ h1 {
 }
 
 .tts-metrics strong,
+.library-metrics strong,
 .voice-lab-metrics strong,
 .sfx-metrics strong,
 .samples-metrics strong {
@@ -352,6 +358,7 @@ h1 {
 }
 
 .tts-metrics span,
+.library-metrics span,
 .voice-lab-metrics span,
 .sfx-metrics span,
 .samples-metrics span {
@@ -360,6 +367,282 @@ h1 {
   font-size: 0.78rem;
   font-weight: 720;
   overflow-wrap: anywhere;
+}
+
+.library-search {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: min(100%, 280px);
+  min-height: 42px;
+  padding: 0 12px;
+  color: #31483f;
+  background: #fffdf8;
+  border: 1px solid #d8d2c6;
+  border-radius: 8px;
+}
+
+.library-search span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-scope-row,
+.library-bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.library-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px;
+  color: #17342e;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.library-scope div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.library-scope strong,
+.library-scope small,
+.library-scope span {
+  overflow-wrap: anywhere;
+}
+
+.library-scope small,
+.library-scope span {
+  color: #66726b;
+  font-size: 0.82rem;
+}
+
+.library-filter-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 10px;
+}
+
+.filter-chip-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  background: #fffdf8;
+  border: 1px solid #e1dbd0;
+  border-radius: 8px;
+}
+
+.filter-chip-group strong {
+  color: #2e443c;
+  font-size: 0.82rem;
+}
+
+.filter-chip-group div,
+.asset-tag-row,
+.lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-chip,
+.asset-tag-row span {
+  min-height: 24px;
+  padding: 4px 8px;
+  color: #55635d;
+  font-size: 0.75rem;
+  border: 1px solid #d7d0c4;
+  border-radius: 999px;
+  background: #f8f2e8;
+  overflow-wrap: anywhere;
+}
+
+.filter-chip.selected {
+  color: #12362f;
+  border-color: #8aac9d;
+  background: #dff0e8;
+}
+
+.library-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.library-item-list {
+  display: grid;
+  gap: 10px;
+}
+
+.library-item {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 12px;
+  min-height: 104px;
+  padding: 12px;
+  color: #17342e;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.library-item.selected {
+  border-color: #789d8d;
+  box-shadow: 0 10px 22px rgb(22 38 33 / 10%);
+}
+
+.waveform-thumb {
+  display: grid;
+  grid-template-columns: repeat(18, 1fr);
+  align-items: center;
+  gap: 2px;
+  width: 92px;
+  height: 58px;
+  padding: 8px;
+  background: #eef3ed;
+  border: 1px solid #d7e0d8;
+  border-radius: 8px;
+}
+
+.waveform-thumb span {
+  display: block;
+  width: 100%;
+  max-height: 42px;
+  background: #4c7867;
+  border-radius: 2px;
+}
+
+.library-item-main,
+.library-detail {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.library-item-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.library-item-title strong,
+.library-item-title span,
+.library-item-main small,
+.library-detail p {
+  overflow-wrap: anywhere;
+}
+
+.library-item-title span {
+  flex: 0 0 auto;
+  color: #53645c;
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.library-item-main small {
+  color: #66726b;
+}
+
+.detail-tags {
+  margin-top: 2px;
+}
+
+.icon-action {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: #f8f3ec;
+  background: #486554;
+  border: 1px solid #3c5546;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.icon-action:disabled {
+  color: #756c61;
+  background: #e1d8c9;
+  border-color: #d4cab9;
+  cursor: not-allowed;
+}
+
+.version-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.version-list li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  color: #40564f;
+}
+
+.version-list strong,
+.version-list small,
+.collection-card strong,
+.collection-card small,
+.collection-card p {
+  overflow-wrap: anywhere;
+}
+
+.version-list small {
+  display: block;
+  color: #66726b;
+}
+
+.collection-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.collection-card {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  color: #17342e;
+  background: #fbf7ef;
+  border: 1px solid #e0d8cb;
+  border-radius: 8px;
+}
+
+.collection-card small,
+.collection-card p {
+  color: #66726b;
+}
+
+.secondary-action {
+  min-height: 34px;
+  padding: 0 12px;
+  color: #23433a;
+  background: #e5f0ea;
+  border: 1px solid #c8dbd2;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.secondary-action:hover,
+.secondary-action:focus-visible {
+  border-color: #7c998f;
+  outline: none;
 }
 
 .tts-layout,
@@ -1683,6 +1966,8 @@ h1 {
   .rights-card-grid,
   .model-gate-grid,
   .rights-review-grid,
+  .library-layout,
+  .library-bottom-grid,
   .voice-lab-layout,
   .voice-lab-metrics,
   .voice-mode-grid,
@@ -1693,6 +1978,7 @@ h1 {
   }
 
   .tts-header,
+  .library-header,
   .voice-lab-header,
   .sfx-header,
   .samples-header {
@@ -1710,6 +1996,20 @@ h1 {
 }
 
 @media (max-width: 560px) {
+  .library-item {
+    grid-template-columns: 1fr 42px;
+  }
+
+  .waveform-thumb {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .library-item-title {
+    display: grid;
+    justify-items: start;
+  }
+
   .studio-card {
     grid-template-columns: 40px minmax(0, 1fr);
   }

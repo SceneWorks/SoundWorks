@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub mod asset_library;
 pub mod domain;
 pub mod evaluation;
 pub mod fixtures;
@@ -14,6 +15,7 @@ pub mod storage;
 pub mod tts;
 pub mod voice_lab;
 
+pub use asset_library::*;
 pub use domain::*;
 pub use evaluation::*;
 pub use fixtures::*;
@@ -36,6 +38,7 @@ pub struct AppOverview {
     pub studios: Vec<StudioSurface>,
     pub commands: Vec<CommandBoundary>,
     pub provider_catalog: ProviderCatalogOverview,
+    pub asset_library: AssetLibrarySummary,
     pub model_evaluation: ModelEvaluationOverview,
     pub tts_studio: TtsStudioSummary,
     pub voice_lab: VoiceLabSummary,
@@ -86,6 +89,23 @@ pub struct ProviderCatalogOverview {
     pub model_count: usize,
     pub capability_count: usize,
     pub workflows: Vec<CapabilityWorkflowSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetLibrarySummary {
+    pub schema_version: u32,
+    pub item_count: usize,
+    pub previewable_item_count: usize,
+    pub collection_count: usize,
+    pub scope_count: usize,
+    pub filter_count: usize,
+    pub supported_type_count: usize,
+    pub favorite_count: usize,
+    pub rejected_count: usize,
+    pub archived_count: usize,
+    pub selected_item_id: String,
+    pub selected_item_type: LibraryItemType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -280,6 +300,13 @@ impl AppOverview {
                             .to_string(),
                 },
                 CommandBoundary {
+                    name: "get_asset_library_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load searchable asset library facets, project/global scope, lifecycle state, collections, previews, and provenance detail."
+                            .to_string(),
+                },
+                CommandBoundary {
                     name: "get_runtime_overview".to_string(),
                     direction: CommandDirection::UiToBackend,
                     purpose:
@@ -344,6 +371,9 @@ impl AppOverview {
                 },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
+            asset_library: AssetLibrarySummary::from_overview(
+                &AssetLibraryOverview::reference().expect("reference Asset Library is valid"),
+            ),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
             tts_studio: TtsStudioSummary::from_overview(
                 &TtsStudioOverview::reference().expect("reference TTS studio is valid"),
@@ -540,6 +570,29 @@ impl RightsSafetySummary {
     }
 }
 
+impl AssetLibrarySummary {
+    pub fn from_overview(overview: &AssetLibraryOverview) -> Self {
+        Self {
+            schema_version: overview.schema_version,
+            item_count: overview.items.len(),
+            previewable_item_count: overview
+                .items
+                .iter()
+                .filter(|item| item.quick_audition.previewable)
+                .count(),
+            collection_count: overview.collections.len(),
+            scope_count: overview.scopes.len(),
+            filter_count: overview.filters.facets.len(),
+            supported_type_count: overview.filters.supported_item_types.len(),
+            favorite_count: overview.items.iter().filter(|item| item.favorite).count(),
+            rejected_count: overview.items.iter().filter(|item| item.rejected).count(),
+            archived_count: overview.items.iter().filter(|item| item.archived).count(),
+            selected_item_id: overview.selected_item.item.id.clone(),
+            selected_item_type: overview.selected_item.item.item_type,
+        }
+    }
+}
+
 impl ProviderCatalogOverview {
     pub fn from_catalog(catalog: &ProviderCatalog) -> Self {
         Self {
@@ -635,20 +688,22 @@ mod tests {
 
         assert_eq!(payload["productName"], "SoundWorks");
         assert_eq!(payload["commands"][0]["name"], "get_app_overview");
-        assert_eq!(payload["commands"][2]["name"], "get_runtime_overview");
+        assert_eq!(payload["commands"][2]["name"], "get_asset_library_overview");
+        assert_eq!(payload["commands"][3]["name"], "get_runtime_overview");
         assert_eq!(
-            payload["commands"][3]["name"],
+            payload["commands"][4]["name"],
             "get_model_evaluation_catalog"
         );
         assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
+        assert_eq!(payload["assetLibrary"]["supportedTypeCount"], 13);
         assert_eq!(payload["modelEvaluation"]["candidateCount"], 28);
         assert_eq!(payload["ttsStudio"]["segmentCount"], 3);
-        assert_eq!(payload["commands"][4]["name"], "get_tts_studio_overview");
-        assert_eq!(payload["commands"][5]["name"], "get_voice_lab_overview");
-        assert_eq!(payload["commands"][6]["name"], "get_sfx_studio_overview");
-        assert_eq!(payload["commands"][8]["name"], "get_song_studio_overview");
+        assert_eq!(payload["commands"][5]["name"], "get_tts_studio_overview");
+        assert_eq!(payload["commands"][6]["name"], "get_voice_lab_overview");
+        assert_eq!(payload["commands"][7]["name"], "get_sfx_studio_overview");
+        assert_eq!(payload["commands"][9]["name"], "get_song_studio_overview");
         assert_eq!(
-            payload["commands"][9]["name"],
+            payload["commands"][10]["name"],
             "get_review_workspace_overview"
         );
         assert_eq!(payload["voiceLab"]["modeCount"], 3);

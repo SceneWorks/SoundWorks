@@ -214,7 +214,8 @@ h1 {
 .tts-studio-panel,
 .voice-lab-panel,
 .sfx-studio-panel,
-.samples-studio-panel {
+.samples-studio-panel,
+.review-workspace-panel {
   display: grid;
   gap: 14px;
 }
@@ -295,6 +296,16 @@ h1 {
   background: #4a3e65;
 }
 
+.review-action {
+  background: #486554;
+  border-color: #3c5546;
+}
+
+.review-action:not(:disabled):hover,
+.review-action:not(:disabled):focus-visible {
+  background: #3a5243;
+}
+
 .tts-metrics,
 .voice-lab-metrics,
 .sfx-metrics,
@@ -343,7 +354,8 @@ h1 {
 .tts-layout,
 .voice-lab-layout,
 .sfx-layout,
-.samples-layout {
+.samples-layout,
+.review-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
   gap: 16px;
@@ -353,10 +365,180 @@ h1 {
 .sfx-main,
 .sfx-side,
 .samples-main,
-.samples-side {
+.samples-side,
+.review-main,
+.review-side {
   display: grid;
   gap: 12px;
   min-width: 0;
+}
+
+.review-transport {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  color: #17231f;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.review-transport-topline {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.review-transport-topline strong,
+.review-transport-topline span,
+.transport-meta span {
+  overflow-wrap: anywhere;
+}
+
+.review-transport-topline span,
+.transport-meta span {
+  color: #66726b;
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.icon-control {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: #f8f3ec;
+  background: #486554;
+  border: 1px solid #3c5546;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.icon-control:hover,
+.icon-control:focus-visible {
+  background: #3a5243;
+  outline: none;
+}
+
+.waveform-strip {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(6px, 1fr));
+  align-items: center;
+  gap: 5px;
+  min-height: 132px;
+  padding: 12px;
+  background: #17231f;
+  border-radius: 8px;
+}
+
+.waveform-bar {
+  align-self: center;
+  min-height: 18px;
+  background: #83c7a1;
+  border-radius: 999px;
+}
+
+.transport-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.review-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.review-asset {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  color: #17231f;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.review-asset.selected {
+  border-color: #78a98e;
+  background: #f8fff9;
+}
+
+.review-asset small,
+.review-asset p {
+  color: #66726b;
+  overflow-wrap: anywhere;
+}
+
+.edit-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.edit-action {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  color: #28352f;
+  text-align: left;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.edit-action.enabled {
+  border-color: #b8d0c1;
+  background: #f8fff9;
+}
+
+.edit-action span {
+  overflow-wrap: anywhere;
+}
+
+.comparison-grid,
+.comparison-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.comparison-grid article,
+.comparison-metrics span {
+  min-width: 0;
+  padding: 10px;
+  background: #fbfaf5;
+  border: 1px solid #e4dfd4;
+  border-radius: 8px;
+}
+
+.comparison-grid strong,
+.comparison-grid small,
+.comparison-grid p,
+.comparison-metrics span {
+  overflow-wrap: anywhere;
+}
+
+.comparison-grid small,
+.comparison-grid p,
+.comparison-metrics span {
+  display: block;
+  margin-top: 4px;
+  color: #66726b;
+  font-size: 0.8rem;
+}
+
+.comparison-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 10px;
 }
 
 .sfx-prompt-panel {
@@ -1358,6 +1540,12 @@ h1 {
   .runtime-columns,
   .runtime-policy,
   .evaluation-summary,
+  .review-layout,
+  .review-asset-grid,
+  .edit-action-grid,
+  .transport-meta,
+  .comparison-grid,
+  .comparison-metrics,
   .sfx-layout,
   .sfx-metrics,
   .sfx-control-grid,

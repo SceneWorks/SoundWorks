@@ -4,6 +4,7 @@ pub mod domain;
 pub mod evaluation;
 pub mod fixtures;
 pub mod manifests;
+pub mod review;
 pub mod runtime;
 pub mod samples;
 pub mod sfx;
@@ -16,6 +17,7 @@ pub use domain::*;
 pub use evaluation::*;
 pub use fixtures::*;
 pub use manifests::*;
+pub use review::*;
 pub use runtime::*;
 pub use samples::*;
 pub use sfx::*;
@@ -38,6 +40,7 @@ pub struct AppOverview {
     pub sfx_studio: SfxStudioSummary,
     pub samples_studio: SamplesStudioSummary,
     pub song_studio: SongStudioSummary,
+    pub review_workspace: ReviewWorkspaceSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,6 +164,20 @@ pub struct SongStudioSummary {
     pub saved_asset_kinds: Vec<AudioAssetKind>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewWorkspaceSummary {
+    pub schema_version: u32,
+    pub asset_count: usize,
+    pub previewable_asset_count: usize,
+    pub edit_action_count: usize,
+    pub comparison_count: usize,
+    pub can_save_edit: bool,
+    pub active_asset_id: String,
+    pub edited_version_id: String,
+    pub source_asset_kinds: Vec<AudioAssetKind>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandDirection {
@@ -220,6 +237,7 @@ impl AppOverview {
                 StudioSurface::scaffolded("sfx", "SFX + Ambience", "/studios/sfx"),
                 StudioSurface::scaffolded("loops", "Samples + Loops", "/studios/loops"),
                 StudioSurface::scaffolded("songs", "Song Studio", "/studios/songs"),
+                StudioSurface::scaffolded("review", "Waveform Review", "/review"),
                 StudioSurface::planned(
                     "video-to-audio",
                     "Video to Audio",
@@ -290,6 +308,13 @@ impl AppOverview {
                         "Load complete-song lyrics, structure, style controls, provider scorecards, variants, recipes, stems, export targets, and saved outputs."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_review_workspace_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load waveform review transport, preview caches, lightweight edit actions, non-destructive edited versions, comparison state, and recipe provenance."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
@@ -307,6 +332,9 @@ impl AppOverview {
             ),
             song_studio: SongStudioSummary::from_overview(
                 &SongStudioOverview::reference().expect("reference Song Studio is valid"),
+            ),
+            review_workspace: ReviewWorkspaceSummary::from_overview(
+                &ReviewWorkspaceOverview::reference().expect("reference Review workspace is valid"),
             ),
         }
     }
@@ -422,6 +450,34 @@ impl VoiceLabSummary {
     }
 }
 
+impl ReviewWorkspaceSummary {
+    pub fn from_overview(overview: &ReviewWorkspaceOverview) -> Self {
+        let mut source_asset_kinds = overview
+            .assets
+            .iter()
+            .map(|asset| asset.asset.kind)
+            .collect::<Vec<_>>();
+        source_asset_kinds.sort_by_key(|kind| format!("{kind:?}"));
+        source_asset_kinds.dedup();
+
+        Self {
+            schema_version: overview.schema_version,
+            asset_count: overview.assets.len(),
+            previewable_asset_count: overview
+                .assets
+                .iter()
+                .filter(|asset| asset.can_preview)
+                .count(),
+            edit_action_count: overview.edit_actions.len(),
+            comparison_count: 1,
+            can_save_edit: overview.edit_submission.can_save,
+            active_asset_id: overview.selected_asset.asset.id.clone(),
+            edited_version_id: overview.edit_submission.saved_version.id.clone(),
+            source_asset_kinds,
+        }
+    }
+}
+
 impl ProviderCatalogOverview {
     pub fn from_catalog(catalog: &ProviderCatalog) -> Self {
         Self {
@@ -490,6 +546,7 @@ mod tests {
                 "sfx",
                 "loops",
                 "songs",
+                "review",
                 "video-to-audio"
             ]
         );
@@ -527,9 +584,14 @@ mod tests {
         assert_eq!(payload["commands"][5]["name"], "get_voice_lab_overview");
         assert_eq!(payload["commands"][6]["name"], "get_sfx_studio_overview");
         assert_eq!(payload["commands"][8]["name"], "get_song_studio_overview");
+        assert_eq!(
+            payload["commands"][9]["name"],
+            "get_review_workspace_overview"
+        );
         assert_eq!(payload["voiceLab"]["modeCount"], 3);
         assert_eq!(payload["sfxStudio"]["variantCount"], 3);
         assert_eq!(payload["songStudio"]["variantCount"], 2);
+        assert_eq!(payload["reviewWorkspace"]["editActionCount"], 8);
     }
 
     #[test]
@@ -659,6 +721,12 @@ mod tests {
             "song_studio_saved_outputs",
             "song_studio_provider_scorecards",
             "song_studio_export_targets",
+            "review_workspace_assets",
+            "review_preview_caches",
+            "review_edit_actions",
+            "review_edit_submissions",
+            "review_version_comparisons",
+            "review_provenance_links",
         ] {
             assert!(
                 sql.contains(table),
@@ -794,5 +862,21 @@ mod tests {
             vec![AudioAssetKind::MusicClip, AudioAssetKind::Song]
         );
         assert!(overview.song_studio.can_submit);
+    }
+
+    #[test]
+    fn app_overview_summarizes_review_workspace() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.studios[5].status, ScaffoldStatus::Scaffolded);
+        assert_eq!(overview.review_workspace.asset_count, 5);
+        assert_eq!(overview.review_workspace.previewable_asset_count, 5);
+        assert_eq!(overview.review_workspace.edit_action_count, 8);
+        assert_eq!(overview.review_workspace.comparison_count, 1);
+        assert_eq!(
+            overview.review_workspace.edited_version_id,
+            "version-loop-001-b-review-edit"
+        );
+        assert!(overview.review_workspace.can_save_edit);
     }
 }

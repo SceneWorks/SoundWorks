@@ -32,6 +32,7 @@ export type AppOverview = {
   sfxStudio: SfxStudioSummary;
   samplesStudio: SamplesStudioSummary;
   songStudio: SongStudioSummary;
+  reviewWorkspace: ReviewWorkspaceSummary;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -216,6 +217,192 @@ export type SongStudioSummary = {
   selectedModelId: string;
   requestedStems: string[];
   savedAssetKinds: string[];
+};
+
+export type ReviewWorkspaceSummary = {
+  schemaVersion: number;
+  assetCount: number;
+  previewableAssetCount: number;
+  editActionCount: number;
+  comparisonCount: number;
+  canSaveEdit: boolean;
+  activeAssetId: string;
+  editedVersionId: string;
+  sourceAssetKinds: string[];
+};
+
+export type ReviewAsset = {
+  id: string;
+  scope: unknown;
+  kind: string;
+  name: string;
+  tags: string[];
+  collectionIds: string[];
+  currentVersionId: string;
+  versionIds: string[];
+  rights: unknown;
+  provenanceIds: string[];
+};
+
+export type ReviewAssetVersion = {
+  id: string;
+  assetId: string;
+  versionIndex: number;
+  file: {
+    storagePath: string;
+    format: string;
+    codec?: string | null;
+    byteSize?: number | null;
+    contentHash?: string | null;
+  };
+  technical: {
+    sampleRateHz: number;
+    bitDepth?: number | null;
+    channels: number;
+    durationMs: number;
+    loudnessLufs?: number | null;
+    truePeakDbfs?: number | null;
+    hasClipping: boolean;
+    bpm?: number | null;
+    musicalKey?: string | null;
+    loopPoints?: { startSample: number; endSample: number } | null;
+  };
+  createdBy: unknown;
+  waveformPreviewCache?: string | null;
+  spectrogramPreviewCache?: string | null;
+};
+
+export type ReviewAssetPreview = {
+  asset: ReviewAsset;
+  versions: ReviewAssetVersion[];
+  sourceWorkflow: string;
+  canPreview: boolean;
+  previewStatus: "ready" | "pending" | "missing";
+};
+
+export type ReviewWorkspaceOverview = {
+  schemaVersion: number;
+  assets: ReviewAssetPreview[];
+  selectedAsset: ReviewAssetPreview;
+  transport: {
+    playing: boolean;
+    positionMs: number;
+    durationMs: number;
+    zoomPixelsPerSecond: number;
+    selection?: { startMs: number; endMs: number } | null;
+    loopRegion?: { startMs: number; endMs: number } | null;
+    keyboardShortcuts: Array<{
+      id: string;
+      keys: string;
+      action: string;
+    }>;
+    accessibleLabels: string[];
+  };
+  waveform: {
+    assetVersionId: string;
+    channelCount: number;
+    sampleRateHz: number;
+    durationMs: number;
+    cachePath: string;
+    status: "ready" | "pending" | "missing";
+    peaks: Array<{ min: number; max: number }>;
+  };
+  spectrogram: {
+    assetVersionId: string;
+    cachePath: string;
+    status: "ready" | "pending" | "missing";
+    frequencyBins: number;
+    timeSlices: number;
+  };
+  editActions: Array<{
+    id: string;
+    kind: string;
+    label: string;
+    operation?: string | null;
+    destructive: boolean;
+    nonDestructiveSave: boolean;
+    enabled: boolean;
+    parameters: Record<string, unknown>;
+  }>;
+  editSubmission: {
+    id: string;
+    canSave: boolean;
+    recipe: unknown;
+    job: {
+      id: string;
+      recipeId: string;
+      kind: string;
+      status: string;
+      progress?: unknown | null;
+      outputVersionIds: string[];
+      error?: string | null;
+    };
+    sourceAsset: ReviewAsset;
+    sourceVersion: ReviewAssetVersion;
+    savedAsset: ReviewAsset;
+    savedVersion: ReviewAssetVersion;
+    warnings: string[];
+    blockingReasons: string[];
+  };
+  versionComparison: {
+    id: string;
+    mode: string;
+    left: {
+      label: string;
+      assetId: string;
+      versionId: string;
+      recipeId: string;
+      durationMs: number;
+      loudnessLufs?: number | null;
+      truePeakDbfs?: number | null;
+    };
+    right: {
+      label: string;
+      assetId: string;
+      versionId: string;
+      recipeId: string;
+      durationMs: number;
+      loudnessLufs?: number | null;
+      truePeakDbfs?: number | null;
+    };
+    metrics: {
+      durationDeltaMs: number;
+      loudnessDeltaLufs?: number | null;
+      truePeakDeltaDb?: number | null;
+      waveformDifferenceScore: number;
+    };
+    notes: string[];
+  };
+  provenance: {
+    inspectable: boolean;
+    originalRecipe: {
+      id: string;
+      workflow: string;
+      providerId: string;
+      modelId: string;
+      sourceReferenceCount: number;
+      outputAssetCount: number;
+      replayable: boolean;
+    };
+    editRecipe: {
+      id: string;
+      workflow: string;
+      providerId: string;
+      modelId: string;
+      sourceReferenceCount: number;
+      outputAssetCount: number;
+      replayable: boolean;
+    };
+    sourceVersionId: string;
+    editedVersionId: string;
+    provenanceIds: string[];
+    sidecarPath: string;
+  };
+  validationChecks: Array<{
+    id: string;
+    status: "passed" | "warning" | "failed";
+    summary: string;
+  }>;
 };
 
 export type VoiceConsentStatus =

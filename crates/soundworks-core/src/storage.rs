@@ -526,6 +526,63 @@ CREATE TABLE song_studio_export_targets (
 );
 ",
     },
+    SchemaMigration {
+        version: 11,
+        name: "review_workspace_workflow",
+        sql: "
+CREATE TABLE review_workspace_assets (
+  asset_id TEXT PRIMARY KEY REFERENCES audio_assets(id),
+  source_workflow TEXT NOT NULL,
+  can_preview INTEGER NOT NULL,
+  preview_status TEXT NOT NULL
+);
+CREATE TABLE review_preview_caches (
+  version_id TEXT PRIMARY KEY REFERENCES audio_asset_versions(id),
+  waveform_cache_path TEXT NOT NULL,
+  spectrogram_cache_path TEXT NOT NULL,
+  status TEXT NOT NULL,
+  generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE review_edit_actions (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  operation TEXT,
+  enabled INTEGER NOT NULL,
+  destructive INTEGER NOT NULL,
+  non_destructive_save INTEGER NOT NULL,
+  parameters_json TEXT NOT NULL
+);
+CREATE TABLE review_edit_submissions (
+  id TEXT PRIMARY KEY,
+  source_asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  source_version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  saved_version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  recipe_id TEXT NOT NULL REFERENCES generation_recipes(id),
+  job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+  can_save INTEGER NOT NULL,
+  warnings_json TEXT NOT NULL,
+  blocking_reasons_json TEXT NOT NULL
+);
+CREATE TABLE review_version_comparisons (
+  id TEXT PRIMARY KEY,
+  mode TEXT NOT NULL,
+  left_asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  left_version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  right_asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  right_version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  metrics_json TEXT NOT NULL,
+  notes_json TEXT NOT NULL
+);
+CREATE TABLE review_provenance_links (
+  edited_version_id TEXT PRIMARY KEY REFERENCES audio_asset_versions(id),
+  source_version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  original_recipe_id TEXT NOT NULL REFERENCES generation_recipes(id),
+  edit_recipe_id TEXT NOT NULL REFERENCES generation_recipes(id),
+  sidecar_path TEXT NOT NULL,
+  provenance_ids_json TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

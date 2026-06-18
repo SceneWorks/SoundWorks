@@ -1,5 +1,6 @@
 import type {
   AppOverview,
+  ReviewWorkspaceOverview,
   RuntimeOverview,
   SamplesStudioOverview,
   SfxStudioOverview,
@@ -74,6 +75,12 @@ export const fallbackOverview: AppOverview = {
       status: "scaffolded",
     },
     {
+      id: "review",
+      name: "Waveform Review",
+      route: "/review",
+      status: "scaffolded",
+    },
+    {
       id: "video-to-audio",
       name: "Video to Audio",
       route: "/studios/video-to-audio",
@@ -134,6 +141,12 @@ export const fallbackOverview: AppOverview = {
       direction: "ui-to-backend",
       purpose:
         "Load complete-song lyrics, structure, style controls, provider scorecards, variants, recipes, stems, export targets, and saved outputs.",
+    },
+    {
+      name: "get_review_workspace_overview",
+      direction: "ui-to-backend",
+      purpose:
+        "Load waveform review transport, preview caches, lightweight edit actions, non-destructive edited versions, comparison state, and recipe provenance.",
     },
   ],
   providerCatalog: {
@@ -285,6 +298,398 @@ export const fallbackOverview: AppOverview = {
     requestedStems: ["full-mix", "vocals", "drums", "bass", "instruments"],
     savedAssetKinds: ["music-clip", "song"],
   },
+  reviewWorkspace: {
+    schemaVersion: 1,
+    assetCount: 5,
+    previewableAssetCount: 5,
+    editActionCount: 8,
+    comparisonCount: 1,
+    canSaveEdit: true,
+    activeAssetId: "asset-loop-001",
+    editedVersionId: "version-loop-001-b-review-edit",
+    sourceAssetKinds: ["instrument-sample", "loop", "sfx", "song", "voice-clip"],
+  },
+};
+
+const reviewScope = { kind: "project", projectId: "project-demo" };
+const reviewRights = {
+  licenseStatus: "user-owned",
+  commercialUse: "allowed",
+  voiceConsent: "not-voice-material",
+  aiDisclosureRequired: true,
+  watermark: "not-present",
+  referenceMediaOwnership: "user-owned",
+};
+
+function reviewAsset(
+  id: string,
+  kind: string,
+  name: string,
+  versionId: string,
+) {
+  return {
+    id,
+    scope: reviewScope,
+    kind,
+    name,
+    tags: [kind],
+    collectionIds: [],
+    currentVersionId: versionId,
+    versionIds: [versionId],
+    rights: reviewRights,
+    provenanceIds: [`provenance-${id}`],
+  };
+}
+
+function reviewVersion(
+  assetId: string,
+  versionId: string,
+  kind: string,
+  durationMs: number,
+  index = 1,
+) {
+  return {
+    id: versionId,
+    assetId,
+    versionIndex: index,
+    file: {
+      storagePath: `soundworks-library/projects/project-demo/${kind}/${assetId}/${versionId}/media.wav`,
+      format: "wav",
+      codec: "pcm_s16le",
+      byteSize: null,
+      contentHash: index === 1 ? null : "sha256:review-edit-loop-001",
+    },
+    technical: {
+      sampleRateHz: 48000,
+      bitDepth: 24,
+      channels: kind === "voice-clips" ? 1 : 2,
+      durationMs,
+      loudnessLufs: index === 1 ? -14 : -16,
+      truePeakDbfs: index === 1 ? -1.5 : -1.8,
+      hasClipping: false,
+      bpm: kind === "loops" ? 86 : null,
+      musicalKey: kind === "songs" ? "A major" : null,
+      loopPoints:
+        kind === "loops"
+          ? { startSample: 0, endSample: 492288 }
+          : null,
+    },
+    createdBy:
+      index === 1
+        ? {
+            kind: "generated",
+            recipeId: `recipe-${assetId.replace("asset-", "")}`,
+            jobId: `job-${assetId}`,
+          }
+        : {
+            kind: "edited",
+            sourceVersionId: "version-loop-001-a",
+            editRecipeId: "recipe-review-edit-loop-001",
+          },
+    waveformPreviewCache: `soundworks-library/projects/project-demo/${kind}/${assetId}/${versionId}/previews/waveform.json`,
+    spectrogramPreviewCache: `soundworks-library/projects/project-demo/${kind}/${assetId}/${versionId}/previews/spectrogram.bin`,
+  };
+}
+
+const reviewVoiceAsset = reviewAsset(
+  "asset-voice-001",
+  "voice-clip",
+  "Narration scratch",
+  "version-voice-001-a",
+);
+const reviewSfxAsset = reviewAsset(
+  "asset-sfx-001",
+  "sfx",
+  "Metal hatch impact",
+  "version-sfx-001-a",
+);
+const reviewSampleAsset = reviewAsset(
+  "asset-sample-001",
+  "instrument-sample",
+  "Analog pluck C3",
+  "version-sample-001-a",
+);
+const reviewLoopAsset = {
+  ...reviewAsset(
+    "asset-loop-001",
+    "loop",
+    "Dusty trip-hop drums",
+    "version-loop-001-b-review-edit",
+  ),
+  versionIds: ["version-loop-001-a", "version-loop-001-b-review-edit"],
+  provenanceIds: ["provenance-asset-loop-001", "provenance-review-edit-loop-001"],
+};
+const reviewSongAsset = reviewAsset(
+  "asset-song-001",
+  "song",
+  "Signal reveal cue",
+  "version-song-001-a",
+);
+const reviewOriginalLoopVersion = reviewVersion(
+  "asset-loop-001",
+  "version-loop-001-a",
+  "loops",
+  11163,
+);
+const reviewEditedLoopVersion = reviewVersion(
+  "asset-loop-001",
+  "version-loop-001-b-review-edit",
+  "loops",
+  10480,
+  2,
+);
+
+export const fallbackReviewWorkspace: ReviewWorkspaceOverview = {
+  schemaVersion: 1,
+  assets: [
+    {
+      asset: reviewVoiceAsset,
+      versions: [
+        reviewVersion("asset-voice-001", "version-voice-001-a", "voice-clips", 4200),
+      ],
+      sourceWorkflow: "tts",
+      canPreview: true,
+      previewStatus: "ready",
+    },
+    {
+      asset: reviewSfxAsset,
+      versions: [reviewVersion("asset-sfx-001", "version-sfx-001-a", "sfx", 1800)],
+      sourceWorkflow: "sfx",
+      canPreview: true,
+      previewStatus: "ready",
+    },
+    {
+      asset: reviewSampleAsset,
+      versions: [
+        reviewVersion(
+          "asset-sample-001",
+          "version-sample-001-a",
+          "instrument-samples",
+          2600,
+        ),
+      ],
+      sourceWorkflow: "instrument-sample",
+      canPreview: true,
+      previewStatus: "ready",
+    },
+    {
+      asset: reviewLoopAsset,
+      versions: [reviewOriginalLoopVersion, reviewEditedLoopVersion],
+      sourceWorkflow: "loop",
+      canPreview: true,
+      previewStatus: "ready",
+    },
+    {
+      asset: reviewSongAsset,
+      versions: [reviewVersion("asset-song-001", "version-song-001-a", "songs", 132000)],
+      sourceWorkflow: "song",
+      canPreview: true,
+      previewStatus: "ready",
+    },
+  ],
+  selectedAsset: {
+    asset: reviewLoopAsset,
+    versions: [reviewOriginalLoopVersion, reviewEditedLoopVersion],
+    sourceWorkflow: "loop",
+    canPreview: true,
+    previewStatus: "ready",
+  },
+  transport: {
+    playing: false,
+    positionMs: 3200,
+    durationMs: 11163,
+    zoomPixelsPerSecond: 92,
+    selection: { startMs: 640, endMs: 10480 },
+    loopRegion: { startMs: 0, endMs: 11163 },
+    keyboardShortcuts: [
+      {
+        id: "transport.play_pause",
+        keys: "Space",
+        action: "Play or pause preview",
+      },
+      {
+        id: "transport.seek_backward",
+        keys: "ArrowLeft",
+        action: "Seek backward",
+      },
+      {
+        id: "transport.scrub",
+        keys: "Shift+Drag",
+        action: "Scrub waveform selection",
+      },
+      {
+        id: "transport.zoom",
+        keys: "Command+Plus / Command+Minus",
+        action: "Zoom waveform",
+      },
+    ],
+    accessibleLabels: [
+      "Play or pause waveform preview",
+      "Seek through selected audio asset",
+      "Adjust loop region start and end",
+      "Zoom waveform timeline",
+    ],
+  },
+  waveform: {
+    assetVersionId: "version-loop-001-a",
+    channelCount: 2,
+    sampleRateHz: 48000,
+    durationMs: 11163,
+    cachePath:
+      "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-a/previews/waveform.json",
+    status: "ready",
+    peaks: [
+      { min: -0.08, max: 0.32 },
+      { min: -0.14, max: 0.56 },
+      { min: -0.2, max: 0.64 },
+      { min: -0.11, max: 0.48 },
+      { min: -0.22, max: 0.78 },
+      { min: -0.17, max: 0.72 },
+      { min: -0.28, max: 0.86 },
+      { min: -0.19, max: 0.62 },
+      { min: -0.12, max: 0.44 },
+      { min: -0.24, max: 0.8 },
+      { min: -0.18, max: 0.7 },
+      { min: -0.3, max: 0.88 },
+      { min: -0.2, max: 0.68 },
+      { min: -0.1, max: 0.4 },
+      { min: -0.16, max: 0.58 },
+      { min: -0.25, max: 0.82 },
+    ],
+  },
+  spectrogram: {
+    assetVersionId: "version-loop-001-a",
+    cachePath:
+      "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-a/previews/spectrogram.bin",
+    status: "ready",
+    frequencyBins: 256,
+    timeSlices: 128,
+  },
+  editActions: [
+    "Trim selection",
+    "Fade in",
+    "Fade out",
+    "Normalize loudness",
+    "Remove silence",
+    "Loop crossfade",
+    "Convert format",
+    "Edit metadata",
+  ].map((label) => ({
+    id: label.toLowerCase().replaceAll(" ", "-"),
+    kind: label.toLowerCase().replaceAll(" ", "-"),
+    label,
+    operation: label.toLowerCase().replaceAll(" ", "-"),
+    destructive: true,
+    nonDestructiveSave: true,
+    enabled: true,
+    parameters: {},
+  })),
+  editSubmission: {
+    id: "review-edit-loop-001",
+    canSave: true,
+    recipe: { id: "recipe-review-edit-loop-001", workflow: "edit" },
+    job: {
+      id: "job-review-edit-loop-001",
+      recipeId: "recipe-review-edit-loop-001",
+      kind: "generate-audio",
+      status: "succeeded",
+      progress: null,
+      outputVersionIds: ["version-loop-001-b-review-edit"],
+      error: null,
+    },
+    sourceAsset: reviewLoopAsset,
+    sourceVersion: reviewOriginalLoopVersion,
+    savedAsset: reviewLoopAsset,
+    savedVersion: reviewEditedLoopVersion,
+    warnings: [
+      "Normalize target is stored as recipe metadata before media mutation.",
+    ],
+    blockingReasons: [],
+  },
+  versionComparison: {
+    id: "compare-loop-001-a-b",
+    mode: "version-ab",
+    left: {
+      label: "Original loop",
+      assetId: "asset-loop-001",
+      versionId: "version-loop-001-a",
+      recipeId: "recipe-loop-001",
+      durationMs: 11163,
+      loudnessLufs: -14,
+      truePeakDbfs: -1.5,
+    },
+    right: {
+      label: "Edited loop",
+      assetId: "asset-loop-001",
+      versionId: "version-loop-001-b-review-edit",
+      recipeId: "recipe-review-edit-loop-001",
+      durationMs: 10480,
+      loudnessLufs: -16,
+      truePeakDbfs: -1.8,
+    },
+    metrics: {
+      durationDeltaMs: -683,
+      loudnessDeltaLufs: -2,
+      truePeakDeltaDb: -0.3,
+      waveformDifferenceScore: 18,
+    },
+    notes: [
+      "A/B compare can target two versions of one asset.",
+      "The same contract accepts generated variants from different assets.",
+    ],
+  },
+  provenance: {
+    inspectable: true,
+    originalRecipe: {
+      id: "recipe-loop-001",
+      workflow: "loop",
+      providerId: "fixture-provider",
+      modelId: "fixture-audio-model",
+      sourceReferenceCount: 0,
+      outputAssetCount: 1,
+      replayable: true,
+    },
+    editRecipe: {
+      id: "recipe-review-edit-loop-001",
+      workflow: "edit",
+      providerId: "soundworks-reference",
+      modelId: "reference-editor",
+      sourceReferenceCount: 1,
+      outputAssetCount: 1,
+      replayable: true,
+    },
+    sourceVersionId: "version-loop-001-a",
+    editedVersionId: "version-loop-001-b-review-edit",
+    provenanceIds: ["provenance-asset-loop-001", "provenance-review-edit-loop-001"],
+    sidecarPath:
+      "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-b-review-edit/metadata/recipe-provenance.json",
+  },
+  validationChecks: [
+    {
+      id: "review.preview_all_generated_assets",
+      status: "passed",
+      summary:
+        "Every generated fixture asset kind exposes waveform and spectrogram preview cache paths.",
+    },
+    {
+      id: "review.transport_accessibility",
+      status: "passed",
+      summary:
+        "Transport includes play, pause, seek, scrub, zoom, loop region, time display, keyboard shortcuts, and accessible labels.",
+    },
+    {
+      id: "review.non_destructive_edit",
+      status: "passed",
+      summary:
+        "Save creates a new edited version and preserves the original generated version.",
+    },
+    {
+      id: "review.provenance_recipe",
+      status: "passed",
+      summary:
+        "Edit recipe, source version, generated source recipe, and provenance sidecar remain inspectable.",
+    },
+  ],
 };
 
 export const fallbackRuntime: RuntimeOverview = {

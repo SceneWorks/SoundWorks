@@ -26,6 +26,7 @@ export type AppOverview = {
   studios: StudioSurface[];
   commands: CommandBoundary[];
   providerCatalog: ProviderCatalogOverview;
+  assetLibrary: AssetLibrarySummary;
   modelEvaluation: ModelEvaluationOverview;
   ttsStudio: TtsStudioSummary;
   voiceLab: VoiceLabSummary;
@@ -146,6 +147,194 @@ export type ProviderCatalogOverview = {
   modelCount: number;
   capabilityCount: number;
   workflows: CapabilityWorkflowSummary[];
+};
+
+export type LibraryItemType =
+  | "voice-clip"
+  | "music-clip"
+  | "sfx"
+  | "song"
+  | "instrument-sample"
+  | "loop"
+  | "stem"
+  | "ambience"
+  | "voice-profile"
+  | "reference-audio"
+  | "composition"
+  | "mixdown-export"
+  | "prompt-recipe-preset";
+
+export type AssetLibrarySummary = {
+  schemaVersion: number;
+  itemCount: number;
+  previewableItemCount: number;
+  collectionCount: number;
+  scopeCount: number;
+  filterCount: number;
+  supportedTypeCount: number;
+  favoriteCount: number;
+  rejectedCount: number;
+  archivedCount: number;
+  selectedItemId: string;
+  selectedItemType: LibraryItemType;
+};
+
+export type LibraryScope =
+  | {
+      kind: "globalLibrary";
+    }
+  | {
+      kind: "project";
+      projectId: string;
+    };
+
+export type AssetLibraryOverview = {
+  schemaVersion: number;
+  scopes: Array<{
+    id: string;
+    label: string;
+    scope: LibraryScope;
+    ownership: string;
+    assetCount: number;
+    collectionCount: number;
+    canPromoteToGlobal: boolean;
+  }>;
+  filters: {
+    facets: Array<{
+      id: string;
+      label: string;
+      options: Array<{
+        id: string;
+        label: string;
+        count: number;
+        selected: boolean;
+      }>;
+    }>;
+    supportedItemTypes: LibraryItemType[];
+    coversProjectAndGlobalScopes: boolean;
+    includesRejectedArchivedToggle: boolean;
+  };
+  selectedFilter: {
+    searchText: string;
+    scope: LibraryScope;
+    selectedType?: LibraryItemType | null;
+    selectedTags: string[];
+    includeRejected: boolean;
+    includeArchived: boolean;
+    favoriteOnly: boolean;
+  };
+  items: LibraryItemCard[];
+  selectedItem: {
+    item: LibraryItemCard;
+    versionHistory: Array<{
+      versionId: string;
+      label: string;
+      durationMs?: number | null;
+      filePath?: string | null;
+      createdBy: string;
+      waveformReady: boolean;
+      recipeId?: string | null;
+    }>;
+    recipe?: {
+      id: string;
+      workflow: string;
+      providerId: string;
+      modelId: string;
+      sourceReferenceCount: number;
+      outputAssetCount: number;
+      replayable: boolean;
+    } | null;
+    provenanceLinks: Array<{
+      id: string;
+      label: string;
+      sidecarPath: string;
+      inspectable: boolean;
+    }>;
+    collectionIds: string[];
+    versionCount: number;
+    sourcePickerTargets: string[];
+    notes: string[];
+  };
+  collections: Array<{
+    collection: {
+      id: string;
+      name: string;
+      assetIds: string[];
+    };
+    collectionType: string;
+    description: string;
+    itemCount: number;
+    dragIntoStudios: string[];
+  }>;
+  lifecycleActions: Array<{
+    id: string;
+    label: string;
+    appliesTo: LibraryItemType[];
+    preservesProvenance: boolean;
+    destructive: boolean;
+  }>;
+  dragTargets: Array<{
+    id: string;
+    label: string;
+    acceptedTypes: LibraryItemType[];
+    createsLinkedCopy: boolean;
+  }>;
+  validationChecks: Array<{
+    id: string;
+    passed: boolean;
+    summary: string;
+  }>;
+};
+
+export type LibraryItemCard = {
+  id: string;
+  name: string;
+  itemType: LibraryItemType;
+  itemTypeLabel: string;
+  scope: LibraryScope;
+  ownership: string;
+  projectId?: string | null;
+  createdAt: string;
+  sourceWorkflow?: string | null;
+  tags: string[];
+  generatedTags: string[];
+  collectionIds: string[];
+  durationMs?: number | null;
+  bpm?: number | null;
+  musicalKey?: string | null;
+  language?: string | null;
+  voiceProfileId?: string | null;
+  providerId?: string | null;
+  modelId?: string | null;
+  licenseStatus: string;
+  commercialUse: string;
+  favorite: boolean;
+  rejected: boolean;
+  archived: boolean;
+  waveformThumbnail?: {
+    previewPath: string;
+    peakCount: number;
+    durationMs: number;
+    ready: boolean;
+  } | null;
+  quickAudition: {
+    previewable: boolean;
+    playableRangeMs?: [number, number] | null;
+    shortcut: string;
+  };
+  timelinePlaceable: boolean;
+  sourcePickerEligible: boolean;
+  compositionUsageCount: number;
+  recipe?: {
+    id: string;
+    workflow: string;
+    providerId: string;
+    modelId: string;
+    sourceReferenceCount: number;
+    outputAssetCount: number;
+    replayable: boolean;
+  } | null;
+  badges: string[];
 };
 
 export type ModelEvaluationOverview = {

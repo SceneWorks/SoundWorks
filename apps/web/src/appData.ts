@@ -1,5 +1,6 @@
 import type {
   AppOverview,
+  AssetLibraryOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -100,6 +101,12 @@ export const fallbackOverview: AppOverview = {
       direction: "ui-to-backend",
       purpose:
         "Load provider/model manifests, capability defaults, and matching inputs.",
+    },
+    {
+      name: "get_asset_library_overview",
+      direction: "ui-to-backend",
+      purpose:
+        "Load searchable asset library facets, project/global scope, lifecycle state, collections, previews, and provenance detail.",
     },
     {
       name: "get_runtime_overview",
@@ -218,6 +225,20 @@ export const fallbackOverview: AppOverview = {
       },
     ],
   },
+  assetLibrary: {
+    schemaVersion: 1,
+    itemCount: 13,
+    previewableItemCount: 10,
+    collectionCount: 3,
+    scopeCount: 2,
+    filterCount: 15,
+    supportedTypeCount: 13,
+    favoriteCount: 2,
+    rejectedCount: 0,
+    archivedCount: 0,
+    selectedItemId: "asset-loop-001",
+    selectedItemType: "loop",
+  },
   modelEvaluation: {
     schemaVersion: 1,
     candidateCount: 28,
@@ -329,6 +350,498 @@ export const fallbackOverview: AppOverview = {
     canExport: false,
     watermarkPolicy: "advisory-until-provider-support",
   },
+};
+
+const libraryLoopItem = {
+  id: "asset-loop-001",
+  name: "Dusty trip-hop drums",
+  itemType: "loop",
+  itemTypeLabel: "Loop",
+  scope: { kind: "project", projectId: "project-demo" },
+  ownership: "project-local",
+  projectId: "project-demo",
+  createdAt: "2026-06-17T11:40:00Z",
+  sourceWorkflow: "loop",
+  tags: ["loop", "drums", "trip-hop"],
+  generatedTags: ["loopable", "timeline-placeable"],
+  collectionIds: ["collection-neon-bass-pack"],
+  durationMs: 11163,
+  bpm: 86,
+  musicalKey: null,
+  language: null,
+  voiceProfileId: null,
+  providerId: "soundworks-reference",
+  modelId: "reference-generation-suite",
+  licenseStatus: "provider-licensed",
+  commercialUse: "allowed",
+  favorite: true,
+  rejected: false,
+  archived: false,
+  waveformThumbnail: {
+    previewPath:
+      "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-a/previews/waveform.json",
+    peakCount: 48,
+    durationMs: 11163,
+    ready: true,
+  },
+  quickAudition: {
+    previewable: true,
+    playableRangeMs: [0, 11163] as [number, number],
+    shortcut: "Space",
+  },
+  timelinePlaceable: true,
+  sourcePickerEligible: true,
+  compositionUsageCount: 1,
+  recipe: {
+    id: "recipe-loop-001",
+    workflow: "loop",
+    providerId: "soundworks-reference",
+    modelId: "reference-generation-suite",
+    sourceReferenceCount: 0,
+    outputAssetCount: 1,
+    replayable: true,
+  },
+  badges: ["Loop", "ProviderLicensed", "waveform", "tempo"],
+} satisfies AssetLibraryOverview["items"][number];
+
+export const fallbackAssetLibrary: AssetLibraryOverview = {
+  schemaVersion: 1,
+  scopes: [
+    {
+      id: "project-demo",
+      label: "Demo SoundWorks Project",
+      scope: { kind: "project", projectId: "project-demo" },
+      ownership: "project-local",
+      assetCount: 9,
+      collectionCount: 2,
+      canPromoteToGlobal: true,
+    },
+    {
+      id: "global-library",
+      label: "Global audio library",
+      scope: { kind: "globalLibrary" },
+      ownership: "global",
+      assetCount: 4,
+      collectionCount: 1,
+      canPromoteToGlobal: false,
+    },
+  ],
+  filters: {
+    supportedItemTypes: [
+      "voice-clip",
+      "music-clip",
+      "sfx",
+      "song",
+      "instrument-sample",
+      "loop",
+      "stem",
+      "ambience",
+      "voice-profile",
+      "reference-audio",
+      "composition",
+      "mixdown-export",
+      "prompt-recipe-preset",
+    ],
+    coversProjectAndGlobalScopes: true,
+    includesRejectedArchivedToggle: true,
+    facets: [
+      {
+        id: "type",
+        label: "Type",
+        options: [
+          { id: "loop", label: "Loop", count: 1, selected: true },
+          { id: "voice-clip", label: "Voice clip", count: 1, selected: false },
+          { id: "song", label: "Song", count: 1, selected: false },
+        ],
+      },
+      {
+        id: "tags",
+        label: "Tags",
+        options: [
+          { id: "drums", label: "drums", count: 1, selected: true },
+          { id: "loop", label: "loop", count: 1, selected: true },
+          { id: "commercial", label: "commercial", count: 8, selected: false },
+        ],
+      },
+      {
+        id: "duration",
+        label: "Duration",
+        options: [
+          { id: "short", label: "Short", count: 4, selected: false },
+          { id: "medium", label: "Medium", count: 5, selected: true },
+          { id: "long", label: "Long", count: 2, selected: false },
+        ],
+      },
+      {
+        id: "bpm",
+        label: "BPM",
+        options: [
+          { id: "under-90", label: "Under 90 BPM", count: 2, selected: true },
+          { id: "90-124", label: "90-124 BPM", count: 4, selected: false },
+        ],
+      },
+      {
+        id: "key",
+        label: "Key",
+        options: [
+          { id: "a-minor", label: "A minor", count: 2, selected: false },
+          { id: "c-minor", label: "C minor", count: 2, selected: false },
+          { id: "no-key", label: "No key", count: 4, selected: true },
+        ],
+      },
+      {
+        id: "language",
+        label: "Language",
+        options: [
+          { id: "en-us", label: "en-US", count: 4, selected: false },
+          {
+            id: "instrumental",
+            label: "Instrumental",
+            count: 9,
+            selected: true,
+          },
+        ],
+      },
+      {
+        id: "voice",
+        label: "Voice",
+        options: [
+          {
+            id: "voice-profile-narrator",
+            label: "voice-profile-narrator",
+            count: 3,
+            selected: false,
+          },
+          { id: "no-voice", label: "No voice", count: 10, selected: true },
+        ],
+      },
+      {
+        id: "model",
+        label: "Model",
+        options: [
+          {
+            id: "reference-generation-suite",
+            label: "reference-generation-suite",
+            count: 5,
+            selected: false,
+          },
+          {
+            id: "manual-imported",
+            label: "Manual/imported",
+            count: 5,
+            selected: false,
+          },
+        ],
+      },
+      {
+        id: "license",
+        label: "License",
+        options: [
+          { id: "user-owned", label: "UserOwned", count: 6, selected: false },
+          {
+            id: "provider-licensed",
+            label: "ProviderLicensed",
+            count: 7,
+            selected: true,
+          },
+        ],
+      },
+      {
+        id: "project",
+        label: "Project",
+        options: [
+          {
+            id: "project-demo",
+            label: "project-demo",
+            count: 9,
+            selected: true,
+          },
+          {
+            id: "global-library",
+            label: "Global library",
+            count: 4,
+            selected: false,
+          },
+        ],
+      },
+      {
+        id: "createdDate",
+        label: "Created date",
+        options: [
+          { id: "2026-06-17", label: "2026-06-17", count: 13, selected: false },
+        ],
+      },
+      {
+        id: "collection",
+        label: "Collection",
+        options: [
+          {
+            id: "collection-neon-bass-pack",
+            label: "collection-neon-bass-pack",
+            count: 3,
+            selected: true,
+          },
+          {
+            id: "collection-demo-song-folder",
+            label: "collection-demo-song-folder",
+            count: 4,
+            selected: false,
+          },
+        ],
+      },
+      {
+        id: "lifecycle",
+        label: "Lifecycle",
+        options: [
+          { id: "active", label: "Active", count: 11, selected: true },
+          { id: "favorite", label: "Favorite", count: 2, selected: false },
+          { id: "rejected", label: "Rejected", count: 0, selected: false },
+          { id: "archived", label: "Archived", count: 0, selected: false },
+        ],
+      },
+      {
+        id: "sourceWorkflow",
+        label: "Source workflow",
+        options: [
+          { id: "loop", label: "Loop", count: 1, selected: true },
+          { id: "tts", label: "Tts", count: 2, selected: false },
+          { id: "song", label: "Song", count: 1, selected: false },
+        ],
+      },
+      {
+        id: "compositionUsage",
+        label: "Composition usage",
+        options: [
+          {
+            id: "used",
+            label: "Used in composition",
+            count: 5,
+            selected: false,
+          },
+          { id: "unused", label: "Unused", count: 8, selected: false },
+        ],
+      },
+    ],
+  },
+  selectedFilter: {
+    searchText: "loop commercial local",
+    scope: { kind: "project", projectId: "project-demo" },
+    selectedType: "loop",
+    selectedTags: ["drums", "loop"],
+    includeRejected: false,
+    includeArchived: false,
+    favoriteOnly: false,
+  },
+  items: [
+    libraryLoopItem,
+    {
+      ...libraryLoopItem,
+      id: "asset-reference-neon-bass",
+      name: "Neon bass reference",
+      itemType: "reference-audio",
+      itemTypeLabel: "Reference audio",
+      ownership: "global",
+      projectId: null,
+      tags: ["reference", "bass", "global"],
+      durationMs: 26400,
+      bpm: 120,
+      musicalKey: "A minor",
+      favorite: false,
+      compositionUsageCount: 2,
+      badges: ["Reference audio", "UserOwned", "waveform", "tempo", "key"],
+    },
+    {
+      ...libraryLoopItem,
+      id: "voice-profile-narrator",
+      name: "Narrator profile",
+      itemType: "voice-profile",
+      itemTypeLabel: "Voice profile",
+      ownership: "linked-global",
+      projectId: null,
+      tags: ["voice", "narrator", "consented"],
+      durationMs: null,
+      bpm: null,
+      language: "en-US",
+      voiceProfileId: "voice-profile-narrator",
+      timelinePlaceable: false,
+      badges: ["voice profile", "consent stored"],
+    },
+    {
+      ...libraryLoopItem,
+      id: "preset-noir-narration",
+      name: "Noir narration recipe",
+      itemType: "prompt-recipe-preset",
+      itemTypeLabel: "Prompt/Recipe preset",
+      ownership: "global",
+      projectId: null,
+      tags: ["preset", "tts", "reusable"],
+      durationMs: null,
+      bpm: null,
+      language: "en-US",
+      timelinePlaceable: false,
+      badges: ["recipe preset", "global"],
+    },
+  ],
+  selectedItem: {
+    item: libraryLoopItem,
+    versionHistory: [
+      {
+        versionId: "version-loop-001-a",
+        label: "Original",
+        durationMs: 11163,
+        filePath:
+          "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-a/media.wav",
+        createdBy: "Generated/imported",
+        waveformReady: true,
+        recipeId: "recipe-loop-001",
+      },
+      {
+        versionId: "version-loop-001-a-review-edit",
+        label: "Review edit",
+        durationMs: 10480,
+        filePath:
+          "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-a/review-edit/media.wav",
+        createdBy: "Waveform Review",
+        waveformReady: true,
+        recipeId: "recipe-review-edit-loop-001",
+      },
+    ],
+    recipe: libraryLoopItem.recipe,
+    provenanceLinks: [
+      {
+        id: "provenance-loop-generated",
+        label: "Generated from loop recipe",
+        sidecarPath:
+          "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-a/metadata/recipe-provenance.json",
+        inspectable: true,
+      },
+      {
+        id: "provenance-loop-review-edit",
+        label: "Available to review/edit chain",
+        sidecarPath:
+          "soundworks-library/projects/project-demo/loops/asset-loop-001/version-loop-001-b-review-edit/metadata/recipe-provenance.json",
+        inspectable: true,
+      },
+    ],
+    collectionIds: ["collection-neon-bass-pack"],
+    versionCount: 2,
+    sourcePickerTargets: [
+      "Samples + Loops",
+      "Waveform Review",
+      "Mixer timeline",
+    ],
+    notes: [
+      "Project-local loop can be promoted to global without losing recipe provenance.",
+      "Rejected and archived items remain findable only when lifecycle filters include them.",
+    ],
+  },
+  collections: [
+    {
+      collection: {
+        id: "collection-neon-bass-pack",
+        name: "Neon bass starter pack",
+        assetIds: [
+          "asset-reference-neon-bass",
+          "asset-sample-001",
+          "asset-loop-001",
+        ],
+      },
+      collectionType: "sample-pack",
+      description: "Reference, one-shot, and loop assets grouped for reuse.",
+      itemCount: 3,
+      dragIntoStudios: ["Samples + Loops", "Mixer"],
+    },
+    {
+      collection: {
+        id: "collection-demo-song-folder",
+        name: "City Lights song folder",
+        assetIds: [
+          "asset-song-001",
+          "asset-stem-drums-001",
+          "asset-mixdown-001",
+        ],
+      },
+      collectionType: "song-folder",
+      description: "Song, stem, timeline, and export outputs stay together.",
+      itemCount: 4,
+      dragIntoStudios: ["Song Studio", "Mixer"],
+    },
+  ],
+  lifecycleActions: [
+    {
+      id: "favorite",
+      label: "Favorite",
+      appliesTo: ["loop", "voice-clip", "song"],
+      preservesProvenance: true,
+      destructive: false,
+    },
+    {
+      id: "reject",
+      label: "Reject",
+      appliesTo: ["loop", "voice-clip", "song"],
+      preservesProvenance: true,
+      destructive: false,
+    },
+    {
+      id: "archive",
+      label: "Archive",
+      appliesTo: ["loop", "voice-clip", "song"],
+      preservesProvenance: true,
+      destructive: false,
+    },
+    {
+      id: "promote-to-global",
+      label: "Promote to global",
+      appliesTo: ["loop", "voice-clip", "song", "prompt-recipe-preset"],
+      preservesProvenance: true,
+      destructive: false,
+    },
+  ],
+  dragTargets: [
+    {
+      id: "sample-pack",
+      label: "Samples + Loops pack",
+      acceptedTypes: ["instrument-sample", "loop", "reference-audio"],
+      createsLinkedCopy: false,
+    },
+    {
+      id: "mixer-timeline",
+      label: "Mixer timeline",
+      acceptedTypes: [
+        "voice-clip",
+        "music-clip",
+        "sfx",
+        "song",
+        "instrument-sample",
+        "loop",
+        "stem",
+        "ambience",
+        "reference-audio",
+        "mixdown-export",
+      ],
+      createsLinkedCopy: true,
+    },
+  ],
+  validationChecks: [
+    {
+      id: "all-major-types",
+      passed: true,
+      summary:
+        "Library contract covers voice clips, music, SFX, songs, samples, loops, stems, ambience, voice profiles, references, compositions, exports, and presets.",
+    },
+    {
+      id: "filters-complete",
+      passed: true,
+      summary:
+        "Filter model includes type, tags, duration, BPM, key, language, voice, model, license, project, collection, lifecycle, date, source workflow, and composition usage.",
+    },
+    {
+      id: "provenance-reachable",
+      passed: true,
+      summary:
+        "Selected asset detail links version history, recipe summary, and provenance sidecars.",
+    },
+  ],
 };
 
 const reviewScope = { kind: "project", projectId: "project-demo" };

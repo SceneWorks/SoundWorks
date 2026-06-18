@@ -1,5 +1,6 @@
 import {
   Activity,
+  Archive,
   Boxes,
   CircleAlert,
   CircleCheck,
@@ -15,6 +16,7 @@ import {
   Play,
   Radio,
   Save,
+  Search,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -23,6 +25,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import {
   fallbackOverview,
+  fallbackAssetLibrary,
   fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
@@ -34,6 +37,7 @@ import {
 } from "./appData";
 import {
   loadAppOverview,
+  loadAssetLibraryOverview,
   loadRightsSafetyOverview,
   loadReviewWorkspaceOverview,
   loadRuntimeOverview,
@@ -45,6 +49,7 @@ import {
 } from "./tauri";
 import type {
   AppOverview,
+  AssetLibraryOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -107,6 +112,8 @@ function countFor(counts: Record<string, number>, key: string) {
 export function App() {
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
+  const [assetLibrary, setAssetLibrary] =
+    useState<AssetLibraryOverview>(fallbackAssetLibrary);
   const [ttsStudio, setTtsStudio] =
     useState<TtsStudioOverview>(fallbackTtsStudio);
   const [voiceLab, setVoiceLab] = useState<VoiceLabOverview>(fallbackVoiceLab);
@@ -134,6 +141,12 @@ export function App() {
     loadRuntimeOverview().then((nextRuntime) => {
       if (active) {
         setRuntime(nextRuntime);
+      }
+    });
+
+    loadAssetLibraryOverview().then((nextAssetLibrary) => {
+      if (active) {
+        setAssetLibrary(nextAssetLibrary);
       }
     });
 
@@ -282,6 +295,245 @@ export function App() {
               </button>
             );
           })}
+        </section>
+
+        <section className="asset-library-panel" aria-label="Asset Library">
+          <div className="library-header">
+            <div>
+              <p className="eyebrow">Asset Library</p>
+              <h2>Project and global audio assets</h2>
+            </div>
+            <div className="library-search" role="search">
+              <Search aria-hidden="true" size={18} />
+              <span>{assetLibrary.selectedFilter.searchText}</span>
+            </div>
+          </div>
+
+          <div className="library-metrics" aria-label="Library status">
+            <div>
+              <Library aria-hidden="true" size={18} />
+              <strong>{overview.assetLibrary.itemCount}</strong>
+              <span>items</span>
+            </div>
+            <div>
+              <Play aria-hidden="true" size={18} />
+              <strong>{overview.assetLibrary.previewableItemCount}</strong>
+              <span>previewable</span>
+            </div>
+            <div>
+              <Boxes aria-hidden="true" size={18} />
+              <strong>{overview.assetLibrary.collectionCount}</strong>
+              <span>collections</span>
+            </div>
+            <div>
+              <Archive aria-hidden="true" size={18} />
+              <strong>{overview.assetLibrary.supportedTypeCount}</strong>
+              <span>asset types</span>
+            </div>
+          </div>
+
+          <div className="library-scope-row" aria-label="Library scopes">
+            {assetLibrary.scopes.map((scope) => (
+              <article className="library-scope" key={scope.id}>
+                <div>
+                  <strong>{scope.label}</strong>
+                  <small>{statusLabel(scope.ownership)}</small>
+                </div>
+                <span>{scope.assetCount} assets</span>
+              </article>
+            ))}
+          </div>
+
+          <div className="library-filter-strip" aria-label="Asset filters">
+            {assetLibrary.filters.facets.map((facet) => (
+              <section className="filter-chip-group" key={facet.id}>
+                <strong>{facet.label}</strong>
+                <div>
+                  {facet.options.slice(0, 3).map((option) => (
+                    <span
+                      className={
+                        option.selected ? "filter-chip selected" : "filter-chip"
+                      }
+                      key={option.id}
+                    >
+                      {option.label} {option.count}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          <div className="library-layout">
+            <div className="library-item-list" aria-label="Library assets">
+              {assetLibrary.items.map((item) => (
+                <article
+                  className={
+                    item.id === assetLibrary.selectedItem.item.id
+                      ? "library-item selected"
+                      : "library-item"
+                  }
+                  key={item.id}
+                >
+                  <div className="waveform-thumb" aria-hidden="true">
+                    {Array.from({ length: 18 }).map((_, index) => (
+                      <span
+                        key={`${item.id}-${index}`}
+                        style={{ height: `${18 + ((index * 11) % 34)}px` }}
+                      />
+                    ))}
+                  </div>
+                  <div className="library-item-main">
+                    <div className="library-item-title">
+                      <strong>{item.name}</strong>
+                      <span>{item.itemTypeLabel}</span>
+                    </div>
+                    <small>
+                      {item.bpm ? `${item.bpm} BPM / ` : ""}
+                      {item.musicalKey ? `${item.musicalKey} / ` : ""}
+                      {item.durationMs
+                        ? formatDuration(item.durationMs)
+                        : "metadata"}
+                    </small>
+                    <div className="asset-tag-row">
+                      {[...item.tags, ...item.generatedTags]
+                        .slice(0, 5)
+                        .map((tag) => (
+                          <span key={`${item.id}-${tag}`}>{tag}</span>
+                        ))}
+                    </div>
+                  </div>
+                  <button
+                    className="icon-action"
+                    disabled={!item.quickAudition.previewable}
+                    title={`Preview ${item.name}`}
+                    type="button"
+                  >
+                    <Play aria-hidden="true" size={16} />
+                  </button>
+                </article>
+              ))}
+            </div>
+
+            <div className="library-detail" aria-label="Asset detail">
+              <section className="tts-subpanel">
+                <div className="subpanel-heading">
+                  <h3>{assetLibrary.selectedItem.item.name}</h3>
+                  <span>{assetLibrary.selectedItem.item.itemTypeLabel}</span>
+                </div>
+                <p>
+                  {assetLibrary.selectedItem.item.ownership} /{" "}
+                  {assetLibrary.selectedItem.item.licenseStatus} /{" "}
+                  {assetLibrary.selectedItem.item.commercialUse}
+                </p>
+                <div className="asset-tag-row detail-tags">
+                  {assetLibrary.selectedItem.item.badges.map((badge) => (
+                    <span key={badge}>{badge}</span>
+                  ))}
+                </div>
+              </section>
+
+              <section className="tts-subpanel">
+                <div className="subpanel-heading">
+                  <h3>Version history</h3>
+                  <span>{assetLibrary.selectedItem.versionCount}</span>
+                </div>
+                <ol className="version-list">
+                  {assetLibrary.selectedItem.versionHistory.map((version) => (
+                    <li key={version.versionId}>
+                      <CircleCheck aria-hidden="true" size={16} />
+                      <div>
+                        <strong>{version.label}</strong>
+                        <small>{version.versionId}</small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
+              <section className="tts-subpanel">
+                <div className="subpanel-heading">
+                  <h3>Recipe provenance</h3>
+                  <span>
+                    {assetLibrary.selectedItem.recipe?.workflow ?? "manual"}
+                  </span>
+                </div>
+                <p>
+                  {assetLibrary.selectedItem.recipe
+                    ? `${assetLibrary.selectedItem.recipe.id} / ${assetLibrary.selectedItem.recipe.modelId}`
+                    : "No generation recipe attached."}
+                </p>
+                <ol className="policy-list">
+                  {assetLibrary.selectedItem.provenanceLinks.map((link) => (
+                    <li key={link.id}>
+                      <ShieldCheck aria-hidden="true" size={16} />
+                      <span>{link.label}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </div>
+          </div>
+
+          <div className="library-bottom-grid">
+            <section className="tts-subpanel" aria-label="Collections">
+              <div className="subpanel-heading">
+                <h3>Collections</h3>
+                <span>{assetLibrary.collections.length}</span>
+              </div>
+              <div className="collection-grid">
+                {assetLibrary.collections.map((collection) => (
+                  <article
+                    className="collection-card"
+                    key={collection.collection.id}
+                  >
+                    <strong>{collection.collection.name}</strong>
+                    <small>
+                      {statusLabel(collection.collectionType)} /{" "}
+                      {collection.itemCount} items
+                    </small>
+                    <p>{collection.description}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Lifecycle actions">
+              <div className="subpanel-heading">
+                <h3>Lifecycle</h3>
+                <span>{assetLibrary.lifecycleActions.length}</span>
+              </div>
+              <div className="lifecycle-actions">
+                {assetLibrary.lifecycleActions.map((action) => (
+                  <button
+                    className="secondary-action"
+                    key={action.id}
+                    type="button"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Library validation">
+              <div className="subpanel-heading">
+                <h3>Validation</h3>
+                <span>{assetLibrary.validationChecks.length}</span>
+              </div>
+              <ol className="voice-checks">
+                {assetLibrary.validationChecks.map((check) => (
+                  <li
+                    className={check.passed ? "passed" : "failed"}
+                    key={check.id}
+                  >
+                    <CircleCheck aria-hidden="true" size={16} />
+                    <span>{check.summary}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
         </section>
 
         <section className="tts-studio-panel" aria-label="TTS Studio">

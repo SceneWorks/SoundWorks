@@ -1,7 +1,7 @@
 use soundworks_core::{
-    AppOverview, ModelEvaluationCatalog, ProviderCatalog, ReviewWorkspaceOverview,
-    RightsSafetyOverview, RuntimeOverview, SamplesStudioOverview, SfxStudioOverview,
-    SongStudioOverview, TtsStudioOverview, VoiceLabOverview,
+    AppOverview, AssetLibraryOverview, ModelEvaluationCatalog, ProviderCatalog,
+    ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeOverview, SamplesStudioOverview,
+    SfxStudioOverview, SongStudioOverview, TtsStudioOverview, VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -12,6 +12,11 @@ fn get_app_overview() -> AppOverview {
 #[tauri::command]
 fn get_provider_catalog() -> ProviderCatalog {
     provider_catalog()
+}
+
+#[tauri::command]
+fn get_asset_library_overview() -> AssetLibraryOverview {
+    asset_library_overview()
 }
 
 #[tauri::command]
@@ -67,6 +72,10 @@ pub fn provider_catalog() -> ProviderCatalog {
     ProviderCatalog::reference()
 }
 
+pub fn asset_library_overview() -> AssetLibraryOverview {
+    AssetLibraryOverview::reference().expect("reference Asset Library is valid")
+}
+
 pub fn runtime_overview() -> RuntimeOverview {
     RuntimeOverview::reference()
 }
@@ -109,6 +118,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         .invoke_handler(tauri::generate_handler![
             get_app_overview,
             get_provider_catalog,
+            get_asset_library_overview,
             get_runtime_overview,
             get_model_evaluation_catalog,
             get_tts_studio_overview,
@@ -131,9 +141,10 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        app_overview, model_evaluation_catalog, provider_catalog, review_workspace_overview,
-        rights_safety_overview, runtime_overview, samples_studio_overview, sfx_studio_overview,
-        song_studio_overview, tts_studio_overview, voice_lab_overview,
+        app_overview, asset_library_overview, model_evaluation_catalog, provider_catalog,
+        review_workspace_overview, rights_safety_overview, runtime_overview,
+        samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
+        voice_lab_overview,
     };
 
     #[test]
@@ -150,6 +161,20 @@ mod tests {
 
         assert_eq!(catalog.schema_version, 1);
         assert_eq!(catalog.model_count(), 3);
+    }
+
+    #[test]
+    fn asset_library_command_returns_searchable_library() {
+        let library = asset_library_overview();
+
+        assert_eq!(library.schema_version, 1);
+        assert_eq!(library.filters.supported_item_types.len(), 13);
+        assert!(library
+            .filters
+            .facets
+            .iter()
+            .any(|facet| facet.id == "lifecycle"));
+        assert_eq!(library.selected_item.item.id, "asset-loop-001");
     }
 
     #[test]

@@ -103,8 +103,8 @@ describe("App", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Dusty trip-hop drums" }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("heading", { name: "Dusty trip-hop drums" }).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByTitle("Save edited audio version")).toBeEnabled();
     expect(screen.getByText("Trim selection")).toBeInTheDocument();
     expect(screen.getByText("Loop crossfade")).toBeInTheDocument();
@@ -119,6 +119,17 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "SoundWorks launch rights policy" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Project and global audio assets" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Global audio library")).toBeInTheDocument();
+    expect(screen.getByText("Prompt/Recipe preset")).toBeInTheDocument();
+    expect(screen.getByText("Version history")).toBeInTheDocument();
+    expect(screen.getByText("Recipe provenance")).toBeInTheDocument();
+    expect(screen.getByText("Promote to global")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Filter model includes type, tags, duration, BPM/i),
     ).toBeInTheDocument();
     expect(screen.getByTitle("SoundWorks export gate")).toBeDisabled();
     expect(

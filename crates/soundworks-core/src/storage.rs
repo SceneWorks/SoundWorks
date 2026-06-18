@@ -647,6 +647,65 @@ CREATE TABLE rights_validation_checks (
 );
 ",
     },
+    SchemaMigration {
+        version: 13,
+        name: "asset_library_workflow",
+        sql: "
+CREATE TABLE asset_library_items (
+  item_id TEXT PRIMARY KEY,
+  item_type TEXT NOT NULL,
+  asset_id TEXT REFERENCES audio_assets(id),
+  scope_kind TEXT NOT NULL,
+  project_id TEXT,
+  ownership TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  source_workflow TEXT,
+  favorite INTEGER NOT NULL,
+  rejected INTEGER NOT NULL,
+  archived INTEGER NOT NULL,
+  timeline_placeable INTEGER NOT NULL,
+  source_picker_eligible INTEGER NOT NULL,
+  composition_usage_count INTEGER NOT NULL DEFAULT 0,
+  generated_tags_json TEXT NOT NULL
+);
+CREATE TABLE asset_library_tags (
+  item_id TEXT NOT NULL REFERENCES asset_library_items(item_id),
+  tag TEXT NOT NULL,
+  system_generated INTEGER NOT NULL,
+  PRIMARY KEY(item_id, tag, system_generated)
+);
+CREATE TABLE asset_library_collections (
+  id TEXT PRIMARY KEY REFERENCES collections(id),
+  collection_type TEXT NOT NULL,
+  description TEXT NOT NULL,
+  drag_into_studios_json TEXT NOT NULL
+);
+CREATE TABLE asset_library_collection_items (
+  collection_id TEXT NOT NULL REFERENCES collections(id),
+  item_id TEXT NOT NULL REFERENCES asset_library_items(item_id),
+  position INTEGER NOT NULL,
+  PRIMARY KEY(collection_id, item_id)
+);
+CREATE TABLE asset_library_saved_filters (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  scope_kind TEXT NOT NULL,
+  project_id TEXT,
+  query_json TEXT NOT NULL,
+  include_rejected INTEGER NOT NULL,
+  include_archived INTEGER NOT NULL,
+  favorite_only INTEGER NOT NULL
+);
+CREATE TABLE asset_library_reuse_events (
+  id TEXT PRIMARY KEY,
+  item_id TEXT NOT NULL REFERENCES asset_library_items(item_id),
+  target TEXT NOT NULL,
+  creates_linked_copy INTEGER NOT NULL,
+  provenance_sidecar_path TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

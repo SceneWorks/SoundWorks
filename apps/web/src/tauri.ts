@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   fallbackOverview,
+  fallbackAssetLibrary,
   fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
@@ -12,6 +13,7 @@ import {
 } from "./appData";
 import type {
   AppOverview,
+  AssetLibraryOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -35,6 +37,14 @@ export async function loadRuntimeOverview(): Promise<RuntimeOverview> {
     return await invoke<RuntimeOverview>("get_runtime_overview");
   } catch {
     return fallbackRuntime;
+  }
+}
+
+export async function loadAssetLibraryOverview(): Promise<AssetLibraryOverview> {
+  try {
+    return await invoke<AssetLibraryOverview>("get_asset_library_overview");
+  } catch {
+    return fallbackAssetLibrary;
   }
 }
 

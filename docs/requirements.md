@@ -76,4 +76,11 @@ Success means a user can move from an idea or source reference to generated audi
 - SceneWorks export should be validated against current SceneWorks import/media contracts before implementation.
 - Voice cloning and voice conversion require explicit consent UX and policy decisions before they can be considered shippable.
 
+## Current Workflow Implementations
+
+- `crates/soundworks-core/src/tts.rs` and `docs/tts-studio.md` define the Text-to-Speech Studio workflow contract.
+- `crates/soundworks-core/src/voice_lab.rs` and `docs/voice-lab.md` define the Voice Lab workflow contract.
+- `crates/soundworks-core/src/sfx.rs` and `docs/sfx-studio.md` define the SFX + Ambience workflow contract.
+- `crates/soundworks-core/src/samples.rs` and `docs/samples-loops.md` define the Samples + Loops workflow contract for instrument family, articulation, BPM, key, scale, bars/beats, loopability, batch generation, provider options, scorecards, sample-pack collections, one-shot/loop variants, post-processing actions, QA checks, recipes, and saved sample/loop outputs.
+
 Confidence: medium-high for product scope because it is derived from live Shortcut story coverage; medium for provider execution details because concrete model adapters are not implemented yet.

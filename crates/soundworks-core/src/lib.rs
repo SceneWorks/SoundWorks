@@ -5,6 +5,7 @@ pub mod evaluation;
 pub mod fixtures;
 pub mod manifests;
 pub mod runtime;
+pub mod samples;
 pub mod sfx;
 pub mod storage;
 pub mod tts;
@@ -15,6 +16,7 @@ pub use evaluation::*;
 pub use fixtures::*;
 pub use manifests::*;
 pub use runtime::*;
+pub use samples::*;
 pub use sfx::*;
 pub use storage::*;
 pub use tts::*;
@@ -32,6 +34,7 @@ pub struct AppOverview {
     pub tts_studio: TtsStudioSummary,
     pub voice_lab: VoiceLabSummary,
     pub sfx_studio: SfxStudioSummary,
+    pub samples_studio: SamplesStudioSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -124,6 +127,21 @@ pub struct SfxStudioSummary {
     pub saved_asset_kinds: Vec<AudioAssetKind>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SamplesStudioSummary {
+    pub schema_version: u32,
+    pub variant_count: usize,
+    pub saved_output_count: usize,
+    pub provider_count: usize,
+    pub scorecard_count: usize,
+    pub can_submit: bool,
+    pub selected_provider_id: String,
+    pub selected_model_id: String,
+    pub pack_collection_id: String,
+    pub saved_asset_kinds: Vec<AudioAssetKind>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandDirection {
@@ -181,7 +199,7 @@ impl AppOverview {
                 StudioSurface::scaffolded("tts", "TTS Studio", "/studios/tts"),
                 StudioSurface::scaffolded("voice-lab", "Voice Lab", "/studios/voice-lab"),
                 StudioSurface::scaffolded("sfx", "SFX + Ambience", "/studios/sfx"),
-                StudioSurface::planned("loops", "Samples + Loops", "/studios/loops"),
+                StudioSurface::scaffolded("loops", "Samples + Loops", "/studios/loops"),
                 StudioSurface::planned("songs", "Song Studio", "/studios/songs"),
                 StudioSurface::planned(
                     "video-to-audio",
@@ -239,6 +257,13 @@ impl AppOverview {
                         "Load SFX and ambience prompts, capability-driven controls, variant previews, provider scorecards, loop checks, post-processing, and saved outputs."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_samples_studio_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load instrument sample and loop controls, provider scorecards, sample-pack variants, QA checks, recipes, and saved outputs."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
@@ -250,6 +275,9 @@ impl AppOverview {
             ),
             sfx_studio: SfxStudioSummary::from_overview(
                 &SfxStudioOverview::reference().expect("reference SFX Studio is valid"),
+            ),
+            samples_studio: SamplesStudioSummary::from_overview(
+                &SamplesStudioOverview::reference().expect("reference Samples Studio is valid"),
             ),
         }
     }
@@ -272,6 +300,14 @@ impl TtsStudioSummary {
 
 impl SfxStudioSummary {
     pub fn from_overview(overview: &SfxStudioOverview) -> Self {
+        let mut saved_asset_kinds = overview
+            .saved_outputs
+            .iter()
+            .map(|output| output.asset.kind)
+            .collect::<Vec<_>>();
+        saved_asset_kinds.sort_by_key(|kind| format!("{kind:?}"));
+        saved_asset_kinds.dedup();
+
         Self {
             schema_version: overview.schema_version,
             variant_count: overview.variants.len(),
@@ -281,11 +317,32 @@ impl SfxStudioSummary {
             can_submit: overview.submission.can_submit,
             selected_provider_id: overview.selected_provider.provider_id.clone(),
             selected_model_id: overview.selected_provider.model_id.clone(),
-            saved_asset_kinds: overview
-                .saved_outputs
-                .iter()
-                .map(|output| output.asset.kind)
-                .collect(),
+            saved_asset_kinds,
+        }
+    }
+}
+
+impl SamplesStudioSummary {
+    pub fn from_overview(overview: &SamplesStudioOverview) -> Self {
+        let mut saved_asset_kinds = overview
+            .saved_outputs
+            .iter()
+            .map(|output| output.asset.kind)
+            .collect::<Vec<_>>();
+        saved_asset_kinds.sort_by_key(|kind| format!("{kind:?}"));
+        saved_asset_kinds.dedup();
+
+        Self {
+            schema_version: overview.schema_version,
+            variant_count: overview.variants.len(),
+            saved_output_count: overview.saved_outputs.len(),
+            provider_count: overview.provider_options.len(),
+            scorecard_count: overview.provider_scorecards.len(),
+            can_submit: overview.submission.can_submit,
+            selected_provider_id: overview.selected_provider.provider_id.clone(),
+            selected_model_id: overview.selected_provider.model_id.clone(),
+            pack_collection_id: overview.pack.collection_id.clone(),
+            saved_asset_kinds,
         }
     }
 }
@@ -531,6 +588,13 @@ mod tests {
             "sfx_studio_saved_outputs",
             "sfx_studio_provider_scorecards",
             "sfx_studio_post_processing_actions",
+            "samples_studio_prompts",
+            "samples_studio_variants",
+            "samples_studio_submissions",
+            "samples_studio_saved_outputs",
+            "samples_studio_provider_scorecards",
+            "samples_studio_pack_collections",
+            "samples_studio_qa_checks",
         ] {
             assert!(
                 sql.contains(table),
@@ -630,8 +694,24 @@ mod tests {
         assert_eq!(overview.sfx_studio.scorecard_count, 9);
         assert_eq!(
             overview.sfx_studio.saved_asset_kinds,
-            vec![AudioAssetKind::Sfx, AudioAssetKind::Ambience]
+            vec![AudioAssetKind::Ambience, AudioAssetKind::Sfx]
         );
         assert!(overview.sfx_studio.can_submit);
+    }
+
+    #[test]
+    fn app_overview_summarizes_samples_studio() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.studios[3].status, ScaffoldStatus::Scaffolded);
+        assert_eq!(overview.samples_studio.variant_count, 4);
+        assert_eq!(overview.samples_studio.saved_output_count, 3);
+        assert_eq!(overview.samples_studio.provider_count, 2);
+        assert_eq!(overview.samples_studio.scorecard_count, 5);
+        assert_eq!(
+            overview.samples_studio.saved_asset_kinds,
+            vec![AudioAssetKind::InstrumentSample, AudioAssetKind::Loop]
+        );
+        assert!(overview.samples_studio.can_submit);
     }
 }

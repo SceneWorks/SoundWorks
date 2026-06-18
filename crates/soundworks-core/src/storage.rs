@@ -358,6 +358,93 @@ CREATE TABLE sfx_studio_saved_outputs (
 );
 ",
     },
+    SchemaMigration {
+        version: 9,
+        name: "samples_studio_workflow",
+        sql: "
+CREATE TABLE samples_studio_prompts (
+  id TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  negative_prompt TEXT NOT NULL,
+  instrument_family TEXT NOT NULL,
+  articulation TEXT NOT NULL,
+  genre_tags_json TEXT NOT NULL,
+  reference_audio_asset_id TEXT REFERENCES audio_assets(id),
+  controls_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE samples_studio_variants (
+  id TEXT PRIMARY KEY,
+  prompt_id TEXT NOT NULL REFERENCES samples_studio_prompts(id),
+  label TEXT NOT NULL,
+  workflow TEXT NOT NULL,
+  asset_kind TEXT NOT NULL,
+  instrument_family TEXT NOT NULL,
+  articulation TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  bpm REAL,
+  musical_key TEXT,
+  time_signature TEXT,
+  loop_points_json TEXT,
+  transient_one_shot INTEGER NOT NULL,
+  loudness_lufs REAL NOT NULL,
+  true_peak_dbfs REAL NOT NULL,
+  has_clipping INTEGER NOT NULL,
+  tags_json TEXT NOT NULL,
+  collection_id TEXT NOT NULL,
+  selected_for_pack INTEGER NOT NULL,
+  favorite INTEGER NOT NULL,
+  duplicate_of_variant_id TEXT REFERENCES samples_studio_variants(id)
+);
+CREATE TABLE samples_studio_provider_scorecards (
+  candidate_id TEXT PRIMARY KEY REFERENCES model_evaluation_candidates(id),
+  readiness TEXT NOT NULL,
+  recommended INTEGER NOT NULL,
+  blockers_json TEXT NOT NULL,
+  notes TEXT NOT NULL
+);
+CREATE TABLE samples_studio_pack_collections (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  selected_variant_ids_json TEXT NOT NULL,
+  favorite_variant_ids_json TEXT NOT NULL,
+  loop_variant_ids_json TEXT NOT NULL,
+  one_shot_variant_ids_json TEXT NOT NULL,
+  export_formats_json TEXT NOT NULL
+);
+CREATE TABLE samples_studio_post_processing_actions (
+  id TEXT PRIMARY KEY,
+  operation TEXT NOT NULL,
+  enabled INTEGER NOT NULL,
+  summary TEXT NOT NULL
+);
+CREATE TABLE samples_studio_qa_checks (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  summary TEXT NOT NULL
+);
+CREATE TABLE samples_studio_submissions (
+  id TEXT PRIMARY KEY,
+  prompt_id TEXT NOT NULL REFERENCES samples_studio_prompts(id),
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  recipe_ids_json TEXT NOT NULL,
+  job_ids_json TEXT NOT NULL,
+  can_submit INTEGER NOT NULL,
+  blocking_reasons_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL
+);
+CREATE TABLE samples_studio_saved_outputs (
+  submission_id TEXT NOT NULL REFERENCES samples_studio_submissions(id),
+  variant_id TEXT NOT NULL REFERENCES samples_studio_variants(id),
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  exported INTEGER NOT NULL,
+  waveform_preview_ready INTEGER NOT NULL,
+  PRIMARY KEY(submission_id, variant_id)
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -5,6 +5,7 @@ import {
   CircleCheck,
   ClipboardCheck,
   Cpu,
+  Disc3,
   Gauge,
   HardDrive,
   Library,
@@ -23,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fallbackOverview,
   fallbackRuntime,
+  fallbackSamplesStudio,
   fallbackSfxStudio,
   fallbackTtsStudio,
   fallbackVoiceLab,
@@ -30,6 +32,7 @@ import {
 import {
   loadAppOverview,
   loadRuntimeOverview,
+  loadSamplesStudioOverview,
   loadSfxStudioOverview,
   loadTtsStudioOverview,
   loadVoiceLabOverview,
@@ -37,6 +40,7 @@ import {
 import type {
   AppOverview,
   RuntimeOverview,
+  SamplesStudioOverview,
   SfxStudioOverview,
   TtsStudioOverview,
   VoiceLabOverview,
@@ -92,6 +96,9 @@ export function App() {
     useState<VoiceLabOverview>(fallbackVoiceLab);
   const [sfxStudio, setSfxStudio] =
     useState<SfxStudioOverview>(fallbackSfxStudio);
+  const [samplesStudio, setSamplesStudio] = useState<SamplesStudioOverview>(
+    fallbackSamplesStudio,
+  );
 
   useEffect(() => {
     let active = true;
@@ -126,6 +133,12 @@ export function App() {
       }
     });
 
+    loadSamplesStudioOverview().then((nextSamplesStudio) => {
+      if (active) {
+        setSamplesStudio(nextSamplesStudio);
+      }
+    });
+
     return () => {
       active = false;
     };
@@ -155,6 +168,15 @@ export function App() {
         ),
       ),
     [sfxStudio.providerScorecards],
+  );
+  const samplesCandidateFocus = useMemo(
+    () =>
+      samplesStudio.providerScorecards.filter((scorecard) =>
+        ["ace-step-1-5", "stable-audio-open-1", "heartmula"].includes(
+          scorecard.candidateId,
+        ),
+      ),
+    [samplesStudio.providerScorecards],
   );
 
   return (
@@ -703,6 +725,205 @@ export function App() {
             </ol>
             <ol className="voice-checks" aria-label="SFX validation checks">
               {sfxStudio.validationChecks.map((check) => (
+                <li className={check.status} key={check.id}>
+                  <CircleCheck aria-hidden="true" size={16} />
+                  <span>{check.summary}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="samples-studio-panel" aria-label="Samples and Loops">
+          <div className="samples-header">
+            <div>
+              <p className="eyebrow">Samples + Loops</p>
+              <h2>{samplesStudio.pack.name}</h2>
+            </div>
+            <button
+              className="primary-action samples-action"
+              disabled={!samplesStudio.submission.canSubmit}
+              type="button"
+              title="Queue sample and loop generation"
+            >
+              <Disc3 aria-hidden="true" size={18} />
+              <span>
+                {samplesStudio.submission.canSubmit ? "Generate" : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="samples-metrics" aria-label="Samples workflow status">
+            <div>
+              <Boxes aria-hidden="true" size={18} />
+              <strong>{overview.samplesStudio.variantCount}</strong>
+              <span>variants</span>
+            </div>
+            <div>
+              <Save aria-hidden="true" size={18} />
+              <strong>{overview.samplesStudio.savedOutputCount}</strong>
+              <span>saved</span>
+            </div>
+            <div>
+              <Gauge aria-hidden="true" size={18} />
+              <strong>{samplesStudio.controls.bpm}</strong>
+              <span>{samplesStudio.controls.musicalKey}</span>
+            </div>
+            <div>
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <strong>{overview.samplesStudio.scorecardCount}</strong>
+              <span>scorecards</span>
+            </div>
+          </div>
+
+          <div className="samples-layout">
+            <div className="samples-main">
+              <section className="sfx-prompt-panel" aria-label="Sample prompt">
+                <div className="subpanel-heading">
+                  <h3>{statusLabel(samplesStudio.prompt.instrumentFamily)}</h3>
+                  <span>{samplesStudio.prompt.genreTags.length}</span>
+                </div>
+                <p>{samplesStudio.prompt.text}</p>
+                <small>{samplesStudio.prompt.negativePrompt}</small>
+                <div className="candidate-strip">
+                  {samplesStudio.prompt.genreTags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+              </section>
+
+              <div className="samples-control-grid" aria-label="Sample controls">
+                <div>
+                  <strong>{samplesStudio.controls.bars} bars</strong>
+                  <span>{samplesStudio.controls.beats}/4 grid</span>
+                </div>
+                <div>
+                  <strong>{samplesStudio.controls.batchSize}</strong>
+                  <span>batch size</span>
+                </div>
+                <div>
+                  <strong>{samplesStudio.controls.velocityEnergy}</strong>
+                  <span>velocity</span>
+                </div>
+                <div>
+                  <strong>{samplesStudio.controls.dryWetAmbience}</strong>
+                  <span>ambience</span>
+                </div>
+              </div>
+
+              <div className="samples-variant-grid" aria-label="Sample variants">
+                {samplesStudio.variants.map((variant) => (
+                  <article
+                    className={
+                      variant.selectedForPack
+                        ? "samples-variant selected"
+                        : "samples-variant"
+                    }
+                    key={variant.id}
+                  >
+                    <div className="sfx-variant-title">
+                      <strong>{variant.label}</strong>
+                      <span>{statusLabel(variant.assetKind)}</span>
+                    </div>
+                    <small>
+                      {formatDuration(variant.durationMs)} /{" "}
+                      {variant.bpm ? `${variant.bpm} BPM` : "one-shot"} /{" "}
+                      {variant.musicalKey ?? "unpitched"}
+                    </small>
+                    <p>
+                      {variant.loopPoints
+                        ? `loop ${variant.loopPoints.startSample}-${variant.loopPoints.endSample}`
+                        : variant.articulation}
+                    </p>
+                    <div className="candidate-strip">
+                      {variant.tags.slice(0, 4).map((tag) => (
+                        <span key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div className="samples-side">
+              <section className="tts-subpanel" aria-label="Sample providers">
+                <div className="subpanel-heading">
+                  <h3>Providers</h3>
+                  <span>{samplesStudio.providerOptions.length}</span>
+                </div>
+                {samplesStudio.providerOptions.map((provider) => (
+                  <article
+                    className="sfx-provider-option"
+                    key={`${provider.workflow}-${provider.modelId}`}
+                  >
+                    <strong>{workflowLabel(provider.workflow)}</strong>
+                    <small>
+                      {statusLabel(provider.installStatus)} /{" "}
+                      {provider.sampleRateHz} Hz /{" "}
+                      {provider.supportsLoopPoints ? "loop points" : "metadata"}
+                    </small>
+                    <p>{provider.supportedControls.map(statusLabel).join(" / ")}</p>
+                  </article>
+                ))}
+              </section>
+
+              <section className="tts-subpanel" aria-label="Sample provider scorecards">
+                <div className="subpanel-heading">
+                  <h3>Scorecards</h3>
+                  <span>{samplesStudio.providerScorecards.length}</span>
+                </div>
+                <div className="voice-provider-list">
+                  {samplesCandidateFocus.map((scorecard) => (
+                    <article
+                      className={`voice-provider ${scorecard.readiness}`}
+                      key={scorecard.candidateId}
+                    >
+                      <div>
+                        <strong>{scorecard.name}</strong>
+                        <small>
+                          {statusLabel(scorecard.readiness)} /{" "}
+                          {scorecard.lanes.map(workflowLabel).join(" / ")}
+                        </small>
+                        <p>{scorecard.notes}</p>
+                      </div>
+                      {scorecard.recommended ? <span>pick</span> : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Sample pack outputs">
+                <div className="subpanel-heading">
+                  <h3>Pack</h3>
+                  <span>{samplesStudio.pack.exportFormats.join(" / ")}</span>
+                </div>
+                {samplesStudio.savedOutputs.map((output) => (
+                  <div className="output-card" key={output.variantId}>
+                    <strong>{output.asset.name}</strong>
+                    <small>
+                      {output.asset.kind} /{" "}
+                      {output.version.technical.bpm
+                        ? `${output.version.technical.bpm} BPM`
+                        : output.version.technical.musicalKey}
+                    </small>
+                    <p>{output.version.file.storagePath}</p>
+                  </div>
+                ))}
+              </section>
+            </div>
+          </div>
+
+          <div className="samples-review-grid">
+            <ol className="voice-checks" aria-label="Sample post-processing">
+              {samplesStudio.postProcessingActions.map((action) => (
+                <li className={action.enabled ? "ready" : "warning"} key={action.id}>
+                  <SlidersHorizontal aria-hidden="true" size={16} />
+                  <span>{action.summary}</span>
+                </li>
+              ))}
+            </ol>
+            <ol className="voice-checks" aria-label="Sample QA checks">
+              {samplesStudio.qaChecks.map((check) => (
                 <li className={check.status} key={check.id}>
                   <CircleCheck aria-hidden="true" size={16} />
                   <span>{check.summary}</span>

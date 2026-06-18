@@ -54,7 +54,7 @@ The core crate should own stable types and validation:
 - Rights, consent, provenance, and safety metadata.
 - Export presets, render requests, stems, and metadata sidecars.
 
-Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, `fixtures.rs`, `manifests.rs`, `runtime.rs`, and `evaluation.rs` define these first-pass contracts, provider capability matching, runtime packaging policy, model scorecards, and fixture coverage for TTS, SFX, instrument sample, loop, and song outputs.
+Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, `fixtures.rs`, `manifests.rs`, `runtime.rs`, `evaluation.rs`, `tts.rs`, `voice_lab.rs`, `sfx.rs`, and `samples.rs` define these first-pass contracts, provider capability matching, runtime packaging policy, model scorecards, workflow contracts, and fixture coverage for TTS, SFX, instrument sample, loop, and song outputs.
 
 ### Persistence
 

@@ -13,7 +13,7 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("get_app_overview")).toBeInTheDocument();
     expect(screen.getByText("Provider Coverage")).toBeInTheDocument();
-    expect(screen.getByText("Stem Separation")).toBeInTheDocument();
+    expect(screen.getAllByText("Stem Separation").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("heading", { name: "Worker Runtime" }),
     ).toBeInTheDocument();
@@ -142,7 +142,7 @@ describe("App", () => {
     expect(
       screen.getAllByText("SceneWorks video track").length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText("DAW bundle")).toBeInTheDocument();
+    expect(screen.getAllByText("DAW bundle").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Sidecars").length).toBeGreaterThan(0);
     expect(
       screen.getByText("Export presets cover WAV, FLAC, MP3, and OGG."),
@@ -165,6 +165,30 @@ describe("App", () => {
     expect(
       screen.getByText(
         "Export sidecars include recipe, model, source media, rights, disclosure, and edit-chain fields.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Release gate and demo matrix" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("MVP release gate")).toBeDisabled();
+    expect(screen.getByText("12/12")).toBeInTheDocument();
+    expect(screen.getByText("Narrate short script")).toBeInTheDocument();
+    expect(
+      screen.getByText("Generate complete song from lyrics and structure"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Prototype silent video Foley"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Silent video Foley map")).toBeInTheDocument();
+    expect(screen.getByText("Failed model download")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Reference fixtures define contracts but do not yet prove generated audio quality from real selected providers.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Required manual audio-quality scorecards are not all passed.",
       ),
     ).toBeInTheDocument();
   });

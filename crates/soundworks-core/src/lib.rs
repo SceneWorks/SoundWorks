@@ -6,6 +6,7 @@ pub mod evaluation;
 pub mod export_workflow;
 pub mod fixtures;
 pub mod manifests;
+pub mod mvp_validation;
 pub mod review;
 pub mod rights;
 pub mod runtime;
@@ -22,6 +23,7 @@ pub use evaluation::*;
 pub use export_workflow::*;
 pub use fixtures::*;
 pub use manifests::*;
+pub use mvp_validation::*;
 pub use review::*;
 pub use rights::*;
 pub use runtime::*;
@@ -42,6 +44,7 @@ pub struct AppOverview {
     pub provider_catalog: ProviderCatalogOverview,
     pub asset_library: AssetLibrarySummary,
     pub export_workflow: ExportWorkflowSummary,
+    pub mvp_validation: MvpValidationSummary,
     pub model_evaluation: ModelEvaluationOverview,
     pub tts_studio: TtsStudioSummary,
     pub voice_lab: VoiceLabSummary,
@@ -347,6 +350,13 @@ impl AppOverview {
                             .to_string(),
                 },
                 CommandBoundary {
+                    name: "get_mvp_validation_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load MVP validation matrix, demo workflows, fixtures, scorecards, stress cases, and release gate."
+                            .to_string(),
+                },
+                CommandBoundary {
                     name: "get_tts_studio_overview".to_string(),
                     direction: CommandDirection::UiToBackend,
                     purpose:
@@ -403,6 +413,7 @@ impl AppOverview {
             export_workflow: ExportWorkflowSummary::from_overview(
                 &ExportWorkflowOverview::reference(),
             ),
+            mvp_validation: MvpValidationSummary::from_overview(&MvpValidationOverview::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
             tts_studio: TtsStudioSummary::from_overview(
                 &TtsStudioOverview::reference().expect("reference TTS studio is valid"),
@@ -749,17 +760,24 @@ mod tests {
             payload["commands"][5]["name"],
             "get_model_evaluation_catalog"
         );
+        assert_eq!(
+            payload["commands"][6]["name"],
+            "get_mvp_validation_overview"
+        );
         assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
         assert_eq!(payload["assetLibrary"]["supportedTypeCount"], 13);
         assert_eq!(payload["exportWorkflow"]["presetCount"], 7);
+        assert_eq!(payload["mvpValidation"]["demoWorkflowCount"], 12);
+        assert_eq!(payload["mvpValidation"]["blockingItemCount"], 4);
+        assert_eq!(payload["mvpValidation"]["readyForMvp"], false);
         assert_eq!(payload["modelEvaluation"]["candidateCount"], 28);
         assert_eq!(payload["ttsStudio"]["segmentCount"], 3);
-        assert_eq!(payload["commands"][6]["name"], "get_tts_studio_overview");
-        assert_eq!(payload["commands"][7]["name"], "get_voice_lab_overview");
-        assert_eq!(payload["commands"][8]["name"], "get_sfx_studio_overview");
-        assert_eq!(payload["commands"][10]["name"], "get_song_studio_overview");
+        assert_eq!(payload["commands"][7]["name"], "get_tts_studio_overview");
+        assert_eq!(payload["commands"][8]["name"], "get_voice_lab_overview");
+        assert_eq!(payload["commands"][9]["name"], "get_sfx_studio_overview");
+        assert_eq!(payload["commands"][11]["name"], "get_song_studio_overview");
         assert_eq!(
-            payload["commands"][11]["name"],
+            payload["commands"][12]["name"],
             "get_review_workspace_overview"
         );
         assert_eq!(payload["voiceLab"]["modeCount"], 3);
@@ -901,6 +919,30 @@ mod tests {
             "review_edit_submissions",
             "review_version_comparisons",
             "review_provenance_links",
+            "rights_consent_checks",
+            "rights_model_use_decisions",
+            "rights_content_policy_gates",
+            "rights_export_sidecars",
+            "rights_disclosure_checks",
+            "asset_library_items",
+            "asset_library_tags",
+            "asset_library_collections",
+            "asset_library_collection_items",
+            "asset_library_saved_filters",
+            "asset_library_reuse_events",
+            "export_presets",
+            "export_submissions",
+            "export_sidecars",
+            "export_daw_handoffs",
+            "export_sceneworks_handoffs",
+            "mvp_validation_demo_workflows",
+            "mvp_validation_regression_fixtures",
+            "mvp_validation_checks",
+            "mvp_validation_manual_scorecards",
+            "mvp_validation_stress_cases",
+            "mvp_validation_known_limitations",
+            "mvp_validation_requirement_coverage",
+            "mvp_validation_release_gates",
         ] {
             assert!(
                 sql.contains(table),
@@ -957,6 +999,18 @@ mod tests {
             .model_evaluation
             .recommended_candidate_ids
             .contains(&"moss-soundeffect".to_string()));
+    }
+
+    #[test]
+    fn app_overview_summarizes_mvp_validation_gate() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.mvp_validation.workflow_count, 12);
+        assert_eq!(overview.mvp_validation.demo_workflow_count, 12);
+        assert_eq!(overview.mvp_validation.regression_fixture_count, 12);
+        assert_eq!(overview.mvp_validation.stress_case_count, 8);
+        assert_eq!(overview.mvp_validation.known_limitation_count, 4);
+        assert!(!overview.mvp_validation.ready_for_mvp);
     }
 
     #[test]

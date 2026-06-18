@@ -2,6 +2,7 @@ import type {
   AppOverview,
   AssetLibraryOverview,
   ExportWorkflowOverview,
+  MvpValidationOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -259,6 +260,19 @@ export const fallbackOverview: AppOverview = {
     writesDawBundle: true,
     writesSceneWorksPackage: true,
   },
+  mvpValidation: {
+    schemaVersion: 1,
+    readyForMvp: false,
+    blockingItemCount: 4,
+    demoWorkflowCount: 12,
+    regressionFixtureCount: 12,
+    automatedCheckCount: 9,
+    manualScorecardCount: 9,
+    stressCaseCount: 8,
+    knownLimitationCount: 4,
+    requirementCount: 8,
+    workflowCount: 12,
+  },
   modelEvaluation: {
     schemaVersion: 1,
     candidateCount: 28,
@@ -370,6 +384,796 @@ export const fallbackOverview: AppOverview = {
     canExportCommercial: false,
     watermarkPolicy: "advisory-until-provider-support",
   },
+};
+
+export const fallbackMvpValidation: MvpValidationOverview = {
+  schemaVersion: 1,
+  releaseGate: {
+    readyForMvp: false,
+    requiredWorkflowCount: 12,
+    coveredWorkflowCount: 12,
+    requiredAutomatedCheckCount: 9,
+    passedAutomatedCheckCount: 8,
+    requiredManualScorecardCount: 9,
+    passedManualScorecardCount: 0,
+    requiredStressCaseCount: 8,
+    passedStressCaseCount: 3,
+    blockingItems: [
+      "Required automated validation checks have not all passed.",
+      "Required manual audio-quality scorecards are not all passed.",
+      "Required stress cases are not all passed on release hardware.",
+      "Known MVP-blocking limitations remain documented.",
+    ],
+  },
+  demoWorkflows: [
+    {
+      id: "demo-short-narration",
+      workflow: "tts",
+      title: "Narrate short script",
+      goal: "Generate a clean 30-60 second voice clip from a script with pronunciation metadata.",
+      requiredArtifacts: [
+        "voice clip WAV",
+        "recipe JSON",
+        "voice consent record",
+        "provenance sidecar",
+      ],
+      acceptance: [
+        "speech is intelligible",
+        "script segments are preserved",
+        "saved output is reusable from the library",
+      ],
+    },
+    {
+      id: "demo-podcast-dialogue",
+      workflow: "voice-clone",
+      title: "Multi-speaker podcast segment",
+      goal: "Generate a short two-speaker segment with explicit voice-profile consent gates.",
+      requiredArtifacts: [
+        "multi-speaker voice clips",
+        "speaker map",
+        "consent audit",
+        "export sidecar",
+      ],
+      acceptance: [
+        "each speaker maps to a consented profile",
+        "blocked voices cannot submit",
+        "dialogue can export with provenance",
+      ],
+    },
+    {
+      id: "demo-voice-conversion",
+      workflow: "voice-conversion",
+      title: "Consented voice conversion",
+      goal: "Convert a source read into an approved target voice profile without treating it as TTS.",
+      requiredArtifacts: [
+        "source clip",
+        "target voice profile",
+        "converted voice clip",
+        "conversion recipe",
+      ],
+      acceptance: [
+        "source and target IDs are preserved",
+        "voice conversion scorecard applies",
+        "output remains a voice clip asset",
+      ],
+    },
+    {
+      id: "demo-game-ui-sfx",
+      workflow: "sfx",
+      title: "Generate game UI SFX",
+      goal: "Create short selectable impacts, buttons, and confirmations with tags and one-shot metadata.",
+      requiredArtifacts: [
+        "SFX variants",
+        "tags",
+        "loudness metrics",
+        "saved output assets",
+      ],
+      acceptance: [
+        "variants are auditionable",
+        "selected outputs save to library",
+        "game export preset accepts the assets",
+      ],
+    },
+    {
+      id: "demo-loopable-ambience",
+      workflow: "ambience",
+      title: "Create loopable ambience",
+      goal: "Generate a seamless ambience bed with loop markers and crossfade QA.",
+      requiredArtifacts: [
+        "ambience asset",
+        "loop points",
+        "waveform preview",
+        "loopability score",
+      ],
+      acceptance: [
+        "loop points are inspectable",
+        "loudness stays within target",
+        "loop export preserves metadata",
+      ],
+    },
+    {
+      id: "demo-instrument-sample-pack",
+      workflow: "instrument-sample",
+      title: "Generate instrument sample pack",
+      goal: "Create one-shots with family, articulation, tags, and pack membership.",
+      requiredArtifacts: [
+        "sample variants",
+        "pack collection",
+        "BPM/key metadata",
+        "sample-pack export",
+      ],
+      acceptance: [
+        "pack contains selected variants",
+        "metadata survives export",
+        "duplicates can be identified",
+      ],
+    },
+    {
+      id: "demo-loop-pack",
+      workflow: "loop",
+      title: "Generate musical loop pack",
+      goal: "Create tempo-aligned loops with key, bar count, and loop marker metadata.",
+      requiredArtifacts: [
+        "loop variants",
+        "loop points",
+        "pack collection",
+        "DAW handoff",
+      ],
+      acceptance: [
+        "BPM/key fields are populated",
+        "loop points are valid",
+        "DAW export preserves loop metadata",
+      ],
+    },
+    {
+      id: "demo-complete-song",
+      workflow: "song",
+      title: "Generate complete song from lyrics and structure",
+      goal: "Generate a song draft from lyrics, sections, style tags, and requested stems.",
+      requiredArtifacts: [
+        "song variants",
+        "section map",
+        "lyrics sidecar",
+        "stem request metadata",
+      ],
+      acceptance: [
+        "structure matches requested sections",
+        "lyrics alignment is scored",
+        "song master export includes disclosure",
+      ],
+    },
+    {
+      id: "demo-stem-separation",
+      workflow: "stem-separation",
+      title: "Prepare stem bundle",
+      goal: "Validate that song or composition outputs can carry stem metadata for DAW handoff.",
+      requiredArtifacts: [
+        "stem asset records",
+        "stem kinds",
+        "bundle manifest",
+        "sidecar",
+      ],
+      acceptance: [
+        "stem kinds are explicit",
+        "bundle references source asset",
+        "sidecar links model and recipe",
+      ],
+    },
+    {
+      id: "demo-video-foley",
+      workflow: "video-to-audio",
+      title: "Prototype silent video Foley",
+      goal: "Track the video-to-audio demo path so MVP cannot forget multimodal SFX coverage.",
+      requiredArtifacts: [
+        "source video ID",
+        "time range map",
+        "generated sync points",
+        "provenance sidecar",
+      ],
+      acceptance: [
+        "source media rights are checked",
+        "time ranges survive export",
+        "provider capability is flagged until sc-6183 ships",
+      ],
+    },
+    {
+      id: "demo-edit-trim-normalize",
+      workflow: "edit",
+      title: "Edit, trim, and normalize",
+      goal: "Round-trip a generated asset through non-destructive trim, fade, loop crossfade, and normalize actions.",
+      requiredArtifacts: [
+        "edited asset version",
+        "edit recipe",
+        "version comparison",
+        "preview cache",
+      ],
+      acceptance: [
+        "original version remains intact",
+        "edit chain is inspectable",
+        "saved version can be exported",
+      ],
+    },
+    {
+      id: "demo-composition-export",
+      workflow: "composition-render",
+      title: "Export composition with provenance",
+      goal: "Render a composition mixdown with optional stems, DAW handoff, and SceneWorks package metadata.",
+      requiredArtifacts: [
+        "mixdown",
+        "optional stems",
+        "DAW bundle",
+        "SceneWorks handoff",
+        "provenance manifest",
+      ],
+      acceptance: [
+        "export preset is selectable",
+        "sidecar contains recipe/model/source/rights",
+        "SceneWorks constraints are carried as warnings",
+      ],
+    },
+  ],
+  regressionFixtures: [
+    {
+      id: "fixture-short-narration",
+      workflow: "tts",
+      name: "Short narration script",
+      inputContract: "three-segment script with two consented speakers",
+      expectedOutputs: ["voice clip asset", "generation job", "recipe summary"],
+      automatedCheckIds: [
+        "check-job-contracts",
+        "check-recipe-persistence",
+        "check-safety-gates",
+      ],
+    },
+    {
+      id: "fixture-podcast-dialogue",
+      workflow: "voice-clone",
+      name: "Podcast voice clone gate",
+      inputContract:
+        "voice-clone request with approved and rejected profile variants",
+      expectedOutputs: [
+        "allowed submission",
+        "blocked submission",
+        "consent audit",
+      ],
+      automatedCheckIds: ["check-job-contracts", "check-safety-gates"],
+    },
+    {
+      id: "fixture-voice-conversion",
+      workflow: "voice-conversion",
+      name: "Voice conversion source-target pair",
+      inputContract: "source audio plus consented target voice profile",
+      expectedOutputs: [
+        "conversion job",
+        "voice clip output",
+        "source-target provenance",
+      ],
+      automatedCheckIds: ["check-job-contracts", "check-recipe-persistence"],
+    },
+    {
+      id: "fixture-game-sfx",
+      workflow: "sfx",
+      name: "Game UI SFX batch",
+      inputContract:
+        "short SFX prompt with duration, category, negative prompt, and tags",
+      expectedOutputs: ["SFX variants", "loudness metrics", "saved output"],
+      automatedCheckIds: [
+        "check-job-contracts",
+        "check-metadata-extraction",
+        "check-asset-lifecycle",
+      ],
+    },
+    {
+      id: "fixture-ambience-loop",
+      workflow: "ambience",
+      name: "Loopable ambience bed",
+      inputContract:
+        "ambience prompt with loopable control and crossfade target",
+      expectedOutputs: ["ambience asset", "loop points", "export warning set"],
+      automatedCheckIds: ["check-metadata-extraction", "check-export-sidecars"],
+    },
+    {
+      id: "fixture-sample-pack",
+      workflow: "instrument-sample",
+      name: "Instrument sample pack",
+      inputContract:
+        "sample generation request with instrument family and articulation",
+      expectedOutputs: [
+        "sample variants",
+        "pack collection",
+        "sample export metadata",
+      ],
+      automatedCheckIds: ["check-metadata-extraction", "check-asset-lifecycle"],
+    },
+    {
+      id: "fixture-loop-pack",
+      workflow: "loop",
+      name: "Musical loop pack",
+      inputContract: "four-bar loop request with BPM, key, and loop points",
+      expectedOutputs: ["loop variants", "BPM/key metadata", "DAW handoff"],
+      automatedCheckIds: ["check-metadata-extraction", "check-export-sidecars"],
+    },
+    {
+      id: "fixture-song-structure",
+      workflow: "song",
+      name: "Complete song structure",
+      inputContract: "lyrics, section map, style tags, stems requested",
+      expectedOutputs: ["song variants", "section scores", "export targets"],
+      automatedCheckIds: [
+        "check-job-contracts",
+        "check-metadata-extraction",
+        "check-export-sidecars",
+      ],
+    },
+    {
+      id: "fixture-stem-bundle",
+      workflow: "stem-separation",
+      name: "Stem bundle handoff",
+      inputContract: "song output with requested stem kinds",
+      expectedOutputs: ["stem records", "stem bundle sidecar", "DAW package"],
+      automatedCheckIds: ["check-export-sidecars", "check-provider-manifests"],
+    },
+    {
+      id: "fixture-video-foley",
+      workflow: "video-to-audio",
+      name: "Silent video Foley map",
+      inputContract:
+        "video source ID, target ranges, object notes, and text direction",
+      expectedOutputs: [
+        "sync points",
+        "source media provenance",
+        "blocked provider gate",
+      ],
+      automatedCheckIds: ["check-provider-manifests", "check-safety-gates"],
+    },
+    {
+      id: "fixture-edit-normalize",
+      workflow: "edit",
+      name: "Non-destructive edit chain",
+      inputContract:
+        "trim, fade, normalize, and loop crossfade operations on a generated loop",
+      expectedOutputs: [
+        "edited version",
+        "comparison metrics",
+        "edit provenance",
+      ],
+      automatedCheckIds: ["check-recipe-persistence", "check-asset-lifecycle"],
+    },
+    {
+      id: "fixture-composition-export",
+      workflow: "composition-render",
+      name: "Composition render and handoff",
+      inputContract: "two-track composition with voice clip and loop assets",
+      expectedOutputs: [
+        "mixdown",
+        "optional stems",
+        "SceneWorks package metadata",
+      ],
+      automatedCheckIds: ["check-export-sidecars", "check-recipe-persistence"],
+    },
+  ],
+  automatedChecks: [
+    {
+      id: "check-job-contracts",
+      category: "job-contracts",
+      status: "passed",
+      requiredForMvp: true,
+      summary:
+        "Generation jobs serialize status, progress, outputs, cancellation, and actionable errors.",
+      evidence:
+        "Runtime, TTS, SFX, samples, song, voice, and edit overview tests cover job snapshots.",
+    },
+    {
+      id: "check-recipe-persistence",
+      category: "recipe-persistence",
+      status: "passed",
+      requiredForMvp: true,
+      summary:
+        "Recipes preserve provider/model, seed, references, post-processing, outputs, and replayability.",
+      evidence:
+        "Fixture and review tests assert serializable inspectable recipes and edit chains.",
+    },
+    {
+      id: "check-metadata-extraction",
+      category: "metadata-extraction",
+      status: "passed",
+      requiredForMvp: true,
+      summary:
+        "Audio metadata contracts include duration, sample rate, channels, loudness, true peak, BPM, key, and loop points where relevant.",
+      evidence:
+        "SFX, samples, songs, review, library, and export reference data expose the required fields.",
+    },
+    {
+      id: "check-provider-manifests",
+      category: "provider-manifest",
+      status: "passed",
+      requiredForMvp: true,
+      summary:
+        "Provider manifests distinguish workflows, inputs, outputs, limits, hardware, license, and runnable defaults.",
+      evidence:
+        "Provider catalog covers all capability workflows with capability-driven matching.",
+    },
+    {
+      id: "check-asset-lifecycle",
+      category: "asset-lifecycle",
+      status: "passed",
+      requiredForMvp: true,
+      summary:
+        "Assets can move through project/global library, tags, collections, saved outputs, version history, and reuse targets.",
+      evidence:
+        "Asset library fixtures cover scopes, tags, collections, lifecycle actions, and provenance links.",
+    },
+    {
+      id: "check-export-sidecars",
+      category: "export-sidecars",
+      status: "passed",
+      requiredForMvp: true,
+      summary:
+        "Exports include preset, target, formats, sidecars, DAW bundle, and SceneWorks handoff metadata.",
+      evidence:
+        "Export workflow sidecars include recipe, model, source media, rights, disclosure, and edit-chain fields.",
+    },
+    {
+      id: "check-safety-gates",
+      category: "safety-gates",
+      status: "passed",
+      requiredForMvp: true,
+      summary:
+        "Voice consent, commercial model eligibility, content policy, watermark, and disclosure gates are first-class.",
+      evidence:
+        "Rights and Voice Lab overviews include blocked consent, model-use, and commercial export decisions.",
+    },
+    {
+      id: "check-release-docs",
+      category: "documentation",
+      status: "passed",
+      requiredForMvp: true,
+      summary:
+        "Validation matrix maps back to epic requirements and states what remains unverified.",
+      evidence: "docs/mvp-validation.md is the human-readable release matrix.",
+    },
+    {
+      id: "check-release-run-artifacts",
+      category: "stress",
+      status: "pending",
+      requiredForMvp: true,
+      summary:
+        "Release run artifacts must capture current Mac and Windows validation evidence before MVP signoff.",
+      evidence:
+        "This story defines the evidence contract; release artifacts remain pending until real provider runs exist.",
+    },
+  ],
+  manualScorecards: [
+    {
+      id: "score-tts-quality",
+      workflow: "tts",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: [
+        "intelligibility",
+        "pronunciation",
+        "prosody",
+        "noise floor",
+      ],
+      passThreshold: "mean 4/5 with no blocker on intelligibility",
+      reviewerNotes:
+        "Needs real generated audio from the selected first TTS provider.",
+    },
+    {
+      id: "score-dialogue-quality",
+      workflow: "voice-clone",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: [
+        "speaker consistency",
+        "consent fit",
+        "turn-taking",
+        "artifact rate",
+      ],
+      passThreshold:
+        "all consent gates pass and mean 4/5 on speaker consistency",
+      reviewerNotes:
+        "Requires approved reference voices and generated dialogue artifacts.",
+    },
+    {
+      id: "score-voice-conversion-quality",
+      workflow: "voice-conversion",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: [
+        "source preservation",
+        "target timbre",
+        "intelligibility",
+        "artifact rate",
+      ],
+      passThreshold: "mean 4/5 with explicit source-target provenance",
+      reviewerNotes: "Requires RVC-style conversion smoke evidence.",
+    },
+    {
+      id: "score-sfx-quality",
+      workflow: "sfx",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: [
+        "prompt adherence",
+        "transient quality",
+        "loudness",
+        "game usability",
+      ],
+      passThreshold: "at least two variants accepted by a reviewer",
+      reviewerNotes: "Requires generated game UI SFX artifacts.",
+    },
+    {
+      id: "score-ambience-loop-quality",
+      workflow: "ambience",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: ["loop seam", "tonal stability", "noise", "loudness drift"],
+      passThreshold: "seam is not distracting across three loop passes",
+      reviewerNotes: "Requires loop audition evidence.",
+    },
+    {
+      id: "score-sample-pack-quality",
+      workflow: "instrument-sample",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: [
+        "transient cleanliness",
+        "pitch usefulness",
+        "tag accuracy",
+        "pack consistency",
+      ],
+      passThreshold: "sample pack receives reviewer acceptance for reuse",
+      reviewerNotes: "Requires sample pack preview artifacts.",
+    },
+    {
+      id: "score-loop-pack-quality",
+      workflow: "loop",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: ["BPM fit", "key fit", "loop seam", "musical usefulness"],
+      passThreshold: "loop aligns to grid and repeats cleanly",
+      reviewerNotes: "Requires DAW or timeline audition.",
+    },
+    {
+      id: "score-song-quality",
+      workflow: "song",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: [
+        "lyric alignment",
+        "section structure",
+        "mix balance",
+        "originality disclosure",
+      ],
+      passThreshold: "song passes structure and disclosure review",
+      reviewerNotes: "Requires complete song artifacts.",
+    },
+    {
+      id: "score-video-foley-quality",
+      workflow: "video-to-audio",
+      status: "manual-required",
+      requiredForMvp: true,
+      scoringAxes: [
+        "sync accuracy",
+        "event coverage",
+        "ambience fit",
+        "rights clarity",
+      ],
+      passThreshold: "generated audio syncs to target ranges",
+      reviewerNotes: "Blocked on sc-6183 implementation evidence.",
+    },
+  ],
+  stressCases: [
+    {
+      id: "stress-long-script",
+      title: "Long script chunking",
+      workflow: "tts",
+      status: "pending",
+      requiredForMvp: true,
+      scenario:
+        "Generate a long-form narration with many segments and speakers.",
+      expectedBehavior:
+        "chunks resume cleanly, output order is stable, partial failures are recoverable",
+    },
+    {
+      id: "stress-long-song",
+      title: "Long song generation",
+      workflow: "song",
+      status: "pending",
+      requiredForMvp: true,
+      scenario:
+        "Generate a multi-minute lyrics-to-song draft with stems requested.",
+      expectedBehavior:
+        "duration stays within provider limits and section metadata survives",
+    },
+    {
+      id: "stress-cancellation",
+      title: "Cancellation during generation",
+      workflow: "composition-render",
+      status: "passed",
+      requiredForMvp: true,
+      scenario: "Cancel a running provider job and preserve actionable state.",
+      expectedBehavior:
+        "job enters canceling/canceled state without orphaned outputs",
+    },
+    {
+      id: "stress-failed-download",
+      title: "Failed model download",
+      workflow: "tts",
+      status: "pending",
+      requiredForMvp: true,
+      scenario: "Simulate a provider package download failure.",
+      expectedBehavior:
+        "runtime exposes recovery guidance and generation remains blocked",
+    },
+    {
+      id: "stress-missing-gpu",
+      title: "Missing GPU or accelerator",
+      workflow: "song",
+      status: "pending",
+      requiredForMvp: true,
+      scenario: "Run provider preflight on unsupported hardware.",
+      expectedBehavior:
+        "manifest compatibility reports unavailable rather than queueing",
+    },
+    {
+      id: "stress-unsupported-language",
+      title: "Unsupported language",
+      workflow: "tts",
+      status: "pending",
+      requiredForMvp: true,
+      scenario: "Submit a script language outside provider support.",
+      expectedBehavior: "provider matcher blocks or warns before generation",
+    },
+    {
+      id: "stress-rejected-voice-consent",
+      title: "Rejected voice consent",
+      workflow: "voice-clone",
+      status: "passed",
+      requiredForMvp: true,
+      scenario: "Attempt cloning or conversion with rejected consent.",
+      expectedBehavior:
+        "submission remains blocked and audit reason is visible",
+    },
+    {
+      id: "stress-noncommercial-commercial-project",
+      title: "Noncommercial model in commercial project",
+      workflow: "song",
+      status: "passed",
+      requiredForMvp: true,
+      scenario:
+        "Request commercial export from a noncommercial or unknown model.",
+      expectedBehavior: "commercial export is blocked with license reasons",
+    },
+  ],
+  knownLimitations: [
+    {
+      id: "limit-no-real-provider-audio",
+      area: "Provider evidence",
+      summary:
+        "Reference fixtures define contracts but do not yet prove generated audio quality from real selected providers.",
+      mitigation:
+        "Run first-provider smoke tests and attach artifacts to this matrix.",
+      blocksMvp: true,
+    },
+    {
+      id: "limit-video-to-audio-prototype",
+      area: "Multimodal SFX",
+      summary:
+        "Video-to-audio has a fixture and gate, but the product workflow remains tracked by sc-6183.",
+      mitigation:
+        "Keep the workflow blocked until sc-6183 supplies prototype evidence.",
+      blocksMvp: true,
+    },
+    {
+      id: "limit-sceneworks-import",
+      area: "SceneWorks handoff",
+      summary:
+        "SoundWorks export package metadata exists, but SceneWorks import/attachment validation is tracked by sc-6202.",
+      mitigation:
+        "Do not claim end-to-end SceneWorks import until the target source is implemented and tested.",
+      blocksMvp: false,
+    },
+    {
+      id: "limit-release-hardware",
+      area: "Runtime validation",
+      summary:
+        "Mac and Windows release hardware runs are not captured by this static reference matrix.",
+      mitigation: "Attach release-run artifacts before MVP signoff.",
+      blocksMvp: true,
+    },
+  ],
+  requirementCoverage: [
+    {
+      requirementId: "epic-req-1",
+      epicRequirement:
+        "Text-to-speech with many voices and consent-aware voice profiles.",
+      demoWorkflowIds: ["demo-short-narration", "demo-podcast-dialogue"],
+      fixtureIds: ["fixture-short-narration", "fixture-podcast-dialogue"],
+      checkIds: ["check-job-contracts", "check-safety-gates"],
+      status: "manual-required",
+    },
+    {
+      requirementId: "epic-req-2",
+      epicRequirement:
+        "Generated sound effects, Foley, ambience, and loopable background beds.",
+      demoWorkflowIds: [
+        "demo-game-ui-sfx",
+        "demo-loopable-ambience",
+        "demo-video-foley",
+      ],
+      fixtureIds: [
+        "fixture-game-sfx",
+        "fixture-ambience-loop",
+        "fixture-video-foley",
+      ],
+      checkIds: ["check-metadata-extraction", "check-provider-manifests"],
+      status: "manual-required",
+    },
+    {
+      requirementId: "epic-req-3",
+      epicRequirement:
+        "Instrument samples and loops with BPM, key, loop points, tags, and provenance.",
+      demoWorkflowIds: ["demo-instrument-sample-pack", "demo-loop-pack"],
+      fixtureIds: ["fixture-sample-pack", "fixture-loop-pack"],
+      checkIds: ["check-metadata-extraction", "check-asset-lifecycle"],
+      status: "manual-required",
+    },
+    {
+      requirementId: "epic-req-4",
+      epicRequirement:
+        "Complete song generation with lyrics, structure, stems, and exportable masters.",
+      demoWorkflowIds: ["demo-complete-song", "demo-stem-separation"],
+      fixtureIds: ["fixture-song-structure", "fixture-stem-bundle"],
+      checkIds: ["check-job-contracts", "check-export-sidecars"],
+      status: "manual-required",
+    },
+    {
+      requirementId: "epic-req-5",
+      epicRequirement:
+        "Recipe, model, seed, reference, license, provenance, and post-processing persistence.",
+      demoWorkflowIds: ["demo-edit-trim-normalize", "demo-composition-export"],
+      fixtureIds: ["fixture-edit-normalize", "fixture-composition-export"],
+      checkIds: ["check-recipe-persistence", "check-export-sidecars"],
+      status: "passed",
+    },
+    {
+      requirementId: "epic-req-6",
+      epicRequirement:
+        "Voice cloning, style imitation, copyrighted music similarity, and disclosure safety gates.",
+      demoWorkflowIds: [
+        "demo-podcast-dialogue",
+        "demo-voice-conversion",
+        "demo-complete-song",
+      ],
+      fixtureIds: [
+        "fixture-podcast-dialogue",
+        "fixture-voice-conversion",
+        "fixture-song-structure",
+      ],
+      checkIds: ["check-safety-gates"],
+      status: "passed",
+    },
+    {
+      requirementId: "epic-req-7",
+      epicRequirement:
+        "Capability-based provider manifests rather than one-off model assumptions.",
+      demoWorkflowIds: ["demo-video-foley", "demo-stem-separation"],
+      fixtureIds: ["fixture-video-foley", "fixture-stem-bundle"],
+      checkIds: ["check-provider-manifests"],
+      status: "passed",
+    },
+    {
+      requirementId: "epic-req-8",
+      epicRequirement:
+        "Audio-native review tools, version comparison, edits, and production exports.",
+      demoWorkflowIds: ["demo-edit-trim-normalize", "demo-composition-export"],
+      fixtureIds: ["fixture-edit-normalize", "fixture-composition-export"],
+      checkIds: ["check-asset-lifecycle", "check-export-sidecars"],
+      status: "passed",
+    },
+  ],
 };
 
 export const fallbackExportWorkflow: ExportWorkflowOverview = {

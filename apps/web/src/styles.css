@@ -214,6 +214,7 @@ h1 {
 .tts-studio-panel,
 .asset-library-panel,
 .export-workflow-panel,
+.mvp-validation-panel,
 .voice-lab-panel,
 .sfx-studio-panel,
 .samples-studio-panel,
@@ -226,6 +227,7 @@ h1 {
 .tts-header,
 .library-header,
 .export-header,
+.mvp-header,
 .voice-lab-header,
 .sfx-header,
 .samples-header {
@@ -238,6 +240,7 @@ h1 {
 .tts-header h2,
 .library-header h2,
 .export-header h2,
+.mvp-header h2,
 .voice-lab-header h2,
 .sfx-header h2,
 .samples-header h2 {
@@ -333,9 +336,20 @@ h1 {
   background: #48512b;
 }
 
+.validation-action {
+  background: #73453d;
+  border-color: #633931;
+}
+
+.validation-action:not(:disabled):hover,
+.validation-action:not(:disabled):focus-visible {
+  background: #5f372f;
+}
+
 .tts-metrics,
 .library-metrics,
 .export-metrics,
+.mvp-metrics,
 .voice-lab-metrics,
 .sfx-metrics,
 .samples-metrics {
@@ -347,6 +361,7 @@ h1 {
 .tts-metrics div,
 .library-metrics div,
 .export-metrics div,
+.mvp-metrics div,
 .voice-lab-metrics div,
 .sfx-metrics div,
 .samples-metrics div {
@@ -364,6 +379,7 @@ h1 {
 .tts-metrics strong,
 .library-metrics strong,
 .export-metrics strong,
+.mvp-metrics strong,
 .voice-lab-metrics strong,
 .sfx-metrics strong,
 .samples-metrics strong {
@@ -376,6 +392,7 @@ h1 {
 .tts-metrics span,
 .library-metrics span,
 .export-metrics span,
+.mvp-metrics span,
 .voice-lab-metrics span,
 .sfx-metrics span,
 .samples-metrics span {
@@ -719,6 +736,118 @@ h1 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
+}
+
+.mvp-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.mvp-main,
+.mvp-side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mvp-demo-grid,
+.requirement-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mvp-demo-card,
+.requirement-card {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  color: #17231f;
+  background: #fbfaf5;
+  border: 1px solid #e4dfd4;
+  border-radius: 8px;
+}
+
+.mvp-demo-card .sfx-variant-title {
+  display: grid;
+  align-items: start;
+}
+
+.mvp-demo-card .sfx-variant-title span {
+  justify-self: start;
+}
+
+.requirement-card.manual-required,
+.requirement-card.pending {
+  border-color: #ddd0a8;
+  background: #fffdf0;
+}
+
+.mvp-demo-card strong,
+.mvp-demo-card span,
+.mvp-demo-card p,
+.requirement-card strong,
+.requirement-card span,
+.requirement-card small,
+.requirement-card p {
+  overflow-wrap: anywhere;
+}
+
+.mvp-demo-card p,
+.requirement-card p,
+.requirement-card small {
+  color: #66726b;
+  line-height: 1.4;
+}
+
+.mvp-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(260px, 0.8fr) minmax(
+      320px,
+      1.1fr
+    );
+  gap: 12px;
+  align-items: start;
+}
+
+.fixture-list,
+.limitation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.fixture-list article,
+.limitation-list article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  color: #17231f;
+  background: #fbfaf5;
+  border: 1px solid #e4dfd4;
+  border-radius: 8px;
+}
+
+.limitation-list article.blocks {
+  border-color: #e3c9c3;
+  background: #fff9f6;
+}
+
+.fixture-list strong,
+.fixture-list small,
+.fixture-list p,
+.limitation-list strong,
+.limitation-list p {
+  overflow-wrap: anywhere;
+}
+
+.fixture-list small,
+.fixture-list p,
+.limitation-list p {
+  color: #66726b;
 }
 
 .sidecar-list article {
@@ -2063,6 +2192,11 @@ h1 {
   .library-bottom-grid,
   .export-layout,
   .export-bottom-grid,
+  .mvp-layout,
+  .mvp-metrics,
+  .mvp-demo-grid,
+  .mvp-bottom-grid,
+  .requirement-grid,
   .voice-lab-layout,
   .voice-lab-metrics,
   .export-metrics,
@@ -2076,6 +2210,7 @@ h1 {
   .tts-header,
   .library-header,
   .export-header,
+  .mvp-header,
   .voice-lab-header,
   .sfx-header,
   .samples-header {

@@ -29,6 +29,7 @@ import {
   fallbackOverview,
   fallbackAssetLibrary,
   fallbackExportWorkflow,
+  fallbackMvpValidation,
   fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
@@ -42,6 +43,7 @@ import {
   loadAppOverview,
   loadAssetLibraryOverview,
   loadExportWorkflowOverview,
+  loadMvpValidationOverview,
   loadRightsSafetyOverview,
   loadReviewWorkspaceOverview,
   loadRuntimeOverview,
@@ -55,6 +57,7 @@ import type {
   AppOverview,
   AssetLibraryOverview,
   ExportWorkflowOverview,
+  MvpValidationOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -122,6 +125,9 @@ export function App() {
   const [exportWorkflow, setExportWorkflow] = useState<ExportWorkflowOverview>(
     fallbackExportWorkflow,
   );
+  const [mvpValidation, setMvpValidation] = useState<MvpValidationOverview>(
+    fallbackMvpValidation,
+  );
   const [ttsStudio, setTtsStudio] =
     useState<TtsStudioOverview>(fallbackTtsStudio);
   const [voiceLab, setVoiceLab] = useState<VoiceLabOverview>(fallbackVoiceLab);
@@ -161,6 +167,12 @@ export function App() {
     loadExportWorkflowOverview().then((nextExportWorkflow) => {
       if (active) {
         setExportWorkflow(nextExportWorkflow);
+      }
+    });
+
+    loadMvpValidationOverview().then((nextMvpValidation) => {
+      if (active) {
+        setMvpValidation(nextMvpValidation);
       }
     });
 
@@ -729,6 +741,227 @@ export function App() {
                   </li>
                 ))}
               </ol>
+            </section>
+          </div>
+        </section>
+
+        <section className="mvp-validation-panel" aria-label="MVP Validation">
+          <div className="mvp-header">
+            <div>
+              <p className="eyebrow">MVP validation</p>
+              <h2>Release gate and demo matrix</h2>
+            </div>
+            <button
+              className="primary-action validation-action"
+              disabled={!mvpValidation.releaseGate.readyForMvp}
+              title="MVP release gate"
+              type="button"
+            >
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <span>
+                {mvpValidation.releaseGate.readyForMvp ? "Ready" : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="mvp-metrics" aria-label="Validation status">
+            <div>
+              <CircleCheck aria-hidden="true" size={18} />
+              <strong>
+                {mvpValidation.releaseGate.coveredWorkflowCount}/
+                {mvpValidation.releaseGate.requiredWorkflowCount}
+              </strong>
+              <span>workflows covered</span>
+            </div>
+            <div>
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <strong>
+                {mvpValidation.releaseGate.passedAutomatedCheckCount}/
+                {mvpValidation.releaseGate.requiredAutomatedCheckCount}
+              </strong>
+              <span>automated checks</span>
+            </div>
+            <div>
+              <Gauge aria-hidden="true" size={18} />
+              <strong>
+                {mvpValidation.releaseGate.passedManualScorecardCount}/
+                {mvpValidation.releaseGate.requiredManualScorecardCount}
+              </strong>
+              <span>manual scorecards</span>
+            </div>
+            <div>
+              <CircleAlert aria-hidden="true" size={18} />
+              <strong>{overview.mvpValidation.blockingItemCount}</strong>
+              <span>blocking items</span>
+            </div>
+          </div>
+
+          <div className="mvp-layout">
+            <div className="mvp-main">
+              <section
+                className="tts-subpanel"
+                aria-label="Golden demo workflows"
+              >
+                <div className="subpanel-heading">
+                  <h3>Golden demos</h3>
+                  <span>{mvpValidation.demoWorkflows.length}</span>
+                </div>
+                <div className="mvp-demo-grid">
+                  {mvpValidation.demoWorkflows.map((workflow) => (
+                    <article className="mvp-demo-card" key={workflow.id}>
+                      <div className="sfx-variant-title">
+                        <strong>{workflow.title}</strong>
+                        <span>{workflowLabel(workflow.workflow)}</span>
+                      </div>
+                      <p>{workflow.goal}</p>
+                      <div className="asset-tag-row">
+                        {workflow.requiredArtifacts
+                          .slice(0, 4)
+                          .map((artifact) => (
+                            <span key={`${workflow.id}-${artifact}`}>
+                              {artifact}
+                            </span>
+                          ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section
+                className="tts-subpanel"
+                aria-label="Requirement coverage"
+              >
+                <div className="subpanel-heading">
+                  <h3>Epic requirement coverage</h3>
+                  <span>{mvpValidation.requirementCoverage.length}</span>
+                </div>
+                <div className="requirement-grid">
+                  {mvpValidation.requirementCoverage.map((coverage) => (
+                    <article
+                      className={`requirement-card ${coverage.status}`}
+                      key={coverage.requirementId}
+                    >
+                      <div className="rights-card-title">
+                        <strong>{coverage.requirementId}</strong>
+                        <span>{statusLabel(coverage.status)}</span>
+                      </div>
+                      <p>{coverage.epicRequirement}</p>
+                      <small>
+                        {coverage.demoWorkflowIds.length} demos /{" "}
+                        {coverage.fixtureIds.length} fixtures /{" "}
+                        {coverage.checkIds.length} checks
+                      </small>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <div className="mvp-side">
+              <section className="tts-subpanel" aria-label="MVP blockers">
+                <div className="subpanel-heading">
+                  <h3>Release blockers</h3>
+                  <span>{mvpValidation.releaseGate.blockingItems.length}</span>
+                </div>
+                <ol className="voice-checks">
+                  {mvpValidation.releaseGate.blockingItems.map((item) => (
+                    <li className="blocked" key={item}>
+                      <CircleAlert aria-hidden="true" size={16} />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
+              <section
+                className="tts-subpanel"
+                aria-label="Automated validation checks"
+              >
+                <div className="subpanel-heading">
+                  <h3>Automated checks</h3>
+                  <span>{mvpValidation.automatedChecks.length}</span>
+                </div>
+                <ol className="voice-checks">
+                  {mvpValidation.automatedChecks.map((check) => (
+                    <li className={check.status} key={check.id}>
+                      <ClipboardCheck aria-hidden="true" size={16} />
+                      <span>
+                        <strong>{statusLabel(check.category)}</strong>{" "}
+                        {check.summary}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </div>
+          </div>
+
+          <div className="mvp-bottom-grid">
+            <section className="tts-subpanel" aria-label="Regression fixtures">
+              <div className="subpanel-heading">
+                <h3>Regression fixtures</h3>
+                <span>{mvpValidation.regressionFixtures.length}</span>
+              </div>
+              <div className="fixture-list">
+                {mvpValidation.regressionFixtures.map((fixture) => (
+                  <article key={fixture.id}>
+                    <strong>{fixture.name}</strong>
+                    <small>{workflowLabel(fixture.workflow)}</small>
+                    <p>{fixture.inputContract}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Manual QA scorecards">
+              <div className="subpanel-heading">
+                <h3>Manual QA</h3>
+                <span>{mvpValidation.manualScorecards.length}</span>
+              </div>
+              <ol className="voice-checks">
+                {mvpValidation.manualScorecards.slice(0, 6).map((scorecard) => (
+                  <li className={scorecard.status} key={scorecard.id}>
+                    <Gauge aria-hidden="true" size={16} />
+                    <span>
+                      <strong>{workflowLabel(scorecard.workflow)}</strong>{" "}
+                      {scorecard.passThreshold}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            <section
+              className="tts-subpanel"
+              aria-label="Stress cases and limitations"
+            >
+              <div className="subpanel-heading">
+                <h3>Stress and limits</h3>
+                <span>{mvpValidation.stressCases.length}</span>
+              </div>
+              <ol className="voice-checks">
+                {mvpValidation.stressCases.map((stressCase) => (
+                  <li className={stressCase.status} key={stressCase.id}>
+                    <CircleAlert aria-hidden="true" size={16} />
+                    <span>
+                      <strong>{stressCase.title}</strong>{" "}
+                      {stressCase.expectedBehavior}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <div className="limitation-list">
+                {mvpValidation.knownLimitations.map((limitation) => (
+                  <article
+                    className={limitation.blocksMvp ? "blocks" : ""}
+                    key={limitation.id}
+                  >
+                    <strong>{limitation.area}</strong>
+                    <p>{limitation.summary}</p>
+                  </article>
+                ))}
+              </div>
             </section>
           </div>
         </section>

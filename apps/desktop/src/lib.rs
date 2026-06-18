@@ -1,8 +1,8 @@
 use soundworks_core::{
     AppOverview, AssetLibraryOverview, ExportWorkflowOverview, ModelEvaluationCatalog,
-    ProviderCatalog, ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeOverview,
-    SamplesStudioOverview, SfxStudioOverview, SongStudioOverview, TtsStudioOverview,
-    VoiceLabOverview,
+    MvpValidationOverview, ProviderCatalog, ReviewWorkspaceOverview, RightsSafetyOverview,
+    RuntimeOverview, SamplesStudioOverview, SfxStudioOverview, SongStudioOverview,
+    TtsStudioOverview, VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -33,6 +33,11 @@ fn get_runtime_overview() -> RuntimeOverview {
 #[tauri::command]
 fn get_model_evaluation_catalog() -> ModelEvaluationCatalog {
     model_evaluation_catalog()
+}
+
+#[tauri::command]
+fn get_mvp_validation_overview() -> MvpValidationOverview {
+    mvp_validation_overview()
 }
 
 #[tauri::command]
@@ -94,6 +99,10 @@ pub fn model_evaluation_catalog() -> ModelEvaluationCatalog {
     ModelEvaluationCatalog::reference()
 }
 
+pub fn mvp_validation_overview() -> MvpValidationOverview {
+    MvpValidationOverview::reference()
+}
+
 pub fn tts_studio_overview() -> TtsStudioOverview {
     TtsStudioOverview::reference().expect("reference TTS studio is valid")
 }
@@ -132,6 +141,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_export_workflow_overview,
             get_runtime_overview,
             get_model_evaluation_catalog,
+            get_mvp_validation_overview,
             get_tts_studio_overview,
             get_voice_lab_overview,
             get_sfx_studio_overview,
@@ -153,9 +163,9 @@ pub fn run() {
 mod tests {
     use super::{
         app_overview, asset_library_overview, export_workflow_overview, model_evaluation_catalog,
-        provider_catalog, review_workspace_overview, rights_safety_overview, runtime_overview,
-        samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
-        voice_lab_overview,
+        mvp_validation_overview, provider_catalog, review_workspace_overview,
+        rights_safety_overview, runtime_overview, samples_studio_overview, sfx_studio_overview,
+        song_studio_overview, tts_studio_overview, voice_lab_overview,
     };
 
     #[test]
@@ -220,6 +230,21 @@ mod tests {
             .recommendations
             .iter()
             .any(|recommendation| recommendation.candidate_id == "kokoro-82m"));
+    }
+
+    #[test]
+    fn mvp_validation_command_returns_release_gate() {
+        let overview = mvp_validation_overview();
+
+        assert_eq!(overview.schema_version, 1);
+        assert_eq!(overview.demo_workflows.len(), 12);
+        assert_eq!(overview.regression_fixtures.len(), 12);
+        assert!(!overview.release_gate.ready_for_mvp);
+        assert!(overview
+            .release_gate
+            .blocking_items
+            .iter()
+            .any(|item| item.contains("stress cases")));
     }
 
     #[test]

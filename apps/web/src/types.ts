@@ -28,6 +28,7 @@ export type AppOverview = {
   providerCatalog: ProviderCatalogOverview;
   assetLibrary: AssetLibrarySummary;
   exportWorkflow: ExportWorkflowSummary;
+  mvpValidation: MvpValidationSummary;
   modelEvaluation: ModelEvaluationOverview;
   ttsStudio: TtsStudioSummary;
   voiceLab: VoiceLabSummary;
@@ -469,6 +470,111 @@ export type ModelEvaluationOverview = {
   statusCounts: Record<string, number>;
   productEligibilityCounts: Record<string, number>;
   recommendedCandidateIds: string[];
+};
+
+export type ValidationStatus =
+  | "passed"
+  | "pending"
+  | "manual-required"
+  | "failed";
+
+export type ValidationCategory =
+  | "job-contracts"
+  | "recipe-persistence"
+  | "metadata-extraction"
+  | "provider-manifest"
+  | "asset-lifecycle"
+  | "export-sidecars"
+  | "safety-gates"
+  | "audio-quality"
+  | "stress"
+  | "documentation";
+
+export type MvpValidationSummary = {
+  schemaVersion: number;
+  readyForMvp: boolean;
+  blockingItemCount: number;
+  demoWorkflowCount: number;
+  regressionFixtureCount: number;
+  automatedCheckCount: number;
+  manualScorecardCount: number;
+  stressCaseCount: number;
+  knownLimitationCount: number;
+  requirementCount: number;
+  workflowCount: number;
+};
+
+export type MvpValidationOverview = {
+  schemaVersion: number;
+  releaseGate: {
+    readyForMvp: boolean;
+    requiredWorkflowCount: number;
+    coveredWorkflowCount: number;
+    requiredAutomatedCheckCount: number;
+    passedAutomatedCheckCount: number;
+    requiredManualScorecardCount: number;
+    passedManualScorecardCount: number;
+    requiredStressCaseCount: number;
+    passedStressCaseCount: number;
+    blockingItems: string[];
+  };
+  demoWorkflows: Array<{
+    id: string;
+    workflow: CapabilityWorkflow;
+    title: string;
+    goal: string;
+    requiredArtifacts: string[];
+    acceptance: string[];
+  }>;
+  regressionFixtures: Array<{
+    id: string;
+    workflow: CapabilityWorkflow;
+    name: string;
+    inputContract: string;
+    expectedOutputs: string[];
+    automatedCheckIds: string[];
+  }>;
+  automatedChecks: Array<{
+    id: string;
+    category: ValidationCategory;
+    status: ValidationStatus;
+    requiredForMvp: boolean;
+    summary: string;
+    evidence: string;
+  }>;
+  manualScorecards: Array<{
+    id: string;
+    workflow: CapabilityWorkflow;
+    status: ValidationStatus;
+    requiredForMvp: boolean;
+    scoringAxes: string[];
+    passThreshold: string;
+    reviewerNotes: string;
+  }>;
+  stressCases: Array<{
+    id: string;
+    title: string;
+    workflow: CapabilityWorkflow;
+    status: ValidationStatus;
+    requiredForMvp: boolean;
+    scenario: string;
+    expectedBehavior: string;
+  }>;
+  knownLimitations: Array<{
+    id: string;
+    area: string;
+    summary: string;
+    mitigation: string;
+    blocksMvp: boolean;
+  }>;
+  requirementCoverage: Array<{
+    requirementId: string;
+    epicRequirement: string;
+    demoWorkflowIds: string[];
+    fixtureIds: string[];
+    checkIds: string[];
+    status: ValidationStatus;
+  }>;
 };
 
 export type TtsStudioSummary = {

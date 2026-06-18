@@ -726,7 +726,7 @@ fn safety_gates() -> Vec<VoiceSafetyGate> {
         VoiceSafetyGate {
             id: "voice.commercial_use.review".to_string(),
             status: VoiceGateStatus::Warning,
-            summary: "Noncommercial or unknown provider licenses stay visible as blocked/research-only scorecards.".to_string(),
+            summary: "Unknown provider licenses stay visible as blocked scorecards; noncommercial licenses require SoundWorks compatibility review.".to_string(),
         },
     ]
 }

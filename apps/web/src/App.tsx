@@ -950,7 +950,7 @@ export function App() {
                           : "voice-approval review"
                       }
                     >
-                      {profile.commercialUseAllowed ? "commercial" : "review"}
+                      {profile.commercialUseAllowed ? "licensed" : "review"}
                     </span>
                   </div>
                   <p>{profile.safetySummary}</p>
@@ -1971,15 +1971,13 @@ export function App() {
             </div>
             <button
               className="primary-action safety-action"
-              disabled={!overview.rightsSafety.canExportCommercial}
+              disabled={!overview.rightsSafety.canExport}
               type="button"
-              title="Commercial export gate"
+              title="SoundWorks export gate"
             >
               <ShieldCheck aria-hidden="true" size={18} />
               <span>
-                {overview.rightsSafety.canExportCommercial
-                  ? "Export"
-                  : "Blocked"}
+                {overview.rightsSafety.canExport ? "Export" : "Blocked"}
               </span>
             </button>
           </div>
@@ -2091,7 +2089,7 @@ export function App() {
                 aria-label="Policy requirements"
               >
                 <div className="subpanel-heading">
-                  <h3>Commercial export</h3>
+                  <h3>SoundWorks export</h3>
                   <span>
                     {rightsSafety.policy.provenanceSidecarRequired
                       ? "sidecar"
@@ -2099,14 +2097,12 @@ export function App() {
                   </span>
                 </div>
                 <ol className="policy-list">
-                  {rightsSafety.policy.commercialExportRequires.map(
-                    (requirement) => (
-                      <li key={requirement}>
-                        <CircleCheck aria-hidden="true" size={16} />
-                        <span>{requirement}</span>
-                      </li>
-                    ),
-                  )}
+                  {rightsSafety.policy.exportRequires.map((requirement) => (
+                    <li key={requirement}>
+                      <CircleCheck aria-hidden="true" size={16} />
+                      <span>{requirement}</span>
+                    </li>
+                  ))}
                 </ol>
               </section>
             </div>

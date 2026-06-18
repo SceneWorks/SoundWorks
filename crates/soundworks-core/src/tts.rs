@@ -390,9 +390,8 @@ impl TtsSubmissionPreview {
             }
 
             if !option.commercial_use_allowed {
-                warnings.push(
-                    "Selected provider requires commercial-use review before export.".to_string(),
-                );
+                warnings
+                    .push("Selected provider requires license review before export.".to_string());
             }
         }
 
@@ -543,7 +542,7 @@ fn limitations_for_license(license: ModelLicense) -> Vec<String> {
             vec![]
         }
         ModelLicense::NonCommercial => {
-            vec!["Noncommercial license blocks default commercial projects.".to_string()]
+            vec!["Noncommercial license requires SoundWorks compatibility review.".to_string()]
         }
         ModelLicense::Unknown => {
             vec!["License must be reviewed before production use.".to_string()]

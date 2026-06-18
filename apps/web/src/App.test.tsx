@@ -150,7 +150,7 @@ describe("App", () => {
     expect(
       screen.getByText(/Loop and sample pack exports preserve BPM, key/i),
     ).toBeInTheDocument();
-    expect(screen.getByTitle("Commercial export gate")).toBeDisabled();
+    expect(screen.getByTitle("SoundWorks export gate")).toBeDisabled();
     expect(
       screen.getByText(
         "Guest voice conversion is blocked until the speaker consent record is completed.",
@@ -159,7 +159,7 @@ describe("App", () => {
     expect(screen.getByText("ChatTTS")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Noncommercial model terms block commercial SoundWorks export.",
+        "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass.",
       ),
     ).toBeInTheDocument();
     expect(

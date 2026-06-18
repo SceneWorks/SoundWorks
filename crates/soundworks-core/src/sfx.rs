@@ -419,9 +419,8 @@ impl SfxSubmissionPreview {
             }
 
             if !option.commercial_use_allowed {
-                warnings.push(
-                    "Selected provider requires commercial-use review before export.".to_string(),
-                );
+                warnings
+                    .push("Selected provider requires license review before export.".to_string());
             }
         }
 
@@ -654,7 +653,7 @@ fn limitations_for_license(license: ModelLicense) -> Vec<String> {
             vec![]
         }
         ModelLicense::NonCommercial => {
-            vec!["Noncommercial license blocks default commercial projects.".to_string()]
+            vec!["Noncommercial license requires SoundWorks compatibility review.".to_string()]
         }
         ModelLicense::Unknown => {
             vec!["License must be reviewed before production use.".to_string()]
@@ -666,7 +665,7 @@ fn limitations_for_safety(safety: &CapabilitySafety) -> Vec<String> {
     let mut limitations = vec![];
 
     if !safety.commercial_use_allowed {
-        limitations.push("Commercial export requires review.".to_string());
+        limitations.push("Model use terms require review before export.".to_string());
     }
 
     if !safety.disallowed_uses.is_empty() {

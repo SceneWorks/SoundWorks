@@ -43,14 +43,14 @@ impl RightsSafetyOverview {
         }
     }
 
-    pub fn can_export_commercial(&self) -> bool {
+    pub fn can_export(&self) -> bool {
         self.content_policy_gates
             .iter()
             .all(|gate| gate.status != PolicyGateStatus::Blocked)
             && self
                 .model_use_decisions
                 .iter()
-                .filter(|decision| decision.commercial_export)
+                .filter(|decision| decision.export_candidate)
                 .all(|decision| decision.decision != PolicyDecision::Blocked)
     }
 }
@@ -60,7 +60,7 @@ impl RightsSafetyOverview {
 pub struct RightsPolicy {
     pub name: String,
     pub voice_consent_required_for: Vec<String>,
-    pub commercial_export_requires: Vec<String>,
+    pub export_requires: Vec<String>,
     pub blocked_prompt_categories: Vec<RiskCategory>,
     pub warning_prompt_categories: Vec<RiskCategory>,
     pub watermark_policy: WatermarkPolicy,
@@ -76,9 +76,9 @@ impl RightsPolicy {
                 "voice-conversion".to_string(),
                 "few-shot-fine-tune".to_string(),
             ],
-            commercial_export_requires: vec![
+            export_requires: vec![
                 "explicit voice consent when voice material is used".to_string(),
-                "commercial-use-allowed or provider-terms-reviewed model license".to_string(),
+                "SoundWorks non-commercial use compatibility or provider-terms-reviewed model license".to_string(),
                 "provenance sidecar with model, prompt, source media, recipe, and edit chain"
                     .to_string(),
                 "AI disclosure flag when generated or AI-edited audio leaves SoundWorks"
@@ -87,7 +87,7 @@ impl RightsPolicy {
             blocked_prompt_categories: vec![
                 RiskCategory::PublicFigureVoiceClone,
                 RiskCategory::UnauthorizedVoiceReference,
-                RiskCategory::NoncommercialModelCommercialExport,
+                RiskCategory::IncompatibleModelLicense,
             ],
             warning_prompt_categories: vec![
                 RiskCategory::ArtistStyleImitation,
@@ -115,7 +115,7 @@ pub enum RiskCategory {
     UnauthorizedVoiceReference,
     ArtistStyleImitation,
     CopyrightedLyrics,
-    NoncommercialModelCommercialExport,
+    IncompatibleModelLicense,
     AiDisclosure,
     WatermarkUnavailable,
 }
@@ -139,7 +139,7 @@ pub struct ModelUseDecision {
     pub candidate_id: String,
     pub name: String,
     pub requested_workflow: String,
-    pub commercial_export: bool,
+    pub export_candidate: bool,
     pub license: String,
     pub commercial_use: CommercialUseEvaluation,
     pub product_eligibility: ProductEligibility,
@@ -228,7 +228,7 @@ fn consent_checks() -> Vec<ConsentCheck> {
             workflow: "voice-clone".to_string(),
             voice_profile_id: "voice-profile-narrator".to_string(),
             consent_status: VoiceConsentStatus::ExplicitConsentRecorded,
-            allowed_use: "commercial voice clone and conversion".to_string(),
+            allowed_use: "approved voice clone and conversion".to_string(),
             decision: PolicyDecision::Allowed,
             summary: "Narrator profile can queue clone, fine-tune, and conversion workflows because explicit consent metadata is stored."
                 .to_string(),
@@ -294,26 +294,25 @@ fn model_use_decisions(catalog: &ModelEvaluationCatalog) -> Vec<ModelUseDecision
 
                     match candidate.license.commercial_use {
                         CommercialUseEvaluation::Allowed => reasons.push(
-                            "License evidence allows commercial product consideration.".to_string(),
+                            "License evidence supports SoundWorks export consideration.".to_string(),
                         ),
                         CommercialUseEvaluation::ProviderTerms => {
                             decision = PolicyDecision::Warn;
                             reasons.push(
-                                "Provider terms must be accepted and attached before commercial export."
+                                "Provider terms must be reviewed and attached before SoundWorks export."
                                     .to_string(),
                             );
                         }
                         CommercialUseEvaluation::NonCommercial => {
-                            decision = PolicyDecision::Blocked;
                             reasons.push(
-                                "Noncommercial model terms block commercial SoundWorks export."
+                                "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass."
                                     .to_string(),
                             );
                         }
                         CommercialUseEvaluation::Unknown => {
                             decision = PolicyDecision::Blocked;
                             reasons.push(
-                                "Unknown commercial-use terms block commercial export until reviewed."
+                                "Unknown model-use terms block SoundWorks export until reviewed."
                                     .to_string(),
                             );
                         }
@@ -325,7 +324,7 @@ fn model_use_decisions(catalog: &ModelEvaluationCatalog) -> Vec<ModelUseDecision
                     ) {
                         decision = PolicyDecision::Blocked;
                         reasons.push(
-                            "Research-only or blocked candidates cannot be product export choices."
+                            "Research-only or blocked candidates cannot be SoundWorks export choices."
                                 .to_string(),
                         );
                     }
@@ -351,7 +350,7 @@ fn model_use_decisions(catalog: &ModelEvaluationCatalog) -> Vec<ModelUseDecision
                             .first()
                             .map(|lane| format!("{lane:?}"))
                             .unwrap_or_else(|| "Unknown".to_string()),
-                        commercial_export: true,
+                        export_candidate: true,
                         license: candidate.license.label.clone(),
                         commercial_use: candidate.license.commercial_use,
                         product_eligibility: candidate.product_eligibility,
@@ -407,8 +406,7 @@ fn content_policy_gates() -> Vec<ContentPolicyGate> {
             applies_to: vec!["song".to_string()],
             summary: "Copyrighted or third-party lyrics require rights review before export."
                 .to_string(),
-            enforcement: "Allow draft generation only; block commercial export until cleared."
-                .to_string(),
+            enforcement: "Allow draft generation only; block export until cleared.".to_string(),
         },
         ContentPolicyGate {
             id: "gate.disclosure.ai-audio".to_string(),
@@ -426,7 +424,7 @@ fn content_policy_gates() -> Vec<ContentPolicyGate> {
 fn export_sidecars() -> Vec<ProvenanceSidecar> {
     vec![
         ProvenanceSidecar {
-            id: "sidecar-voice-commercial-export".to_string(),
+            id: "sidecar-voice-export".to_string(),
             asset_id: "asset-voice-lab-conversion-reference".to_string(),
             asset_kind: AudioAssetKind::VoiceClip,
             target: ExportTarget::AudioFile,
@@ -450,10 +448,10 @@ fn export_sidecars() -> Vec<ProvenanceSidecar> {
                 ),
             },
             provenance: provenance_record(
-                "provenance-voice-commercial-export",
+                "provenance-voice-export",
                 "asset-voice-lab-conversion-reference",
                 vec![
-                    ("rights-reviewed", ProvenanceEventType::RightsReviewed, "Explicit voice consent and commercial use rights checked."),
+                    ("rights-reviewed", ProvenanceEventType::RightsReviewed, "Explicit voice consent and model-use rights checked."),
                     ("generated", ProvenanceEventType::Generated, "RVC-style conversion recipe and source audio IDs attached."),
                     ("exported", ProvenanceEventType::Exported, "WAV export wrote recipe, model, source media, rights, and disclosure metadata."),
                 ],
@@ -555,7 +553,7 @@ fn validation_checks() -> Vec<RightsValidationCheck> {
         RightsValidationCheck {
             id: "validation.model-license".to_string(),
             status: RightsValidationStatus::Passed,
-            summary: "Commercial export decisions include model license, product eligibility, and runtime dependency blockers."
+            summary: "SoundWorks export decisions include model license, product eligibility, and runtime dependency blockers."
                 .to_string(),
         },
         RightsValidationCheck {
@@ -603,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn commercial_export_blocks_noncommercial_unknown_or_python_runtime_models() {
+    fn export_blocks_unknown_research_only_or_python_runtime_models() {
         let overview = RightsSafetyOverview::reference();
         let chattts = overview
             .model_use_decisions
@@ -621,12 +619,16 @@ mod tests {
             CommercialUseEvaluation::NonCommercial
         );
         assert_eq!(chattts.decision, PolicyDecision::Blocked);
+        assert!(chattts
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("Research-only or blocked candidates")));
         assert_eq!(diffrhythm.decision, PolicyDecision::Blocked);
         assert!(diffrhythm
             .reasons
             .iter()
-            .any(|reason| reason.contains("Unknown commercial-use terms")));
-        assert!(!overview.can_export_commercial());
+            .any(|reason| reason.contains("Unknown model-use terms")));
+        assert!(!overview.can_export());
     }
 
     #[test]

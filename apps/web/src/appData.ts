@@ -367,7 +367,7 @@ export const fallbackOverview: AppOverview = {
     blockedGateCount: 2,
     sidecarCount: 2,
     disclosureCount: 2,
-    canExportCommercial: false,
+    canExport: false,
     watermarkPolicy: "advisory-until-provider-support",
   },
 };
@@ -1627,16 +1627,16 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       "voice-conversion",
       "few-shot-fine-tune",
     ],
-    commercialExportRequires: [
+    exportRequires: [
       "explicit voice consent when voice material is used",
-      "commercial-use-allowed or provider-terms-reviewed model license",
+      "SoundWorks non-commercial use compatibility or provider-terms-reviewed model license",
       "provenance sidecar with model, prompt, source media, recipe, and edit chain",
       "AI disclosure flag when generated or AI-edited audio leaves SoundWorks",
     ],
     blockedPromptCategories: [
       "public-figure-voice-clone",
       "unauthorized-voice-reference",
-      "noncommercial-model-commercial-export",
+      "incompatible-model-license",
     ],
     warningPromptCategories: [
       "artist-style-imitation",
@@ -1652,7 +1652,7 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       workflow: "voice-clone",
       voiceProfileId: "voice-profile-narrator",
       consentStatus: "explicit-consent-recorded",
-      allowedUse: "commercial voice clone and conversion",
+      allowedUse: "approved voice clone and conversion",
       decision: "allowed",
       summary:
         "Narrator profile can queue clone, fine-tune, and conversion workflows because explicit consent metadata is stored.",
@@ -1692,20 +1692,20 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       candidateId: "kokoro-82m",
       name: "Kokoro 82M",
       requestedWorkflow: "Tts",
-      commercialExport: true,
+      exportCandidate: true,
       license: "Apache-licensed weights",
       commercialUse: "allowed",
       productEligibility: "product-candidate",
       runtimePath: "rust-native",
       requiresPythonRuntime: false,
       decision: "allowed",
-      reasons: ["License evidence allows commercial product consideration."],
+      reasons: ["License evidence supports SoundWorks export consideration."],
     },
     {
       candidateId: "chattts",
       name: "ChatTTS",
       requestedWorkflow: "Tts",
-      commercialExport: true,
+      exportCandidate: true,
       license: "AGPLv3+ code / CC BY-NC 4.0 model",
       commercialUse: "non-commercial",
       productEligibility: "research-only",
@@ -1713,8 +1713,8 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       requiresPythonRuntime: true,
       decision: "blocked",
       reasons: [
-        "Noncommercial model terms block commercial SoundWorks export.",
-        "Research-only or blocked candidates cannot be product export choices.",
+        "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass.",
+        "Research-only or blocked candidates cannot be SoundWorks export choices.",
         "Python runtime dependency is not allowed in shipped SoundWorks export paths.",
       ],
     },
@@ -1722,7 +1722,7 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       candidateId: "diffrhythm-2",
       name: "DiffRhythm 2",
       requestedWorkflow: "Song",
-      commercialExport: true,
+      exportCandidate: true,
       license: "Source-backed license review required",
       commercialUse: "unknown",
       productEligibility: "research-only",
@@ -1730,8 +1730,8 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       requiresPythonRuntime: true,
       decision: "blocked",
       reasons: [
-        "Unknown commercial-use terms block commercial export until reviewed.",
-        "Research-only or blocked candidates cannot be product export choices.",
+        "Unknown model-use terms block SoundWorks export until reviewed.",
+        "Research-only or blocked candidates cannot be SoundWorks export choices.",
         "Python runtime dependency is not allowed in shipped SoundWorks export paths.",
       ],
     },
@@ -1739,7 +1739,7 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       candidateId: "stable-audio-3",
       name: "Stable Audio 3",
       requestedWorkflow: "Song",
-      commercialExport: true,
+      exportCandidate: true,
       license: "Stability AI Community License / Enterprise terms",
       commercialUse: "provider-terms",
       productEligibility: "needs-runtime-port",
@@ -1747,7 +1747,7 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       requiresPythonRuntime: false,
       decision: "warn",
       reasons: [
-        "Provider terms must be accepted and attached before commercial export.",
+        "Provider terms must be reviewed and attached before SoundWorks export.",
       ],
     },
   ],
@@ -1789,8 +1789,7 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       appliesTo: ["song"],
       summary:
         "Copyrighted or third-party lyrics require rights review before export.",
-      enforcement:
-        "Allow draft generation only; block commercial export until cleared.",
+      enforcement: "Allow draft generation only; block export until cleared.",
     },
     {
       id: "gate.disclosure.ai-audio",
@@ -1805,7 +1804,7 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
   ],
   exportSidecars: [
     {
-      id: "sidecar-voice-commercial-export",
+      id: "sidecar-voice-export",
       assetId: "asset-voice-lab-conversion-reference",
       assetKind: "voice-clip",
       target: "audio-file",
@@ -1819,14 +1818,13 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       watermark: "sidecar-only",
       rights: consentRights,
       provenance: {
-        id: "provenance-voice-commercial-export",
+        id: "provenance-voice-export",
         subjectId: "asset-voice-lab-conversion-reference",
         events: [
           {
             eventType: "rights-reviewed",
             actor: "system",
-            summary:
-              "Explicit voice consent and commercial use rights checked.",
+            summary: "Explicit voice consent and model-use rights checked.",
             metadata: { author: "soundworks-policy" },
           },
           {
@@ -1931,7 +1929,7 @@ export const fallbackRightsSafety: RightsSafetyOverview = {
       id: "validation.model-license",
       status: "passed",
       summary:
-        "Commercial export decisions include model license, product eligibility, and runtime dependency blockers.",
+        "SoundWorks export decisions include model license, product eligibility, and runtime dependency blockers.",
     },
     {
       id: "validation.provenance-sidecar",
@@ -2555,9 +2553,11 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       runtimePath: "python-poc-only",
       commercialUse: "non-commercial",
       recommended: false,
-      blockers: ["Pretrained model non-commercial license blocks product use"],
+      blockers: [
+        "Pretrained model license requires SoundWorks compatibility review",
+      ],
       notes:
-        "Use only as a research comparison unless commercially trainable weights are produced.",
+        "Use only as a research comparison unless packaging and license compatibility are resolved.",
     },
     {
       candidateId: "cosyvoice-2",
@@ -2617,7 +2617,7 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       commercialUse: "non-commercial",
       recommended: false,
       blockers: [
-        "Non-commercial model license blocks shipped product use",
+        "Non-commercial model license requires SoundWorks compatibility review",
         "Reference clip requirement must be normalized as 6 seconds from the model card unless docs are reconciled",
       ],
       notes: "Keep as a comparison/reference only unless licensing changes.",
@@ -2702,7 +2702,7 @@ export const fallbackVoiceLab: VoiceLabOverview = {
       id: "voice.commercial_use.review",
       status: "warning",
       summary:
-        "Noncommercial or unknown provider licenses stay visible as blocked/research-only scorecards.",
+        "Unknown provider licenses stay visible as blocked scorecards; noncommercial licenses require SoundWorks compatibility review.",
     },
   ],
   qaChecks: [
@@ -2917,7 +2917,7 @@ export const fallbackSfxStudio: SfxStudioOverview = {
       commercialUse: "unknown",
       recommended: false,
       blockers: [
-        "Model card requires downstream risk investigation before product use",
+        "Model card requires downstream risk investigation before SoundWorks use",
       ],
       notes: "Baseline SFX comparator; not first product provider.",
     },
@@ -2932,7 +2932,9 @@ export const fallbackSfxStudio: SfxStudioOverview = {
       runtimePath: "python-poc-only",
       commercialUse: "non-commercial",
       recommended: false,
-      blockers: ["Non-commercial checkpoint license blocks product use"],
+      blockers: [
+        "Non-commercial checkpoint license requires SoundWorks compatibility review",
+      ],
       notes: "Research comparison only.",
     },
     {
@@ -2978,7 +2980,7 @@ export const fallbackSfxStudio: SfxStudioOverview = {
       commercialUse: "unknown",
       recommended: true,
       blockers: [
-        "Commercial rights and no-Python product path unresolved",
+        "License terms and no-Python product path unresolved",
         "Multimodal/video-to-audio workflow is tracked in sc-6183.",
       ],
       notes: "Primary video-to-audio benchmark candidate.",
@@ -3349,7 +3351,7 @@ export const fallbackSamplesStudio: SamplesStudioOverview = {
       runtimePath: "python-poc-only",
       commercialUse: "unknown",
       recommended: false,
-      blockers: ["Runtime and commercial terms need validation"],
+      blockers: ["Runtime and license terms need validation"],
       notes: "Model-family candidate for song and loop comparisons.",
     },
     {
@@ -3836,7 +3838,7 @@ export const fallbackSongStudio: SongStudioOverview = {
       runtimePath: "python-poc-only",
       commercialUse: "unknown",
       recommended: false,
-      blockers: ["Commercial rights and no-Python product path are unresolved"],
+      blockers: ["License terms and no-Python product path are unresolved"],
       notes:
         "Useful comparison target for complete-song quality; not product-eligible without license/runtime work.",
     },

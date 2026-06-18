@@ -24,13 +24,20 @@ import {
   fallbackOverview,
   fallbackRuntime,
   fallbackTtsStudio,
+  fallbackVoiceLab,
 } from "./appData";
 import {
   loadAppOverview,
   loadRuntimeOverview,
   loadTtsStudioOverview,
+  loadVoiceLabOverview,
 } from "./tauri";
-import type { AppOverview, RuntimeOverview, TtsStudioOverview } from "./types";
+import type {
+  AppOverview,
+  RuntimeOverview,
+  TtsStudioOverview,
+  VoiceLabOverview,
+} from "./types";
 
 const navItems = [
   { label: "Studios", icon: Sparkles },
@@ -78,6 +85,8 @@ export function App() {
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
   const [ttsStudio, setTtsStudio] =
     useState<TtsStudioOverview>(fallbackTtsStudio);
+  const [voiceLab, setVoiceLab] =
+    useState<VoiceLabOverview>(fallbackVoiceLab);
 
   useEffect(() => {
     let active = true;
@@ -100,6 +109,12 @@ export function App() {
       }
     });
 
+    loadVoiceLabOverview().then((nextVoiceLab) => {
+      if (active) {
+        setVoiceLab(nextVoiceLab);
+      }
+    });
+
     return () => {
       active = false;
     };
@@ -111,6 +126,15 @@ export function App() {
         (layer) => layer.status === "scaffolded",
       ).length,
     [overview.architecture.layers],
+  );
+  const voiceCandidateFocus = useMemo(
+    () =>
+      voiceLab.providerScorecards.filter((scorecard) =>
+        ["chatterbox", "rvc", "chatterbox-turbo"].includes(
+          scorecard.candidateId,
+        ),
+      ),
+    [voiceLab.providerScorecards],
   );
 
   return (
@@ -300,6 +324,179 @@ export function App() {
               </li>
             ))}
           </ol>
+        </section>
+
+        <section className="voice-lab-panel" aria-label="Voice Lab">
+          <div className="voice-lab-header">
+            <div>
+              <p className="eyebrow">Voice Lab</p>
+              <h2>Consented voice workflows</h2>
+            </div>
+            <button
+              className="primary-action voice-action"
+              disabled={!voiceLab.selectedConversion.canSubmit}
+              type="button"
+              title="Queue voice conversion"
+            >
+              <Radio aria-hidden="true" size={18} />
+              <span>
+                {voiceLab.selectedConversion.canSubmit ? "Convert" : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="voice-lab-metrics" aria-label="Voice Lab status">
+            <div>
+              <Mic2 aria-hidden="true" size={18} />
+              <strong>{overview.voiceLab.modeCount}</strong>
+              <span>modes</span>
+            </div>
+            <div>
+              <ShieldCheck aria-hidden="true" size={18} />
+              <strong>{overview.voiceLab.profileCount}</strong>
+              <span>profiles</span>
+            </div>
+            <div>
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <strong>{overview.voiceLab.providerCount}</strong>
+              <span>scorecards</span>
+            </div>
+            <div>
+              <Save aria-hidden="true" size={18} />
+              <strong>{overview.voiceLab.savedAssetKind}</strong>
+              <span>{overview.voiceLab.selectedConversionCandidateId}</span>
+            </div>
+          </div>
+
+          <div className="voice-mode-grid" aria-label="Voice modes">
+            {voiceLab.modes.map((mode) => (
+              <article className="voice-mode-card" key={mode.mode}>
+                <div className="voice-mode-title">
+                  <strong>{mode.label}</strong>
+                  <span>{workflowLabel(mode.workflow)}</span>
+                </div>
+                <small>
+                  {mode.inputAssetKinds.map(statusLabel).join(" / ")} to{" "}
+                  {statusLabel(mode.outputAssetKind)}
+                </small>
+                <div className="candidate-strip">
+                  {mode.providerCandidateIds.slice(0, 4).map((candidateId) => (
+                    <span key={candidateId}>{candidateId}</span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="voice-lab-layout">
+            <div className="voice-profile-column" aria-label="Voice profiles">
+              {voiceLab.voiceProfiles.map((profile) => (
+                <article className="voice-profile-card" key={profile.profile.id}>
+                  <div className="voice-profile-topline">
+                    <div>
+                      <strong>{profile.profile.displayName}</strong>
+                      <small>
+                        {profile.language} / {statusLabel(profile.profile.consent)}
+                      </small>
+                    </div>
+                    <span
+                      className={
+                        profile.commercialUseAllowed
+                          ? "voice-approval approved"
+                          : "voice-approval review"
+                      }
+                    >
+                      {profile.commercialUseAllowed ? "commercial" : "review"}
+                    </span>
+                  </div>
+                  <p>{profile.safetySummary}</p>
+                  <ol className="mode-readiness">
+                    {profile.modeReadiness.map((readiness) => (
+                      <li key={readiness.mode}>
+                        <span
+                          className={
+                            readiness.ready
+                              ? "readiness-dot ready"
+                              : "readiness-dot blocked"
+                          }
+                        />
+                        <span>{statusLabel(readiness.mode)}</span>
+                        <small>{readiness.reason ?? "ready"}</small>
+                      </li>
+                    ))}
+                  </ol>
+                </article>
+              ))}
+            </div>
+
+            <div className="voice-side">
+              <section className="tts-subpanel" aria-label="Conversion source">
+                <div className="subpanel-heading">
+                  <h3>Conversion</h3>
+                  <span>{voiceLab.selectedConversion.job.status}</span>
+                </div>
+                <div className="conversion-source">
+                  <strong>{voiceLab.conversionSource.name}</strong>
+                  <small>
+                    {statusLabel(voiceLab.conversionSource.kind)} /{" "}
+                    {formatDuration(voiceLab.conversionSource.durationMs)}
+                  </small>
+                  <p>{voiceLab.conversionSource.assetId}</p>
+                </div>
+                <div className="output-card">
+                  <strong>{voiceLab.savedOutput.asset.name}</strong>
+                  <small>{voiceLab.savedOutput.asset.currentVersionId}</small>
+                  <p>{voiceLab.savedOutput.version.file.storagePath}</p>
+                </div>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Voice providers">
+                <div className="subpanel-heading">
+                  <h3>Providers</h3>
+                  <span>{voiceLab.providerScorecards.length}</span>
+                </div>
+                <div className="voice-provider-list">
+                  {voiceCandidateFocus.map((scorecard) => (
+                    <article
+                      className={`voice-provider ${scorecard.readiness}`}
+                      key={scorecard.candidateId}
+                    >
+                      <div>
+                        <strong>{scorecard.name}</strong>
+                        <small>
+                          {statusLabel(scorecard.readiness)} /{" "}
+                          {scorecard.lanes.map(workflowLabel).join(" / ")}
+                        </small>
+                        <p>{scorecard.notes}</p>
+                      </div>
+                      {scorecard.recommended ? <span>pick</span> : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div className="voice-review-grid">
+            <ol className="voice-checks" aria-label="Voice safety gates">
+              {voiceLab.safetyGates.map((gate) => (
+                <li className={gate.status} key={gate.id}>
+                  <ShieldCheck aria-hidden="true" size={16} />
+                  <span>{gate.summary}</span>
+                </li>
+              ))}
+            </ol>
+            <ol className="voice-checks" aria-label="Voice QA checks">
+              {voiceLab.qaChecks.map((check) => (
+                <li className={check.status} key={check.id}>
+                  <ClipboardCheck aria-hidden="true" size={16} />
+                  <span>
+                    <strong>{check.label}</strong> {check.target}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
         </section>
 
         <section className="system-grid" aria-label="Architecture">

@@ -28,6 +28,7 @@ export type AppOverview = {
   providerCatalog: ProviderCatalogOverview;
   modelEvaluation: ModelEvaluationOverview;
   ttsStudio: TtsStudioSummary;
+  voiceLab: VoiceLabSummary;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -161,6 +162,17 @@ export type TtsStudioSummary = {
   canSubmit: boolean;
   selectedProviderId: string;
   selectedModelId: string;
+  savedAssetKind: string;
+};
+
+export type VoiceLabSummary = {
+  schemaVersion: number;
+  modeCount: number;
+  profileCount: number;
+  providerCount: number;
+  safetyGateCount: number;
+  canSubmitConversion: boolean;
+  selectedConversionCandidateId: string;
   savedAssetKind: string;
 };
 
@@ -316,5 +328,134 @@ export type TtsStudioOverview = {
     id: string;
     status: "passed" | "warning" | "failed";
     summary: string;
+  }>;
+};
+
+export type VoiceLabMode =
+  | "zero-shot-clone"
+  | "few-shot-fine-tune"
+  | "voice-conversion";
+
+export type VoiceLabOverview = {
+  schemaVersion: number;
+  modes: Array<{
+    mode: VoiceLabMode;
+    label: string;
+    workflow: CapabilityWorkflow;
+    inputAssetKinds: string[];
+    outputAssetKind: string;
+    providerCandidateIds: string[];
+    ready: boolean;
+  }>;
+  voiceProfiles: Array<{
+    profile: {
+      id: string;
+      displayName: string;
+      consent: VoiceConsentStatus;
+      allowedUses: string[];
+    };
+    speakerIdentity: string;
+    language: string;
+    sourceClipIds: string[];
+    modeReadiness: Array<{
+      mode: VoiceLabMode;
+      ready: boolean;
+      reason?: string | null;
+    }>;
+    commercialUseAllowed: boolean;
+    safetySummary: string;
+  }>;
+  referenceClips: Array<{
+    id: string;
+    assetId: string;
+    profileId: string;
+    label: string;
+    durationMs: number;
+    consent: VoiceConsentStatus;
+    ownerAttestation: string;
+    acceptedForModes: VoiceLabMode[];
+  }>;
+  conversionSource: {
+    assetId: string;
+    name: string;
+    durationMs: number;
+    kind: string;
+  };
+  providerScorecards: Array<{
+    candidateId: string;
+    name: string;
+    provider: string;
+    lanes: string[];
+    status: string;
+    productEligibility: string;
+    readiness: string;
+    runtimePath: string;
+    commercialUse: string;
+    recommended: boolean;
+    blockers: string[];
+    notes: string;
+  }>;
+  selectedConversion: {
+    canSubmit: boolean;
+    job: {
+      id: string;
+      recipeId: string;
+      kind: string;
+      status: string;
+      outputVersionIds: string[];
+      error?: string | null;
+    };
+    recipe: {
+      id: string;
+      workflow: string;
+      provider: {
+        providerId: string;
+        modelId: string;
+        runtime: string;
+      };
+      request: {
+        kind: string;
+        sourceAudioAssetId?: string;
+        targetVoiceProfileId?: string;
+        preserveTiming?: boolean;
+      };
+      outputAssetIds: string[];
+    };
+    blockingReasons: string[];
+    warnings: string[];
+  };
+  savedOutput: {
+    asset: {
+      id: string;
+      kind: string;
+      name: string;
+      tags: string[];
+      currentVersionId: string;
+    };
+    version: {
+      id: string;
+      file: {
+        storagePath: string;
+        format: string;
+      };
+      technical: {
+        sampleRateHz: number;
+        channels: number;
+        durationMs: number;
+        loudnessLufs?: number | null;
+      };
+    };
+    waveformPreviewReady: boolean;
+  };
+  safetyGates: Array<{
+    id: string;
+    status: "passed" | "warning" | "blocked";
+    summary: string;
+  }>;
+  qaChecks: Array<{
+    id: string;
+    label: string;
+    status: "ready" | "needs-review";
+    target: string;
   }>;
 };

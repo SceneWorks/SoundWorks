@@ -7,6 +7,7 @@ pub mod manifests;
 pub mod runtime;
 pub mod storage;
 pub mod tts;
+pub mod voice_lab;
 
 pub use domain::*;
 pub use evaluation::*;
@@ -15,6 +16,7 @@ pub use manifests::*;
 pub use runtime::*;
 pub use storage::*;
 pub use tts::*;
+pub use voice_lab::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +28,7 @@ pub struct AppOverview {
     pub provider_catalog: ProviderCatalogOverview,
     pub model_evaluation: ModelEvaluationOverview,
     pub tts_studio: TtsStudioSummary,
+    pub voice_lab: VoiceLabSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +94,19 @@ pub struct TtsStudioSummary {
     pub saved_asset_kind: AudioAssetKind,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceLabSummary {
+    pub schema_version: u32,
+    pub mode_count: usize,
+    pub profile_count: usize,
+    pub provider_count: usize,
+    pub safety_gate_count: usize,
+    pub can_submit_conversion: bool,
+    pub selected_conversion_candidate_id: String,
+    pub saved_asset_kind: AudioAssetKind,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandDirection {
@@ -146,7 +162,7 @@ impl AppOverview {
             },
             studios: vec![
                 StudioSurface::scaffolded("tts", "TTS Studio", "/studios/tts"),
-                StudioSurface::planned("voice-lab", "Voice Lab", "/studios/voice-lab"),
+                StudioSurface::scaffolded("voice-lab", "Voice Lab", "/studios/voice-lab"),
                 StudioSurface::planned("sfx", "SFX + Ambience", "/studios/sfx"),
                 StudioSurface::planned("loops", "Samples + Loops", "/studios/loops"),
                 StudioSurface::planned("songs", "Song Studio", "/studios/songs"),
@@ -192,11 +208,21 @@ impl AppOverview {
                         "Load TTS script segmentation, voice consent gates, provider limits, submission preview, and saved voice-clip output."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_voice_lab_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load voice profile consent state, clone/fine-tune/conversion modes, provider scorecards, safety gates, and saved conversion output."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
             tts_studio: TtsStudioSummary::from_overview(
                 &TtsStudioOverview::reference().expect("reference TTS studio is valid"),
+            ),
+            voice_lab: VoiceLabSummary::from_overview(
+                &VoiceLabOverview::reference().expect("reference Voice Lab is valid"),
             ),
         }
     }
@@ -212,6 +238,26 @@ impl TtsStudioSummary {
             can_submit: overview.submission.can_submit,
             selected_provider_id: overview.selected_provider.provider_id.clone(),
             selected_model_id: overview.selected_provider.model_id.clone(),
+            saved_asset_kind: overview.saved_output.asset.kind,
+        }
+    }
+}
+
+impl VoiceLabSummary {
+    pub fn from_overview(overview: &VoiceLabOverview) -> Self {
+        Self {
+            schema_version: overview.schema_version,
+            mode_count: overview.modes.len(),
+            profile_count: overview.voice_profiles.len(),
+            provider_count: overview.provider_scorecards.len(),
+            safety_gate_count: overview.safety_gates.len(),
+            can_submit_conversion: overview.selected_conversion.can_submit,
+            selected_conversion_candidate_id: overview
+                .selected_conversion
+                .recipe
+                .provider
+                .model_id
+                .clone(),
             saved_asset_kind: overview.saved_output.asset.kind,
         }
     }
@@ -319,6 +365,8 @@ mod tests {
         assert_eq!(payload["modelEvaluation"]["candidateCount"], 28);
         assert_eq!(payload["ttsStudio"]["segmentCount"], 3);
         assert_eq!(payload["commands"][4]["name"], "get_tts_studio_overview");
+        assert_eq!(payload["commands"][5]["name"], "get_voice_lab_overview");
+        assert_eq!(payload["voiceLab"]["modeCount"], 3);
     }
 
     #[test]
@@ -423,6 +471,11 @@ mod tests {
             "model_evaluation_candidates",
             "model_evaluation_fixtures",
             "model_evaluation_recommendations",
+            "voice_lab_profiles",
+            "voice_lab_reference_clips",
+            "voice_lab_provider_scorecards",
+            "voice_lab_safety_gates",
+            "voice_lab_conversion_submissions",
         ] {
             assert!(
                 sql.contains(table),
@@ -493,5 +546,21 @@ mod tests {
             AudioAssetKind::VoiceClip
         );
         assert!(overview.tts_studio.can_submit);
+    }
+
+    #[test]
+    fn app_overview_summarizes_voice_lab() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.studios[1].status, ScaffoldStatus::Scaffolded);
+        assert_eq!(overview.voice_lab.mode_count, 3);
+        assert_eq!(overview.voice_lab.profile_count, 2);
+        assert_eq!(overview.voice_lab.provider_count, 8);
+        assert_eq!(overview.voice_lab.selected_conversion_candidate_id, "rvc");
+        assert_eq!(
+            overview.voice_lab.saved_asset_kind,
+            AudioAssetKind::VoiceClip
+        );
+        assert!(overview.voice_lab.can_submit_conversion);
     }
 }

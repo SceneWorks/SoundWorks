@@ -3,8 +3,14 @@ import {
   fallbackOverview,
   fallbackRuntime,
   fallbackTtsStudio,
+  fallbackVoiceLab,
 } from "./appData";
-import type { AppOverview, RuntimeOverview, TtsStudioOverview } from "./types";
+import type {
+  AppOverview,
+  RuntimeOverview,
+  TtsStudioOverview,
+  VoiceLabOverview,
+} from "./types";
 
 export async function loadAppOverview(): Promise<AppOverview> {
   try {
@@ -27,5 +33,13 @@ export async function loadTtsStudioOverview(): Promise<TtsStudioOverview> {
     return await invoke<TtsStudioOverview>("get_tts_studio_overview");
   } catch {
     return fallbackTtsStudio;
+  }
+}
+
+export async function loadVoiceLabOverview(): Promise<VoiceLabOverview> {
+  try {
+    return await invoke<VoiceLabOverview>("get_voice_lab_overview");
+  } catch {
+    return fallbackVoiceLab;
   }
 }

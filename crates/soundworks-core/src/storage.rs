@@ -239,6 +239,61 @@ CREATE TABLE tts_saved_outputs (
 );
 ",
     },
+    SchemaMigration {
+        version: 7,
+        name: "voice_lab_workflow",
+        sql: "
+CREATE TABLE voice_lab_profiles (
+  id TEXT PRIMARY KEY REFERENCES voice_profiles(id),
+  speaker_identity TEXT NOT NULL,
+  language TEXT NOT NULL,
+  source_clip_ids_json TEXT NOT NULL,
+  mode_readiness_json TEXT NOT NULL,
+  commercial_use_allowed INTEGER NOT NULL,
+  safety_summary TEXT NOT NULL
+);
+CREATE TABLE voice_lab_reference_clips (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  profile_id TEXT NOT NULL REFERENCES voice_profiles(id),
+  label TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  consent TEXT NOT NULL,
+  owner_attestation TEXT NOT NULL,
+  accepted_for_modes_json TEXT NOT NULL
+);
+CREATE TABLE voice_lab_provider_scorecards (
+  candidate_id TEXT PRIMARY KEY REFERENCES model_evaluation_candidates(id),
+  readiness TEXT NOT NULL,
+  recommended INTEGER NOT NULL,
+  blockers_json TEXT NOT NULL,
+  notes TEXT NOT NULL
+);
+CREATE TABLE voice_lab_safety_gates (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  summary TEXT NOT NULL
+);
+CREATE TABLE voice_lab_qa_checks (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  status TEXT NOT NULL,
+  target TEXT NOT NULL
+);
+CREATE TABLE voice_lab_conversion_submissions (
+  id TEXT PRIMARY KEY,
+  source_audio_asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  target_voice_profile_id TEXT NOT NULL REFERENCES voice_profiles(id),
+  provider_candidate_id TEXT NOT NULL REFERENCES model_evaluation_candidates(id),
+  recipe_id TEXT NOT NULL REFERENCES generation_recipes(id),
+  job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+  output_asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  can_submit INTEGER NOT NULL,
+  blocking_reasons_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

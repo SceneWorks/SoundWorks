@@ -1,5 +1,6 @@
 use soundworks_core::{
     AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview, TtsStudioOverview,
+    VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -27,6 +28,11 @@ fn get_tts_studio_overview() -> TtsStudioOverview {
     tts_studio_overview()
 }
 
+#[tauri::command]
+fn get_voice_lab_overview() -> VoiceLabOverview {
+    voice_lab_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -47,6 +53,10 @@ pub fn tts_studio_overview() -> TtsStudioOverview {
     TtsStudioOverview::reference().expect("reference TTS studio is valid")
 }
 
+pub fn voice_lab_overview() -> VoiceLabOverview {
+    VoiceLabOverview::reference().expect("reference Voice Lab is valid")
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -55,7 +65,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_provider_catalog,
             get_runtime_overview,
             get_model_evaluation_catalog,
-            get_tts_studio_overview
+            get_tts_studio_overview,
+            get_voice_lab_overview
         ])
 }
 
@@ -70,7 +81,7 @@ pub fn run() {
 mod tests {
     use super::{
         app_overview, model_evaluation_catalog, provider_catalog, runtime_overview,
-        tts_studio_overview,
+        tts_studio_overview, voice_lab_overview,
     };
 
     #[test]
@@ -121,5 +132,18 @@ mod tests {
         assert!(overview.submission.can_submit);
         assert_eq!(overview.script.segments.len(), 3);
         assert_eq!(overview.saved_output.asset.id, "asset-tts-studio-reference");
+    }
+
+    #[test]
+    fn voice_lab_command_returns_conversion_contract() {
+        let overview = voice_lab_overview();
+
+        assert_eq!(overview.schema_version, 1);
+        assert_eq!(overview.modes.len(), 3);
+        assert!(overview.selected_conversion.can_submit);
+        assert_eq!(
+            overview.saved_output.asset.id,
+            "asset-voice-lab-conversion-reference"
+        );
     }
 }

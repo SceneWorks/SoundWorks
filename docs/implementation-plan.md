@@ -80,7 +80,7 @@ Success criteria:
 ## Phase 2: Core Generation Workflows
 
 - `sc-6152` - Text-to-Speech Studio: script segmentation, speaker/voice assignments, pronunciation entries, provider limitation visibility, consent-gated voice-clone capable submission, chunking/stitching plan, queued generation preview, and saved project voice-clip output.
-- `sc-6177` - Voice Lab for cloning, fine-tuning, and conversion.
+- `sc-6177` - Voice Lab for cloning, fine-tuning, and conversion: consented profile management, distinct zero-shot/few-shot/conversion modes, RVC-style source-audio conversion, safety gates, provider scorecards, queued conversion preview, and saved project voice-clip output.
 - `sc-6153` - SFX and ambience generation.
 - `sc-6154` - Instrument sample and loop generation.
 - `sc-6155` - Complete song generation.

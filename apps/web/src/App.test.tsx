@@ -35,5 +35,21 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("TTS Studio narration draft")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Queue/i })).toBeEnabled();
+    expect(
+      screen.getByRole("heading", { name: "Consented voice workflows" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Convert/i })).toBeEnabled();
+    expect(screen.getByText("Zero-shot clone")).toBeInTheDocument();
+    expect(screen.getByText("Few-shot fine-tune")).toBeInTheDocument();
+    expect(screen.getByText("Voice conversion")).toBeInTheDocument();
+    expect(screen.getByText("Narrator converted read")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "RVC-style conversion requires source audio and a target voice profile.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Score as speech-to-speech voice conversion, not text-to-speech."),
+    ).toBeInTheDocument();
   });
 });

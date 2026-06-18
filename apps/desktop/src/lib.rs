@@ -1,6 +1,6 @@
 use soundworks_core::{
     AppOverview, ModelEvaluationCatalog, ProviderCatalog, RuntimeOverview, SamplesStudioOverview,
-    SfxStudioOverview, TtsStudioOverview, VoiceLabOverview,
+    SfxStudioOverview, SongStudioOverview, TtsStudioOverview, VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -43,6 +43,11 @@ fn get_samples_studio_overview() -> SamplesStudioOverview {
     samples_studio_overview()
 }
 
+#[tauri::command]
+fn get_song_studio_overview() -> SongStudioOverview {
+    song_studio_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -75,6 +80,10 @@ pub fn samples_studio_overview() -> SamplesStudioOverview {
     SamplesStudioOverview::reference().expect("reference Samples Studio is valid")
 }
 
+pub fn song_studio_overview() -> SongStudioOverview {
+    SongStudioOverview::reference().expect("reference Song Studio is valid")
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -86,7 +95,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_tts_studio_overview,
             get_voice_lab_overview,
             get_sfx_studio_overview,
-            get_samples_studio_overview
+            get_samples_studio_overview,
+            get_song_studio_overview
         ])
 }
 
@@ -101,7 +111,8 @@ pub fn run() {
 mod tests {
     use super::{
         app_overview, model_evaluation_catalog, provider_catalog, runtime_overview,
-        samples_studio_overview, sfx_studio_overview, tts_studio_overview, voice_lab_overview,
+        samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
+        voice_lab_overview,
     };
 
     #[test]
@@ -186,5 +197,16 @@ mod tests {
         assert!(overview.submission.can_submit);
         assert_eq!(overview.saved_outputs.len(), 3);
         assert_eq!(overview.pack.collection_id, "collection-neon-bass-pack");
+    }
+
+    #[test]
+    fn song_studio_command_returns_complete_song_contract() {
+        let overview = song_studio_overview();
+
+        assert_eq!(overview.schema_version, 1);
+        assert_eq!(overview.arrangement.section_count, 4);
+        assert!(overview.submission.can_submit);
+        assert_eq!(overview.saved_outputs.len(), 2);
+        assert_eq!(overview.export_targets.len(), 3);
     }
 }

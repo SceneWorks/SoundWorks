@@ -25,6 +25,7 @@ import {
   fallbackOverview,
   fallbackRuntime,
   fallbackSamplesStudio,
+  fallbackSongStudio,
   fallbackSfxStudio,
   fallbackTtsStudio,
   fallbackVoiceLab,
@@ -33,6 +34,7 @@ import {
   loadAppOverview,
   loadRuntimeOverview,
   loadSamplesStudioOverview,
+  loadSongStudioOverview,
   loadSfxStudioOverview,
   loadTtsStudioOverview,
   loadVoiceLabOverview,
@@ -41,6 +43,7 @@ import type {
   AppOverview,
   RuntimeOverview,
   SamplesStudioOverview,
+  SongStudioOverview,
   SfxStudioOverview,
   TtsStudioOverview,
   VoiceLabOverview,
@@ -99,6 +102,8 @@ export function App() {
   const [samplesStudio, setSamplesStudio] = useState<SamplesStudioOverview>(
     fallbackSamplesStudio,
   );
+  const [songStudio, setSongStudio] =
+    useState<SongStudioOverview>(fallbackSongStudio);
 
   useEffect(() => {
     let active = true;
@@ -136,6 +141,12 @@ export function App() {
     loadSamplesStudioOverview().then((nextSamplesStudio) => {
       if (active) {
         setSamplesStudio(nextSamplesStudio);
+      }
+    });
+
+    loadSongStudioOverview().then((nextSongStudio) => {
+      if (active) {
+        setSongStudio(nextSongStudio);
       }
     });
 
@@ -177,6 +188,15 @@ export function App() {
         ),
       ),
     [samplesStudio.providerScorecards],
+  );
+  const songCandidateFocus = useMemo(
+    () =>
+      songStudio.providerScorecards.filter((scorecard) =>
+        ["ace-step-1-5", "stable-audio-3", "diffrhythm-2"].includes(
+          scorecard.candidateId,
+        ),
+      ),
+    [songStudio.providerScorecards],
   );
 
   return (
@@ -924,6 +944,219 @@ export function App() {
             </ol>
             <ol className="voice-checks" aria-label="Sample QA checks">
               {samplesStudio.qaChecks.map((check) => (
+                <li className={check.status} key={check.id}>
+                  <CircleCheck aria-hidden="true" size={16} />
+                  <span>{check.summary}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="samples-studio-panel song-studio-panel" aria-label="Song Studio">
+          <div className="samples-header">
+            <div>
+              <p className="eyebrow">Song Studio</p>
+              <h2>{songStudio.draft.title}</h2>
+            </div>
+            <button
+              className="primary-action samples-action"
+              disabled={!songStudio.submission.canSubmit}
+              type="button"
+              title="Queue song generation"
+            >
+              <Music2 aria-hidden="true" size={18} />
+              <span>
+                {songStudio.submission.canSubmit ? "Generate" : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="samples-metrics" aria-label="Song workflow status">
+            <div>
+              <Music2 aria-hidden="true" size={18} />
+              <strong>{overview.songStudio.sectionCount}</strong>
+              <span>sections</span>
+            </div>
+            <div>
+              <Save aria-hidden="true" size={18} />
+              <strong>{overview.songStudio.savedOutputCount}</strong>
+              <span>saved</span>
+            </div>
+            <div>
+              <Gauge aria-hidden="true" size={18} />
+              <strong>{songStudio.controls.bpm}</strong>
+              <span>{songStudio.controls.musicalKey}</span>
+            </div>
+            <div>
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <strong>{overview.songStudio.scorecardCount}</strong>
+              <span>scorecards</span>
+            </div>
+          </div>
+
+          <div className="samples-layout">
+            <div className="samples-main">
+              <section className="sfx-prompt-panel" aria-label="Song prompt">
+                <div className="subpanel-heading">
+                  <h3>{songStudio.draft.language}</h3>
+                  <span>{songStudio.draft.styleTags.length}</span>
+                </div>
+                <p>{songStudio.draft.prompt}</p>
+                <small>{songStudio.draft.singerHint}</small>
+                <div className="candidate-strip">
+                  {songStudio.draft.styleTags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+              </section>
+
+              <div className="samples-control-grid" aria-label="Song controls">
+                <div>
+                  <strong>{songStudio.arrangement.totalBars} bars</strong>
+                  <span>{songStudio.controls.timeSignature}</span>
+                </div>
+                <div>
+                  <strong>{formatDuration(songStudio.arrangement.estimatedDurationMs)}</strong>
+                  <span>arranged</span>
+                </div>
+                <div>
+                  <strong>{songStudio.controls.variationCount}</strong>
+                  <span>variants</span>
+                </div>
+                <div>
+                  <strong>{songStudio.controls.requestedStems.length}</strong>
+                  <span>stems</span>
+                </div>
+              </div>
+
+              <div className="samples-variant-grid" aria-label="Song sections">
+                {songStudio.arrangement.sections.map((section) => (
+                  <article className="samples-variant selected" key={section.id}>
+                    <div className="sfx-variant-title">
+                      <strong>{section.label}</strong>
+                      <span>{section.bars} bars</span>
+                    </div>
+                    <small>
+                      starts bar {section.startBar + 1} /{" "}
+                      {section.hasLyrics ? "lyrics" : "instrumental"}
+                    </small>
+                    <p>{section.locked ? "locked" : "regeneratable"}</p>
+                  </article>
+                ))}
+              </div>
+
+              <div className="samples-variant-grid" aria-label="Song variants">
+                {songStudio.variants.map((variant) => (
+                  <article
+                    className={
+                      variant.selectedForSave
+                        ? "samples-variant selected"
+                        : "samples-variant"
+                    }
+                    key={variant.id}
+                  >
+                    <div className="sfx-variant-title">
+                      <strong>{variant.label}</strong>
+                      <span>{statusLabel(variant.assetKind)}</span>
+                    </div>
+                    <small>
+                      {formatDuration(variant.durationMs)} / {variant.bpm} BPM /{" "}
+                      {variant.musicalKey}
+                    </small>
+                    <p>
+                      lyric {variant.lyricAlignmentScore} / structure{" "}
+                      {variant.structureMatchScore}
+                    </p>
+                    <div className="candidate-strip">
+                      {variant.stemKinds.slice(0, 5).map((stem) => (
+                        <span key={stem}>{statusLabel(stem)}</span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div className="samples-side">
+              <section className="tts-subpanel" aria-label="Song providers">
+                <div className="subpanel-heading">
+                  <h3>Providers</h3>
+                  <span>{songStudio.providerOptions.length}</span>
+                </div>
+                {songStudio.providerOptions.map((provider) => (
+                  <article
+                    className="sfx-provider-option"
+                    key={`${provider.workflow}-${provider.modelId}`}
+                  >
+                    <strong>{provider.modelId}</strong>
+                    <small>
+                      {statusLabel(provider.installStatus)} /{" "}
+                      {provider.supportsStems ? "stems" : "mixdown"} /{" "}
+                      {provider.sampleRateHz} Hz
+                    </small>
+                    <p>{provider.supportedControls.map(statusLabel).join(" / ")}</p>
+                  </article>
+                ))}
+              </section>
+
+              <section className="tts-subpanel" aria-label="Song provider scorecards">
+                <div className="subpanel-heading">
+                  <h3>Scorecards</h3>
+                  <span>{songStudio.providerScorecards.length}</span>
+                </div>
+                <div className="voice-provider-list">
+                  {songCandidateFocus.map((scorecard) => (
+                    <article
+                      className={`voice-provider ${scorecard.readiness}`}
+                      key={scorecard.candidateId}
+                    >
+                      <div>
+                        <strong>{scorecard.name}</strong>
+                        <small>
+                          {statusLabel(scorecard.readiness)} /{" "}
+                          {scorecard.lanes.map(workflowLabel).join(" / ")}
+                        </small>
+                        <p>{scorecard.notes}</p>
+                      </div>
+                      {scorecard.recommended ? <span>pick</span> : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Song outputs">
+                <div className="subpanel-heading">
+                  <h3>Outputs</h3>
+                  <span>{songStudio.submission.job.status}</span>
+                </div>
+                {songStudio.savedOutputs.map((output) => (
+                  <div className="output-card" key={output.variantId}>
+                    <strong>{output.asset.name}</strong>
+                    <small>
+                      {output.asset.kind} /{" "}
+                      {output.version.technical.bpm
+                        ? `${output.version.technical.bpm} BPM`
+                        : output.asset.currentVersionId}
+                    </small>
+                    <p>{output.version.file.storagePath}</p>
+                  </div>
+                ))}
+              </section>
+            </div>
+          </div>
+
+          <div className="samples-review-grid">
+            <ol className="voice-checks" aria-label="Song export targets">
+              {songStudio.exportTargets.map((target) => (
+                <li className="ready" key={target.id}>
+                  <Save aria-hidden="true" size={16} />
+                  <span>{target.summary}</span>
+                </li>
+              ))}
+            </ol>
+            <ol className="voice-checks" aria-label="Song QA checks">
+              {songStudio.qaChecks.map((check) => (
                 <li className={check.status} key={check.id}>
                   <CircleCheck aria-hidden="true" size={16} />
                   <span>{check.summary}</span>

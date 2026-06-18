@@ -31,6 +31,7 @@ export type AppOverview = {
   voiceLab: VoiceLabSummary;
   sfxStudio: SfxStudioSummary;
   samplesStudio: SamplesStudioSummary;
+  songStudio: SongStudioSummary;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -200,6 +201,20 @@ export type SamplesStudioSummary = {
   selectedProviderId: string;
   selectedModelId: string;
   packCollectionId: string;
+  savedAssetKinds: string[];
+};
+
+export type SongStudioSummary = {
+  schemaVersion: number;
+  sectionCount: number;
+  variantCount: number;
+  savedOutputCount: number;
+  providerCount: number;
+  scorecardCount: number;
+  canSubmit: boolean;
+  selectedProviderId: string;
+  selectedModelId: string;
+  requestedStems: string[];
   savedAssetKinds: string[];
 };
 
@@ -823,6 +838,178 @@ export type SamplesStudioOverview = {
     id: string;
     operation: string;
     enabled: boolean;
+    summary: string;
+  }>;
+  qaChecks: Array<{
+    id: string;
+    status: "passed" | "warning" | "failed";
+    summary: string;
+  }>;
+};
+
+export type SongVocalMode = "vocal" | "instrumental" | "both";
+
+export type SongStudioOverview = {
+  schemaVersion: number;
+  draft: {
+    id: string;
+    title: string;
+    prompt: string;
+    lyrics: string;
+    styleTags: string[];
+    language: string;
+    vocalist: SongVocalMode;
+    singerHint?: string | null;
+    referenceAudioAssetIds: string[];
+    sections: Array<{
+      id: string;
+      label: string;
+      bars: number;
+      lyrics?: string | null;
+      regenerateLocked: boolean;
+    }>;
+  };
+  controls: {
+    bpm: number;
+    musicalKey: string;
+    timeSignature: string;
+    targetDurationMs: number;
+    sectionLengthBars: number;
+    variationCount: number;
+    generateStems: boolean;
+    requestedStems: string[];
+    allowReferenceAudio: boolean;
+    promoteToProjectLibrary: boolean;
+  };
+  providerOptions: Array<{
+    providerId: string;
+    modelId: string;
+    modelVersion?: string | null;
+    displayName: string;
+    workflow: CapabilityWorkflow;
+    runtime: string;
+    installStatus: string;
+    runnable: boolean;
+    outputAssetKinds: string[];
+    outputFormat: string;
+    sampleRateHz: number;
+    channelLayout: string;
+    minDurationMs?: number | null;
+    maxDurationMs?: number | null;
+    supportsLyrics: boolean;
+    supportsStyleTags: boolean;
+    supportsReferenceAudio: boolean;
+    supportsStems: boolean;
+    supportedStems: string[];
+    commercialUseAllowed: boolean;
+    watermark: string;
+    supportedControls: string[];
+    limitations: string[];
+  }>;
+  selectedProvider: {
+    providerId: string;
+    modelId: string;
+    modelVersion?: string | null;
+    workflow: CapabilityWorkflow;
+    runtime: string;
+    accepted: boolean;
+    blocker?: string | null;
+  };
+  providerScorecards: Array<{
+    candidateId: string;
+    name: string;
+    provider: string;
+    lanes: string[];
+    status: string;
+    productEligibility: string;
+    readiness: string;
+    runtimePath: string;
+    commercialUse: string;
+    recommended: boolean;
+    blockers: string[];
+    notes: string;
+  }>;
+  arrangement: {
+    sectionCount: number;
+    totalBars: number;
+    estimatedDurationMs: number;
+    sections: Array<{
+      id: string;
+      label: string;
+      startBar: number;
+      bars: number;
+      hasLyrics: boolean;
+      locked: boolean;
+    }>;
+  };
+  variants: Array<{
+    id: string;
+    label: string;
+    assetKind: string;
+    durationMs: number;
+    bpm: number;
+    musicalKey: string;
+    vocalMode: SongVocalMode;
+    stemKinds: string[];
+    loudnessLufs: number;
+    truePeakDbfs: number;
+    lyricAlignmentScore: number;
+    structureMatchScore: number;
+    tags: string[];
+    selectedForSave: boolean;
+  }>;
+  submission: {
+    canSubmit: boolean;
+    job: {
+      id: string;
+      recipeId: string;
+      kind: string;
+      status: string;
+      outputVersionIds: string[];
+      error?: string | null;
+    };
+    recipe: {
+      id: string;
+      workflow: string;
+      outputAssetIds: string[];
+    };
+    blockingReasons: string[];
+    warnings: string[];
+  };
+  savedOutputs: Array<{
+    variantId: string;
+    asset: {
+      id: string;
+      kind: string;
+      name: string;
+      tags: string[];
+      currentVersionId: string;
+    };
+    version: {
+      id: string;
+      file: {
+        storagePath: string;
+        format: string;
+      };
+      technical: {
+        sampleRateHz: number;
+        channels: number;
+        durationMs: number;
+        loudnessLufs?: number | null;
+        truePeakDbfs?: number | null;
+        bpm?: number | null;
+        musicalKey?: string | null;
+      };
+    };
+    exportReady: boolean;
+    waveformPreviewReady: boolean;
+  }>;
+  exportTargets: Array<{
+    id: string;
+    label: string;
+    formats: string[];
+    includesStems: boolean;
+    includesSidecar: boolean;
     summary: string;
   }>;
   qaChecks: Array<{

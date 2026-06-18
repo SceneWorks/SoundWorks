@@ -74,10 +74,26 @@ describe("App", () => {
     expect(screen.getByTitle("Queue sample and loop generation")).toBeEnabled();
     expect(screen.getAllByText("Bass pluck A1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Four-bar chase bassline").length).toBeGreaterThan(0);
-    expect(screen.getByText("ACE-Step 1.5")).toBeInTheDocument();
+    expect(screen.getAllByText("ACE-Step 1.5").length).toBeGreaterThan(0);
     expect(
       screen.getByText(
         "Loop variants include BPM, key, bar count, and inspectable loop points.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "City Lights Resolve" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Queue song generation")).toBeEnabled();
+    expect(screen.getByText("Verse 1")).toBeInTheDocument();
+    expect(screen.getAllByText("City Lights full mix").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("City Lights instrumental pass").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Stable Audio 3")).toBeInTheDocument();
+    expect(screen.getByText("DiffRhythm 2")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Stable Audio 3 and ACE-Step need runnable Mac/Windows smoke evidence before product enablement.",
       ),
     ).toBeInTheDocument();
   });

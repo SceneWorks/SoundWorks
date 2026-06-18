@@ -13,6 +13,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - `crates/soundworks-core/src/voice_lab.rs` defines the Voice Lab workflow state for consented profiles, clone/fine-tune/conversion modes, source-audio conversion, safety gates, provider scorecards, and saved voice-clip outputs.
 - `crates/soundworks-core/src/sfx.rs` defines the SFX Studio workflow state for text-first sound effects and ambience generation, provider capability controls, variant comparison, loop inspection, post-processing, export state, scorecards, and saved outputs.
 - `crates/soundworks-core/src/samples.rs` defines the Samples + Loops workflow state for instrument one-shots, loop generation, BPM/key/bar controls, sample-pack organization, provider scorecards, post-processing, QA checks, and saved sample/loop outputs.
+- `crates/soundworks-core/src/songs.rs` defines the Song Studio workflow state for lyrics, song sections, style controls, vocal/instrumental generation, provider scorecards, arrangement previews, variants, stems, export targets, and saved song/music-clip outputs.
 
 ## Represented Concepts
 
@@ -28,6 +29,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - Voice Lab state: zero-shot clone, few-shot fine-tune, and voice conversion modes; consented voice profile readiness; reference clips; RVC-style source-audio conversion previews; provider readiness scorecards; safety gates; QA checks; and saved converted voice clips.
 - SFX Studio state: prompts, negative prompts, categories, tags, reference audio, provider-derived controls, SFX and ambience variants, selected saves, loop points, scorecards, post-processing actions, export state, and saved SFX/ambience outputs.
 - Samples + Loops state: instrument prompt controls, articulation, tempo/key/scale, bars/beats, one-shot and loop variants, sample-pack collections, favorites, duplicate/version handling, provider scorecards, QA checks, post-processing actions, and saved instrument sample/loop outputs.
+- Song Studio state: song drafts, lyrics, style tags, language, singer hints, reference audio, ordered sections, BPM/key/time-signature/duration controls, requested stems, provider scorecards, arrangement previews, song/music-clip variants, export targets, QA checks, and saved outputs.
 
 ## Storage Contract
 
@@ -68,6 +70,13 @@ Structured metadata is intended for SQLite. The first schema contract covers:
 - `samples_studio_qa_checks`
 - `samples_studio_submissions`
 - `samples_studio_saved_outputs`
+- `song_studio_drafts`
+- `song_studio_sections`
+- `song_studio_variants`
+- `song_studio_provider_scorecards`
+- `song_studio_submissions`
+- `song_studio_saved_outputs`
+- `song_studio_export_targets`
 
 Media and derived files are stored outside SQLite. The path allocator emits version-specific paths:
 
@@ -94,3 +103,4 @@ Rust tests verify:
 - Voice Lab serialization, distinct mode coverage, RVC voice-conversion routing, consent/provider gating, and saved converted voice-clip output linkage.
 - SFX Studio serialization, capability-driven controls, MOSS scorecard recommendation, multimodal boundary deferral, variant comparison, recipe provenance, saved SFX/ambience output linkage, and loop-point coverage.
 - Samples + Loops serialization, capability-driven controls, sample/loop scorecard readiness, separate sample and loop recipes, sample-pack collection membership, BPM/key metadata, loop points, and QA coverage for clipping/silence/loudness/duration/loop seams.
+- Song Studio serialization, capability-driven controls, complete-song scorecard readiness, lyrics/section/stem recipe preservation, saved song/music-clip output linkage, export target sidecars, and provider-gate QA coverage.

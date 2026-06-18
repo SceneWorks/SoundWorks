@@ -3,6 +3,7 @@ import {
   fallbackOverview,
   fallbackRuntime,
   fallbackSamplesStudio,
+  fallbackSongStudio,
   fallbackSfxStudio,
   fallbackTtsStudio,
   fallbackVoiceLab,
@@ -11,6 +12,7 @@ import type {
   AppOverview,
   RuntimeOverview,
   SamplesStudioOverview,
+  SongStudioOverview,
   SfxStudioOverview,
   TtsStudioOverview,
   VoiceLabOverview,
@@ -61,5 +63,13 @@ export async function loadSamplesStudioOverview(): Promise<SamplesStudioOverview
     return await invoke<SamplesStudioOverview>("get_samples_studio_overview");
   } catch {
     return fallbackSamplesStudio;
+  }
+}
+
+export async function loadSongStudioOverview(): Promise<SongStudioOverview> {
+  try {
+    return await invoke<SongStudioOverview>("get_song_studio_overview");
+  } catch {
+    return fallbackSongStudio;
   }
 }

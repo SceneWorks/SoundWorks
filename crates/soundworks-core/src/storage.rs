@@ -790,6 +790,82 @@ CREATE TABLE export_sceneworks_handoffs (
 );
 ",
     },
+    SchemaMigration {
+        version: 15,
+        name: "mvp_validation_matrix",
+        sql: "
+CREATE TABLE mvp_validation_demo_workflows (
+  id TEXT PRIMARY KEY,
+  workflow TEXT NOT NULL,
+  title TEXT NOT NULL,
+  goal TEXT NOT NULL,
+  required_artifacts_json TEXT NOT NULL,
+  acceptance_json TEXT NOT NULL
+);
+CREATE TABLE mvp_validation_regression_fixtures (
+  id TEXT PRIMARY KEY,
+  workflow TEXT NOT NULL,
+  name TEXT NOT NULL,
+  input_contract TEXT NOT NULL,
+  expected_outputs_json TEXT NOT NULL,
+  automated_check_ids_json TEXT NOT NULL
+);
+CREATE TABLE mvp_validation_checks (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  status TEXT NOT NULL,
+  required_for_mvp INTEGER NOT NULL,
+  summary TEXT NOT NULL,
+  evidence TEXT NOT NULL
+);
+CREATE TABLE mvp_validation_manual_scorecards (
+  id TEXT PRIMARY KEY,
+  workflow TEXT NOT NULL,
+  status TEXT NOT NULL,
+  required_for_mvp INTEGER NOT NULL,
+  scoring_axes_json TEXT NOT NULL,
+  pass_threshold TEXT NOT NULL,
+  reviewer_notes TEXT NOT NULL
+);
+CREATE TABLE mvp_validation_stress_cases (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  workflow TEXT NOT NULL,
+  status TEXT NOT NULL,
+  required_for_mvp INTEGER NOT NULL,
+  scenario TEXT NOT NULL,
+  expected_behavior TEXT NOT NULL
+);
+CREATE TABLE mvp_validation_known_limitations (
+  id TEXT PRIMARY KEY,
+  area TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  mitigation TEXT NOT NULL,
+  blocks_mvp INTEGER NOT NULL
+);
+CREATE TABLE mvp_validation_requirement_coverage (
+  requirement_id TEXT PRIMARY KEY,
+  epic_requirement TEXT NOT NULL,
+  demo_workflow_ids_json TEXT NOT NULL,
+  fixture_ids_json TEXT NOT NULL,
+  check_ids_json TEXT NOT NULL,
+  status TEXT NOT NULL
+);
+CREATE TABLE mvp_validation_release_gates (
+  id TEXT PRIMARY KEY,
+  ready_for_mvp INTEGER NOT NULL,
+  required_workflow_count INTEGER NOT NULL,
+  covered_workflow_count INTEGER NOT NULL,
+  required_automated_check_count INTEGER NOT NULL,
+  passed_automated_check_count INTEGER NOT NULL,
+  required_manual_scorecard_count INTEGER NOT NULL,
+  passed_manual_scorecard_count INTEGER NOT NULL,
+  required_stress_case_count INTEGER NOT NULL,
+  passed_stress_case_count INTEGER NOT NULL,
+  blocking_items_json TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

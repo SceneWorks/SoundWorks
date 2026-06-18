@@ -3,6 +3,7 @@ import {
   fallbackOverview,
   fallbackAssetLibrary,
   fallbackExportWorkflow,
+  fallbackMvpValidation,
   fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
@@ -16,6 +17,7 @@ import type {
   AppOverview,
   AssetLibraryOverview,
   ExportWorkflowOverview,
+  MvpValidationOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -55,6 +57,14 @@ export async function loadExportWorkflowOverview(): Promise<ExportWorkflowOvervi
     return await invoke<ExportWorkflowOverview>("get_export_workflow_overview");
   } catch {
     return fallbackExportWorkflow;
+  }
+}
+
+export async function loadMvpValidationOverview(): Promise<MvpValidationOverview> {
+  try {
+    return await invoke<MvpValidationOverview>("get_mvp_validation_overview");
+  } catch {
+    return fallbackMvpValidation;
   }
 }
 

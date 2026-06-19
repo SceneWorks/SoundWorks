@@ -1209,7 +1209,12 @@ mod tests {
                 && option
                     .supported_controls
                     .contains(&SampleControlKind::Loopable)));
-        assert!(overview.submission.can_submit);
+        assert!(!overview.submission.can_submit);
+        assert!(overview
+            .submission
+            .blocking_reasons
+            .iter()
+            .any(|reason| reason.contains("verified cache/package evidence")));
     }
 
     #[test]

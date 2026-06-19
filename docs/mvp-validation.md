@@ -1,15 +1,16 @@
 # MVP Validation Matrix
 
-SoundWorks cannot be marked MVP-ready until this matrix passes. The current reference matrix defines coverage for every capability lane, but the release gate remains blocked until real provider audio, manual QA, stress runs, and release-hardware evidence are attached.
+SoundWorks cannot be marked MVP-ready until this matrix passes. The current reference matrix defines coverage for every capability lane, but fixture/demo data is not runtime evidence. The release gate remains blocked until verified model cache/package evidence, real provider audio, persisted runtime jobs, playback/edit/export artifacts, manual QA, stress runs, and release-hardware evidence are attached.
 
 ## Release Gate
 
 - Status: blocked.
 - Workflow coverage: 12 of 12 capability workflows have both a golden demo and a regression fixture.
-- Automated checks: 8 of 9 required checks currently pass in the reference contract.
+- Automated checks: 4 of 10 required checks currently pass in the reference contract.
+- Runtime evidence: 0 of 5 required runtime evidence checks are satisfied; all are fixture-only until follow-up recovery stories attach real artifacts.
 - Manual audio QA: 0 of 9 required scorecards have real generated-audio evidence.
 - Stress cases: 3 of 8 required cases pass from current contract coverage.
-- Blocking limitations: real provider audio evidence, video-to-audio prototype evidence, and Mac/Windows release hardware runs.
+- Blocking limitations: manifest-only model install state, fixture-only job/output/playback/edit/export evidence, real provider audio evidence, video-to-audio prototype evidence, and Mac/Windows release hardware runs.
 
 ## Golden Demo Workflows
 
@@ -30,7 +31,11 @@ SoundWorks cannot be marked MVP-ready until this matrix passes. The current refe
 
 ## Automated Checks
 
-The required automated categories are job contracts, recipe persistence, metadata extraction, provider manifest validation, asset lifecycle, export sidecars, safety gates, documentation, and release-run artifacts. The first eight are represented by current Rust and React reference contracts. Release-run artifacts remain pending because they require real provider execution on release hardware.
+The required automated categories are job contracts, recipe persistence, metadata extraction, provider manifest validation, asset lifecycle, export sidecars, safety gates, runtime evidence, documentation, and release-run artifacts. Recipe persistence, provider manifests, safety gates, and documentation pass at the current contract level. Job contracts, metadata extraction, asset lifecycle, export sidecars, runtime evidence, and release-run artifacts remain pending because fixtures do not prove product-runtime behavior.
+
+## Runtime Evidence
+
+The MVP gate requires real evidence for verified model cache/package files, persisted generation jobs, generated audio files, playback/edit behavior over real media, and exported audio files plus sidecars. Until those artifacts exist, static manifests, fixture paths, and reference snapshots must remain labeled as fixture/demo evidence and cannot satisfy the release gate.
 
 ## Manual QA Scorecards
 

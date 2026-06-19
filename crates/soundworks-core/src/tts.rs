@@ -881,8 +881,12 @@ mod tests {
             .iter()
             .flat_map(|option| option.limitations.iter())
             .any(|limitation| limitation.contains("Voice profile consent")));
-        assert!(overview.submission.can_submit);
-        assert!(overview.submission.blocking_reasons.is_empty());
+        assert!(!overview.submission.can_submit);
+        assert!(overview
+            .submission
+            .blocking_reasons
+            .iter()
+            .any(|reason| reason.contains("No runnable TTS provider is registered")));
     }
 
     #[test]

@@ -4,9 +4,9 @@ use crate::asset_library::{
 };
 use crate::domain::{
     AssetCreation, AudioAsset, AudioAssetKind, AudioAssetVersion, AudioFileFormat,
-    AudioFileReference, CommercialUseStatus, JobStatus, LibraryScope, LicenseStatus, Project,
-    RecipeSummary, RecipeWorkflow, RightsMetadata, TechnicalAudioMetadata, VoiceConsentStatus,
-    WatermarkStatus, Workspace,
+    AudioFileReference, CommercialUseStatus, JobStatus, LibraryScope, LicenseStatus, LoopPoints,
+    Project, RecipeSummary, RecipeWorkflow, RightsMetadata, TechnicalAudioMetadata,
+    VoiceConsentStatus, WatermarkStatus, Workspace,
 };
 use crate::manifests::CapabilityWorkflow;
 use crate::runtime::{RuntimeArtifactKind, RuntimeJobStore};
@@ -376,12 +376,20 @@ impl ProjectLibraryStore {
                     .and_then(|manifest| manifest.get("durationMs"))
                     .and_then(Value::as_u64)
                     .unwrap_or(1_000),
-                loudness_lufs: None,
-                true_peak_dbfs: None,
+                loudness_lufs: output_manifest
+                    .as_ref()
+                    .and_then(|manifest| manifest.get("loudnessLufs"))
+                    .and_then(Value::as_f64)
+                    .map(|value| value as f32),
+                true_peak_dbfs: output_manifest
+                    .as_ref()
+                    .and_then(|manifest| manifest.get("truePeakDbfs"))
+                    .and_then(Value::as_f64)
+                    .map(|value| value as f32),
                 has_clipping: false,
                 bpm: None,
                 musical_key: None,
-                loop_points: None,
+                loop_points: output_manifest.as_ref().and_then(loop_points_from_manifest),
             },
             created_by: AssetCreation::Generated {
                 recipe_id: recipe.id.clone(),
@@ -826,6 +834,15 @@ fn workflow_label(workflow: CapabilityWorkflow) -> &'static str {
         CapabilityWorkflow::Edit => "Edit",
         CapabilityWorkflow::CompositionRender => "Composition render",
     }
+}
+
+fn loop_points_from_manifest(manifest: &Value) -> Option<LoopPoints> {
+    let start_sample = manifest.get("loopStartSample")?.as_u64()?;
+    let end_sample = manifest.get("loopEndSample")?.as_u64()?;
+    (end_sample > start_sample).then_some(LoopPoints {
+        start_sample,
+        end_sample,
+    })
 }
 
 fn slug(value: &str) -> String {

@@ -80,12 +80,17 @@ impl RuntimeOverview {
         validation_checks.extend(inventory.validation_checks());
         validation_checks.extend(store.validation_checks());
 
-        let model_states: Vec<ModelRuntimeState> = manager
+        let mut model_states: Vec<ModelRuntimeState> = manager
             .candidates
             .iter()
             .filter(|candidate| candidate.install_state == CandidateInstallState::Installed)
             .map(|candidate| ModelRuntimeState::from_candidate(candidate, inventory))
             .collect();
+        if !model_states.iter().any(|state| {
+            state.provider_id == "soundworks-native" && state.model_id == "native-procedural-sfx"
+        }) {
+            model_states.push(ModelRuntimeState::native_procedural_sfx(inventory));
+        }
         let mut jobs = store.read_jobs().unwrap_or_default();
         jobs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
 
@@ -605,6 +610,50 @@ impl ModelRuntimeState {
             reasons,
         }
     }
+
+    fn native_procedural_sfx(inventory: &DeviceInventory) -> Self {
+        let selected = inventory
+            .devices
+            .iter()
+            .find(|device| device.available)
+            .map(|device| device.accelerator);
+        Self {
+            provider_id: "soundworks-native".to_string(),
+            model_id: "native-procedural-sfx".to_string(),
+            model_name: "SoundWorks native procedural SFX".to_string(),
+            runtime: ModelRuntime::Local,
+            workflows: vec![CapabilityWorkflow::Sfx, CapabilityWorkflow::Ambience],
+            availability: RuntimeAvailability::Installed,
+            install_status: ModelInstallStatus::Installed,
+            cache: ModelCacheState {
+                cache_path: None,
+                package_id: Some("soundworks-native-procedural-sfx".to_string()),
+                status: CacheStatus::Ready,
+                expected_size_mb: Some(1),
+                disk_usage_mb: Some(1),
+                verified: true,
+                evidence:
+                    "built into the Rust runtime; no Python, model cache, or network call required"
+                        .to_string(),
+                license: LicenseAcceptanceState::Accepted,
+                warmup: WarmupStatus::Cold,
+            },
+            compatibility: RuntimeCompatibility {
+                supported: true,
+                selected_accelerator: selected,
+                min_memory_mb: None,
+                available_memory_mb: inventory
+                    .devices
+                    .iter()
+                    .find(|device| device.available)
+                    .and_then(|device| device.memory_mb),
+                requires_network: false,
+                reasons: vec![],
+            },
+            health: RuntimeHealth::Ready,
+            reasons: vec![],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1058,6 +1107,9 @@ impl RuntimeJobStore {
             ProviderAdapterKind::NativeRust if job.model_id == "kokoro-82m" => {
                 self.write_kokoro_tts_audio(&mut job, request)?
             }
+            ProviderAdapterKind::NativeRust if job.model_id == "native-procedural-sfx" => {
+                self.write_native_sfx_audio(&mut job, request)?
+            }
             ProviderAdapterKind::NativeRust => self.write_smoke_audio(&mut job, request)?,
             ProviderAdapterKind::LocalExecutable
             | ProviderAdapterKind::ManagedApi
@@ -1288,6 +1340,145 @@ impl RuntimeJobStore {
         Ok(())
     }
 
+    fn write_native_sfx_audio(
+        &self,
+        job: &mut RuntimeJobSnapshot,
+        request: &RuntimeJobRequest,
+    ) -> io::Result<()> {
+        let prompt = request.prompt.trim();
+        if prompt.is_empty() {
+            job.status = JobStatus::Failed;
+            job.progress = Some(JobProgress {
+                percent: 100.0,
+                message: Some("SFX prompt is empty.".to_string()),
+            });
+            job.cancellation = CancellationState::NotCancellable;
+            job.actionable_error = Some(ActionableRuntimeError {
+                code: "sfx.empty_prompt".to_string(),
+                summary: "SFX prompt is empty".to_string(),
+                recovery: "Enter a sound-effect or ambience prompt before queueing generation."
+                    .to_string(),
+            });
+            self.write_error_report(job)?;
+            return Ok(());
+        }
+
+        let sample_rate = 48_000u32;
+        let channels = 2u16;
+        let duration_ms = request
+            .parameters
+            .get("durationMs")
+            .and_then(Value::as_u64)
+            .unwrap_or(8_000)
+            .clamp(250, 30_000);
+        let loopable = request
+            .parameters
+            .get("loopable")
+            .and_then(Value::as_bool)
+            .unwrap_or(matches!(request.workflow, CapabilityWorkflow::Ambience));
+        let category = request
+            .parameters
+            .get("category")
+            .and_then(Value::as_str)
+            .unwrap_or(if loopable {
+                "ambience-bed"
+            } else {
+                "foley-impact"
+            });
+        let intensity = request
+            .parameters
+            .get("intensity")
+            .and_then(Value::as_u64)
+            .unwrap_or(70)
+            .clamp(1, 100) as f32
+            / 100.0;
+        let realism = request
+            .parameters
+            .get("realism")
+            .and_then(Value::as_u64)
+            .unwrap_or(65)
+            .clamp(1, 100) as f32
+            / 100.0;
+
+        job.progress = Some(JobProgress {
+            percent: 65.0,
+            message: Some("Rust native SFX generator is writing prompt-derived audio.".to_string()),
+        });
+        job.log_tail.push(format!(
+            "generating native SFX: {duration_ms} ms, category {category}, loopable {loopable}"
+        ));
+        self.append_event(job, "running", "native SFX generation started")?;
+
+        let samples = synthesize_native_sfx(
+            prompt,
+            request.workflow,
+            duration_ms,
+            sample_rate,
+            intensity,
+            realism,
+            loopable,
+        );
+        let stats = audio_stats(&samples);
+        let record_root = PathBuf::from(&job.record_root);
+        let audio_path = record_root.join("artifacts").join("native-sfx.wav");
+        write_pcm_f32_wav_channels(&audio_path, &samples, sample_rate, channels)?;
+        let frame_count = samples.len() as u64 / channels as u64;
+        let loop_start_sample = loopable.then_some(sample_rate as u64 / 2);
+        let loop_end_sample =
+            loopable.then_some(frame_count.saturating_sub(sample_rate as u64 / 2));
+        let manifest_path = record_root.join("output-manifest.json");
+        write_json(
+            &manifest_path,
+            &serde_json::json!({
+                "jobId": job.id,
+                "workflow": request.workflow,
+                "providerId": request.provider_id,
+                "modelId": request.model_id,
+                "prompt": prompt,
+                "negativePrompt": request.parameters.get("negativePrompt"),
+                "category": category,
+                "tags": request.parameters.get("tags"),
+                "durationMs": duration_ms,
+                "sampleRateHz": sample_rate,
+                "channels": channels,
+                "loudnessLufs": stats.loudness_lufs,
+                "truePeakDbfs": stats.true_peak_dbfs,
+                "loopable": loopable,
+                "loopStartSample": loop_start_sample,
+                "loopEndSample": loop_end_sample,
+                "artifact": audio_path,
+                "note": "Real Rust-native procedural SFX/ambience generation. MOSS-SoundEffect remains blocked until verified cache and product-safe adapter evidence are present.",
+                "sourceEvidence": {
+                    "mossMlx": "https://huggingface.co/mlx-community/MOSS-SoundEffect-v2.0-4bit",
+                    "mossUpstream": "https://github.com/OpenMOSS/MOSS-TTS/blob/main/moss_soundeffect_v2/README.md"
+                }
+            }),
+        )?;
+        job.status = JobStatus::Succeeded;
+        job.progress = Some(JobProgress {
+            percent: 100.0,
+            message: Some("Native SFX generator wrote a real playable WAV.".to_string()),
+        });
+        job.cancellation = CancellationState::Completed;
+        job.log_tail
+            .push(format!("wrote native-sfx.wav with {frame_count} frames"));
+        job.artifacts = vec![
+            artifact(
+                RuntimeArtifactKind::AudioPreview,
+                &audio_path,
+                "audio/wav",
+                "Generated native SFX/ambience WAV",
+            )?,
+            artifact(
+                RuntimeArtifactKind::OutputManifest,
+                &manifest_path,
+                "application/json",
+                "Generated SFX manifest, loop metadata, and provenance",
+            )?,
+        ];
+        Ok(())
+    }
+
     fn write_error_report(&self, job: &mut RuntimeJobSnapshot) -> io::Result<()> {
         let path = PathBuf::from(&job.record_root).join("error.json");
         write_json(
@@ -1467,6 +1658,9 @@ fn adapter_for_model(
             ModelRuntime::Local if state.model_id == "kokoro-82m" => {
                 ProviderAdapterKind::NativeRust
             }
+            ModelRuntime::Local if state.model_id == "native-procedural-sfx" => {
+                ProviderAdapterKind::NativeRust
+            }
             ModelRuntime::Local if state.model_id == "native-smoke" => {
                 ProviderAdapterKind::NativeRust
             }
@@ -1562,6 +1756,110 @@ fn timestamp_string() -> String {
     timestamp_millis().to_string()
 }
 
+#[derive(Debug, Clone, Copy)]
+struct AudioStats {
+    loudness_lufs: f32,
+    true_peak_dbfs: f32,
+}
+
+fn synthesize_native_sfx(
+    prompt: &str,
+    workflow: CapabilityWorkflow,
+    duration_ms: u64,
+    sample_rate: u32,
+    intensity: f32,
+    realism: f32,
+    loopable: bool,
+) -> Vec<f32> {
+    let frame_count = (sample_rate as u64 * duration_ms / 1000).max(1) as usize;
+    let mut samples = Vec::with_capacity(frame_count * 2);
+    let mut noise = hash_prompt(prompt);
+    let prompt_lower = prompt.to_ascii_lowercase();
+    let ambience = loopable
+        || matches!(workflow, CapabilityWorkflow::Ambience)
+        || prompt_lower.contains("ambience")
+        || prompt_lower.contains("bed");
+    let metallic = prompt_lower.contains("metal") || prompt_lower.contains("hatch");
+    let creature = prompt_lower.contains("creature") || prompt_lower.contains("growl");
+    let weather = prompt_lower.contains("wind") || prompt_lower.contains("rain");
+    let base_frequency = if creature {
+        74.0
+    } else if metallic {
+        330.0
+    } else if weather {
+        120.0
+    } else {
+        180.0 + (noise as f32 % 240.0)
+    };
+    let secondary_frequency = base_frequency * if metallic { 2.74 } else { 1.51 };
+    let amplitude = 0.16 + intensity * 0.24;
+    let texture = 0.12 + (1.0 - realism) * 0.2;
+
+    for frame in 0..frame_count {
+        let t = frame as f32 / sample_rate as f32;
+        let progress = frame as f32 / frame_count as f32;
+        noise = lcg(noise);
+        let white = ((noise >> 8) as f32 / u32::MAX as f32) * 2.0 - 1.0;
+        let envelope = if ambience {
+            let fade = (progress * 12.0)
+                .min((1.0 - progress) * 12.0)
+                .clamp(0.0, 1.0);
+            0.55 + 0.45 * fade
+        } else {
+            (-progress * 9.0).exp()
+        };
+        let impact = if ambience {
+            0.0
+        } else {
+            let transient = (-progress * 42.0).exp();
+            white * transient * (0.65 + intensity * 0.35)
+        };
+        let tonal = (std::f32::consts::TAU * base_frequency * t).sin() * 0.52
+            + (std::f32::consts::TAU * secondary_frequency * t).sin() * 0.24
+            + (std::f32::consts::TAU * (base_frequency * 0.49) * t).sin() * 0.18;
+        let rumble = (std::f32::consts::TAU * (base_frequency * 0.25) * t).sin() * 0.22;
+        let bed = if ambience {
+            tonal * 0.38 + rumble + white * texture
+        } else {
+            tonal * 0.3 + impact + white * texture * envelope
+        };
+        let pan = (std::f32::consts::TAU * 0.07 * t).sin() * 0.18;
+        let left = (bed * envelope * amplitude * (1.0 - pan)).clamp(-0.95, 0.95);
+        let right = (bed * envelope * amplitude * (1.0 + pan)).clamp(-0.95, 0.95);
+        samples.push(left);
+        samples.push(right);
+    }
+
+    samples
+}
+
+fn audio_stats(samples: &[f32]) -> AudioStats {
+    let mut sum_squares = 0.0f32;
+    let mut peak = 0.0f32;
+    for sample in samples {
+        sum_squares += sample * sample;
+        peak = peak.max(sample.abs());
+    }
+    let rms = (sum_squares / samples.len().max(1) as f32)
+        .sqrt()
+        .max(0.000_001);
+    let peak = peak.max(0.000_001);
+    AudioStats {
+        loudness_lufs: 20.0 * rms.log10(),
+        true_peak_dbfs: 20.0 * peak.log10(),
+    }
+}
+
+fn hash_prompt(prompt: &str) -> u32 {
+    prompt.bytes().fold(0x811c_9dc5, |hash, byte| {
+        hash.wrapping_mul(16_777_619) ^ u32::from(byte)
+    })
+}
+
+fn lcg(seed: u32) -> u32 {
+    seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223)
+}
+
 fn write_smoke_wav(path: &Path) -> io::Result<()> {
     let sample_rate = 16_000u32;
     let samples = sample_rate / 4;
@@ -1588,6 +1886,15 @@ fn write_smoke_wav(path: &Path) -> io::Result<()> {
 }
 
 fn write_pcm_f32_wav(path: &Path, samples: &[f32], sample_rate: u32) -> io::Result<()> {
+    write_pcm_f32_wav_channels(path, samples, sample_rate, 1)
+}
+
+fn write_pcm_f32_wav_channels(
+    path: &Path,
+    samples: &[f32],
+    sample_rate: u32,
+    channels: u16,
+) -> io::Result<()> {
     let data_bytes = samples.len() as u32 * 2;
     let mut bytes = Vec::with_capacity(44 + data_bytes as usize);
     bytes.extend_from_slice(b"RIFF");
@@ -1595,10 +1902,10 @@ fn write_pcm_f32_wav(path: &Path, samples: &[f32], sample_rate: u32) -> io::Resu
     bytes.extend_from_slice(b"WAVEfmt ");
     bytes.extend_from_slice(&16u32.to_le_bytes());
     bytes.extend_from_slice(&1u16.to_le_bytes());
-    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&channels.to_le_bytes());
     bytes.extend_from_slice(&sample_rate.to_le_bytes());
-    bytes.extend_from_slice(&(sample_rate * 2).to_le_bytes());
-    bytes.extend_from_slice(&2u16.to_le_bytes());
+    bytes.extend_from_slice(&(sample_rate * u32::from(channels) * 2).to_le_bytes());
+    bytes.extend_from_slice(&(channels * 2).to_le_bytes());
     bytes.extend_from_slice(&16u16.to_le_bytes());
     bytes.extend_from_slice(b"data");
     bytes.extend_from_slice(&data_bytes.to_le_bytes());
@@ -1894,6 +2201,81 @@ mod tests {
     }
 
     #[test]
+    fn native_sfx_adapter_generates_playable_loopable_asset() {
+        let store = RuntimeJobStore::new(temp_runtime_root("native-sfx"));
+        let overview = native_sfx_overview(&store);
+        let mut parameters = BTreeMap::new();
+        parameters.insert("durationMs".to_string(), serde_json::json!(1_500));
+        parameters.insert("loopable".to_string(), serde_json::json!(true));
+        parameters.insert("category".to_string(), serde_json::json!("ambience-bed"));
+        parameters.insert("intensity".to_string(), serde_json::json!(72));
+        parameters.insert("realism".to_string(), serde_json::json!(64));
+        parameters.insert(
+            "tags".to_string(),
+            serde_json::json!(["foley", "engine-room", "loopable"]),
+        );
+
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "soundworks-native".to_string(),
+                    model_id: "native-procedural-sfx".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Sfx,
+                    prompt: "Close metallic hatch impact into engine room ambience.".to_string(),
+                    source_surface: "SFX Studio".to_string(),
+                    parameters,
+                },
+            )
+            .expect("native SFX job runs");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+        assert!(job.artifacts.iter().any(|artifact| {
+            artifact.kind == RuntimeArtifactKind::AudioPreview
+                && artifact.summary.contains("Generated native SFX")
+                && artifact.bytes > 44
+                && PathBuf::from(&artifact.path).is_file()
+        }));
+
+        let library = crate::ProjectLibraryStore::new(temp_runtime_root("native-sfx-library"));
+        let saved = library
+            .import_runtime_artifact_from_store(
+                crate::ImportRuntimeArtifactRequest {
+                    job_id: job.id.clone(),
+                    project_id: None,
+                    name: Some("Native generated hatch ambience".to_string()),
+                    scope: None,
+                    tags: vec!["sfx".to_string(), "loopable".to_string()],
+                },
+                &store,
+            )
+            .expect("generated SFX imports into the project library");
+        assert_eq!(
+            saved.asset_library.selected_item.item.item_type,
+            crate::asset_library::LibraryItemType::Sfx
+        );
+        let technical = &saved
+            .asset_library
+            .selected_item
+            .item
+            .current_version
+            .as_ref()
+            .expect("current version")
+            .technical;
+        assert_eq!(technical.sample_rate_hz, 48_000);
+        assert_eq!(technical.channels, 2);
+        assert!(technical.duration_ms >= 1_500);
+        assert!(technical.loop_points.is_some());
+        assert!(technical.loudness_lufs.is_some());
+
+        let playback = library
+            .playback_for_item(&saved.asset_library.selected_item.item.id)
+            .expect("playback check works");
+        assert!(playback.playable);
+    }
+
+    #[test]
     fn voice_conversion_runtime_request_requires_explicit_consent() {
         let store = RuntimeJobStore::new(temp_runtime_root("voice-consent"));
         let overview = installed_overview(&store);
@@ -2025,6 +2407,24 @@ mod tests {
         overview.model_states[0].cache.package_id =
             Some("onnx-community/Kokoro-82M-v1.0-ONNX".to_string());
         overview
+    }
+
+    fn native_sfx_overview(store: &RuntimeJobStore) -> RuntimeOverview {
+        RuntimeOverview {
+            schema_version: super::RUNTIME_SCHEMA_VERSION,
+            packaging_policy: RuntimePackagingPolicy::shipped_desktop(),
+            devices: DeviceInventory::reference_mac().devices,
+            status_counts: super::RuntimeStatusCounts {
+                installed: 1,
+                available: 0,
+                unavailable: 0,
+            },
+            model_states: vec![super::ModelRuntimeState::native_procedural_sfx(
+                &DeviceInventory::reference_mac(),
+            )],
+            jobs: store.read_jobs().unwrap_or_default(),
+            validation_checks: vec![],
+        }
     }
 
     fn temp_runtime_root(label: &str) -> PathBuf {

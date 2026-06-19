@@ -27,7 +27,8 @@ The studio overview includes:
 
 SFX Studio scorecards are derived from the source-backed model evaluation catalog:
 
-- MOSS-SoundEffect is the first recommended SFX spike because current evidence includes an Apache-licensed upstream/MLX path.
+- MOSS-SoundEffect remains the first recommended ML SFX spike because current evidence includes an Apache-licensed upstream/MLX path, but it is not product-enabled until a verified cache and product-safe adapter are present.
+- SC-6471 adds a Rust-native procedural SFX/ambience adapter (`soundworks-native/native-procedural-sfx`) so the recovered app can generate real playable WAV artifacts immediately without Python, a model cache, or fixture-only output.
 - Stable Audio 3 and Stable Audio Open remain promising candidates that need runtime and licensing gates before product enablement.
 - AudioCraft / AudioGen and AudioLDM 2 remain research-only.
 - AudioLDM remains blocked by noncommercial checkpoint constraints.
@@ -55,7 +56,8 @@ The studio reuses `model_evaluation_candidates`, `generation_recipes`, `generati
 Rust tests verify:
 
 - Text-first SFX and ambience controls are derived from provider capabilities.
-- MOSS-SoundEffect is selected as the recommended SFX scorecard.
+- MOSS-SoundEffect is selected as the recommended ML SFX scorecard, with cache/adapter validation still required before it can claim model inference.
+- The native procedural adapter writes real audio previews plus output manifests with prompt, category, duration, loop, loudness, sample-rate, channel, and provenance metadata. Generated artifacts can be imported into the project library and exported through normal sidecar flows.
 - Multimodal/video-to-audio candidates remain deferred to `sc-6183`.
 - Submission recipes preserve prompt, reference audio, source references, post-processing, and output IDs.
 - Saved outputs include SFX tags, export state, ambience output, and loop points.

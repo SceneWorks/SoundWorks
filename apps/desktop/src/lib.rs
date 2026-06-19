@@ -462,6 +462,13 @@ mod tests {
             .model_states
             .iter()
             .all(|state| !state.model_id.starts_with("reference-")));
+        assert!(runtime.model_states.iter().any(|state| {
+            state.provider_id == "soundworks-native"
+                && state.model_id == "native-procedural-sfx"
+                && state
+                    .workflows
+                    .contains(&soundworks_core::CapabilityWorkflow::Sfx)
+        }));
         assert!(runtime
             .jobs
             .iter()

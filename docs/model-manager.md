@@ -25,7 +25,7 @@ Each candidate gets a cache subdirectory named by candidate ID, such as `kokoro-
 - TTS: `kokoro-82m` is the first product candidate and verifies when `config.json`, `onnx/model.onnx`, and `voices/af_heart.bin` exist in the downloaded Kokoro snapshot.
 - Voice clone: `chatterbox` needs a product-safe provider package before enablement.
 - Voice conversion: `rvc` remains consent-gated and needs isolated external-executable packaging.
-- SFX: `moss-soundeffect` is the first SFX product candidate, but remains missing-cache until the MLX/provider files verify.
+- SFX: `moss-soundeffect` is the first ML SFX product candidate, but remains missing-cache until the MLX/provider files verify. SC-6471 also exposes `soundworks-native/native-procedural-sfx` through the runtime overview as a built-in Rust-native recovery adapter; it is not a model-cache candidate and does not satisfy MOSS inference validation.
 - Song: `ace-step-1-5` needs packaged runtime proof before enablement.
 - Video-to-audio: `mmaudio` remains blocked for shipped product use because current evidence points to a Python research stack.
 

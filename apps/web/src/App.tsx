@@ -468,6 +468,27 @@ export function App() {
             );
           });
       }
+      if (
+        (workflow === "sfx" || workflow === "ambience") &&
+        job.status === "succeeded"
+      ) {
+        importRuntimeArtifactToLibrary({
+          jobId: job.id,
+          projectId: workspace.activeProject.project.id,
+          name: `${workflowLabel(job.workflow)} generated ${workflow === "ambience" ? "bed" : "effect"}`,
+          tags: [
+            workflow,
+            "generated-audio",
+            ...(sfxStudio.prompt.tags ?? []),
+          ],
+        })
+          .then(applyProjectLibraryResult)
+          .catch((error) => {
+            setLibraryActionStatus(
+              `SFX generated but save unavailable: ${String(error)}`,
+            );
+          });
+      }
       refreshRuntime();
     });
   }
@@ -2358,7 +2379,17 @@ export function App() {
                 <button
                   className="primary-action sfx-action"
                   disabled={!sfxRuntimeModel}
-                  onClick={() => runRuntimeJob("sfx", sfxStudio.prompt.text)}
+                  onClick={() =>
+                    runRuntimeJob("sfx", sfxStudio.prompt.text, {
+                      category: sfxStudio.prompt.category,
+                      negativePrompt: sfxStudio.prompt.negativePrompt,
+                      tags: sfxStudio.prompt.tags,
+                      durationMs: sfxStudio.controls.durationMs,
+                      loopable: sfxStudio.controls.loopable,
+                      intensity: sfxStudio.controls.intensity,
+                      realism: sfxStudio.controls.realism,
+                    })
+                  }
                   type="button"
                   title="Queue SFX generation"
                 >

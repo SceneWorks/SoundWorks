@@ -476,16 +476,35 @@ export function App() {
           jobId: job.id,
           projectId: workspace.activeProject.project.id,
           name: `${workflowLabel(job.workflow)} generated ${workflow === "ambience" ? "bed" : "effect"}`,
-          tags: [
-            workflow,
-            "generated-audio",
-            ...(sfxStudio.prompt.tags ?? []),
-          ],
+          tags: [workflow, "generated-audio", ...(sfxStudio.prompt.tags ?? [])],
         })
           .then(applyProjectLibraryResult)
           .catch((error) => {
             setLibraryActionStatus(
               `SFX generated but save unavailable: ${String(error)}`,
+            );
+          });
+      }
+      if (
+        (workflow === "instrument-sample" || workflow === "loop") &&
+        job.status === "succeeded"
+      ) {
+        importRuntimeArtifactToLibrary({
+          jobId: job.id,
+          projectId: workspace.activeProject.project.id,
+          name: `${workflowLabel(job.workflow)} generated ${workflow === "loop" ? "loop" : "sample"}`,
+          tags: [
+            workflow,
+            "generated-audio",
+            samplesStudio.controls.musicalKey,
+            `${samplesStudio.controls.bpm}-bpm`,
+            ...(samplesStudio.prompt.genreTags ?? []),
+          ],
+        })
+          .then(applyProjectLibraryResult)
+          .catch((error) => {
+            setLibraryActionStatus(
+              `Sample/loop generated but save unavailable: ${String(error)}`,
             );
           });
       }
@@ -2863,6 +2882,26 @@ export function App() {
                 <button
                   className="primary-action samples-action"
                   disabled={!samplesStudio.submission.canSubmit}
+                  onClick={() =>
+                    runRuntimeJob(
+                      samplesStudio.selectedProvider.workflow,
+                      samplesStudio.prompt.text,
+                      {
+                        negativePrompt: samplesStudio.prompt.negativePrompt,
+                        instrumentFamily: samplesStudio.prompt.instrumentFamily,
+                        articulation: samplesStudio.prompt.articulation,
+                        tags: samplesStudio.prompt.genreTags,
+                        musicalKey: samplesStudio.controls.musicalKey,
+                        scale: samplesStudio.controls.scale,
+                        bpm: samplesStudio.controls.bpm,
+                        bars: samplesStudio.controls.bars,
+                        beats: samplesStudio.controls.beats,
+                        loopable: samplesStudio.controls.loopable,
+                        velocityEnergy: samplesStudio.controls.velocityEnergy,
+                        dryWetAmbience: samplesStudio.controls.dryWetAmbience,
+                      },
+                    )
+                  }
                   type="button"
                   title="Queue sample and loop generation"
                 >

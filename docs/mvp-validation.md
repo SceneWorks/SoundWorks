@@ -7,7 +7,7 @@ SoundWorks cannot be marked MVP-ready until this matrix passes. The current refe
 - Status: blocked.
 - Workflow coverage: 12 of 12 capability workflows have both a golden demo and a regression fixture.
 - Automated checks: 4 of 10 required checks currently pass in the reference contract.
-- Runtime evidence: 0 of 5 required runtime evidence checks are satisfied; all are fixture-only until follow-up recovery stories attach real artifacts.
+- Runtime evidence: 0 of 5 required runtime evidence checks are satisfied at the MVP-gate level. Recovery stories have begun attaching real artifacts for individual lanes, including TTS, SFX, and samples/loops, but the overall gate remains blocked until the full evidence set, manual QA, playback/edit/export, and release-hardware checks pass.
 - Manual audio QA: 0 of 9 required scorecards have real generated-audio evidence.
 - Stress cases: 3 of 8 required cases pass from current contract coverage.
 - Blocking limitations: manifest-only model install state, fixture-only job/output/playback/edit/export evidence, real provider audio evidence, video-to-audio prototype evidence, and Mac/Windows release hardware runs.
@@ -35,7 +35,9 @@ The required automated categories are job contracts, recipe persistence, metadat
 
 ## Runtime Evidence
 
-The MVP gate requires real evidence for verified model cache/package files, persisted generation jobs, generated audio files, playback/edit behavior over real media, and exported audio files plus sidecars. Until those artifacts exist, static manifests, fixture paths, and reference snapshots must remain labeled as fixture/demo evidence and cannot satisfy the release gate.
+The MVP gate requires real evidence for verified model cache/package files, persisted generation jobs, generated audio files, playback/edit behavior over real media, and exported audio files plus sidecars. Static manifests, fixture paths, and reference snapshots must remain labeled as fixture/demo evidence and cannot satisfy the release gate.
+
+Recovery evidence is lane-specific until the full matrix closes. SC-6470 proves real Kokoro TTS when the local cache is present, SC-6471 proves built-in Rust-native SFX/ambience artifact generation, and SC-6472 proves built-in Rust-native sample/loop generation with BPM/key/loop metadata. Complete-song generation still lacks verified product-runtime evidence and must remain visibly blocked.
 
 Model cache/package evidence is owned by `docs/model-manager.md`. A model can only contribute runtime evidence after its model-manager candidate state is `installed` from verified expected files, not merely because the evaluation catalog says it is promising or installable.
 

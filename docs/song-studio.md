@@ -32,6 +32,7 @@ Song Studio scorecards are derived from the source-backed model evaluation catal
 - ACE-Step 1.5 is the current recommended first song spike because it is permissively licensed and local execution is documented, but it still needs a no-Python product runtime wrapper or external executable packaging proof.
 - Stable Audio 3 is a strong broad-audio candidate, but SoundWorks must enforce provider terms and validate local Mac/Windows packaging before product enablement.
 - LeVo 2, YuE, DiffRhythm 2, Khala, HeartMuLa, and Muse remain research-only until license, runtime, and packaging evidence are stronger.
+- SC-6472 keeps complete-song generation blocked in the shipped app because no full-song candidate currently has verified SoundWorks cache evidence plus a product-safe Rust/native/external-executable adapter. This is intentional recovery behavior, not a completed song-generation claim.
 
 Provider-specific advanced controls stay behind capability manifests. Unsupported capabilities are represented as warnings or blocked states rather than silently appearing as available UI.
 

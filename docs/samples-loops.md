@@ -2,12 +2,13 @@
 
 `sc-6154` establishes the workflow contract for reusable instrument samples, one-shots, riffs, rhythmic loops, and sample-pack style assets.
 
-Confidence: medium-high. The workflow state, provider capability controls, sample-pack organization, BPM/key/loop metadata, evaluation-backed scorecards, QA checks, recipe provenance, and saved outputs are represented. Real provider adapters and generated audio bytes still require later model integration stories and runnable smoke outputs.
+Confidence: medium-high. The workflow state, provider capability controls, sample-pack organization, BPM/key/loop metadata, evaluation-backed scorecards, QA checks, recipe provenance, and saved outputs are represented. SC-6472 adds a Rust-native procedural sample/loop adapter so the recovery app can generate real playable WAV artifacts immediately; ML music providers still require adapter, cache, license, and packaging validation before product enablement.
 
 ## Implementation Surface
 
 - `crates/soundworks-core/src/samples.rs` defines the Samples + Loops Studio overview contract.
 - `get_samples_studio_overview` exposes the contract through the Tauri command boundary.
+- `soundworks-native/native-procedural-music` is the first runnable recovery provider for `instrument-sample` and `loop`. It writes prompt-derived one-shots and tempo-aligned loops with BPM, key, loop points, loudness, true peak, and provenance in the runtime output manifest.
 - The React workspace renders a Samples + Loops panel with instrument prompt state, BPM/key/bar controls, provider options, scorecards, sample-pack variants, saved outputs, post-processing actions, and QA checks.
 - `AppOverview::baseline()` marks Samples + Loops as scaffolded and includes dashboard summary metadata for routing and command discovery.
 
@@ -22,6 +23,7 @@ The reference workflow represents:
 - Variants for one-shot instrument samples and loops, including transient/sample isolation, BPM, key, time signature, loop points, loudness, peak, clipping, favorite state, duplicate/version linkage, tags, and collection assignment.
 - Separate `InstrumentSample` and `Loop` generation recipes so one-shots and loops remain first-class request types.
 - Saved outputs as project-local `InstrumentSample` and `Loop` assets with versioned media paths, waveform/spectrogram preview caches, recipe provenance, BPM/key metadata, loop points, and metadata sidecars.
+- Runtime imports preserve generated BPM, key, loop points, sample rate, channel count, loudness, and true peak into persisted library metadata and provenance sidecars.
 
 ## Storage
 
@@ -45,5 +47,6 @@ Local tests cover:
 - Separate sample and loop recipes with BPM/key/bar metadata.
 - Saved outputs with project collection membership, instrument sample metadata, loop BPM/key metadata, and loop points.
 - Tauri command exposure and `AppOverview` summary fields.
+- Native runtime generation of playable sample and loop WAV files, followed by project-library import and playback checks over the generated files.
 
-Real audio quality validation remains future model-adapter work. This slice defines the product contract and review surface that those adapters must satisfy.
+Manual audio-quality review remains required before MVP signoff. The native recovery adapter proves the end-to-end sample/loop artifact path while the ML provider scorecards continue to define the product-runtime bar those adapters must satisfy.

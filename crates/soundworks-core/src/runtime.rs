@@ -6,7 +6,10 @@ use crate::manifests::{
 use crate::model_manager::{
     CandidateInstallState, ModelCandidateInstallState, ModelManagerOverview,
 };
+use kokoro_en::{KokoroTts, Voice};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -576,6 +579,7 @@ impl ModelRuntimeState {
             availability,
             install_status: ModelInstallStatus::Installed,
             cache: ModelCacheState {
+                cache_path: Some(candidate.cache.cache_path.clone()),
                 package_id: candidate.download_plan.repository_id.clone(),
                 status: CacheStatus::Ready,
                 expected_size_mb: candidate.download_plan.expected_size_mb,
@@ -622,6 +626,7 @@ pub enum RuntimeHealth {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCacheState {
+    pub cache_path: Option<String>,
     pub package_id: Option<String>,
     pub status: CacheStatus,
     pub expected_size_mb: Option<u32>,
@@ -644,6 +649,7 @@ impl ModelCacheState {
         let verified = false;
 
         Self {
+            cache_path: None,
             package_id: model.install.package_id.clone(),
             status,
             expected_size_mb: model.install.installed_size_mb,
@@ -828,6 +834,8 @@ pub struct RuntimeJobRequest {
     pub workflow: CapabilityWorkflow,
     pub prompt: String,
     pub source_surface: String,
+    #[serde(default)]
+    pub parameters: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -876,6 +884,7 @@ impl RuntimeJobStore {
         let created_at = timestamp_string();
         let adapter = adapter_for_model(overview, &request);
         let admission = overview.admit_job(&request.provider_id, &request.model_id, request.kind);
+        let request_gate = validate_request_gates(&request);
 
         write_json(record_root.join("recipe.json"), &request)?;
         write_json(
@@ -916,7 +925,7 @@ impl RuntimeJobStore {
         };
         self.append_event(&job, "queued", "persisted job record")?;
 
-        if !admission.accepted {
+        if !admission.accepted || request_gate.is_some() {
             job.status = JobStatus::Failed;
             job.progress = Some(JobProgress {
                 percent: 100.0,
@@ -924,8 +933,13 @@ impl RuntimeJobStore {
             });
             job.cancellation = CancellationState::NotCancellable;
             job.updated_at = timestamp_string();
-            job.log_tail.push(admission.reason.clone());
-            job.actionable_error = admission.actionable_error;
+            if let Some(error) = request_gate {
+                job.log_tail.push(error.summary.clone());
+                job.actionable_error = Some(error);
+            } else {
+                job.log_tail.push(admission.reason.clone());
+                job.actionable_error = admission.actionable_error;
+            }
             self.write_error_report(&mut job)?;
             self.append_event(&job, "failed", "runtime admission rejected job")?;
             self.write_job(&job)?;
@@ -1041,6 +1055,9 @@ impl RuntimeJobStore {
         }
 
         match job.adapter {
+            ProviderAdapterKind::NativeRust if job.model_id == "kokoro-82m" => {
+                self.write_kokoro_tts_audio(&mut job, request)?
+            }
             ProviderAdapterKind::NativeRust => self.write_smoke_audio(&mut job, request)?,
             ProviderAdapterKind::LocalExecutable
             | ProviderAdapterKind::ManagedApi
@@ -1110,6 +1127,162 @@ impl RuntimeJobStore {
                 &manifest_path,
                 "application/json",
                 "Output manifest and provenance",
+            )?,
+        ];
+        Ok(())
+    }
+
+    fn write_kokoro_tts_audio(
+        &self,
+        job: &mut RuntimeJobSnapshot,
+        request: &RuntimeJobRequest,
+    ) -> io::Result<()> {
+        let cache_root = request
+            .parameters
+            .get("cachePath")
+            .and_then(Value::as_str)
+            .map(PathBuf::from)
+            .unwrap_or_else(kokoro_cache_root);
+        let model_path = cache_root.join("onnx").join("model.onnx");
+        let voices_path = cache_root.join("voices");
+        let voice = request
+            .parameters
+            .get("voice")
+            .and_then(Value::as_str)
+            .unwrap_or("af_heart");
+
+        if !model_path.is_file() || !voices_path.join(format!("{voice}.bin")).is_file() {
+            job.status = JobStatus::Failed;
+            job.progress = Some(JobProgress {
+                percent: 100.0,
+                message: Some("Kokoro cache verification failed at adapter execution.".to_string()),
+            });
+            job.cancellation = CancellationState::NotCancellable;
+            job.actionable_error = Some(ActionableRuntimeError {
+                code: "tts.kokoro_cache_missing".to_string(),
+                summary: "Kokoro model files are missing".to_string(),
+                recovery: format!(
+                    "Install onnx/model.onnx and voices/{voice}.bin under {} before retrying.",
+                    cache_root.display()
+                ),
+            });
+            self.write_error_report(job)?;
+            return Ok(());
+        }
+
+        let text = request.prompt.trim();
+        if text.is_empty() {
+            job.status = JobStatus::Failed;
+            job.progress = Some(JobProgress {
+                percent: 100.0,
+                message: Some("TTS script is empty.".to_string()),
+            });
+            job.cancellation = CancellationState::NotCancellable;
+            job.actionable_error = Some(ActionableRuntimeError {
+                code: "tts.empty_script".to_string(),
+                summary: "TTS script is empty".to_string(),
+                recovery: "Enter script text before queueing speech generation.".to_string(),
+            });
+            self.write_error_report(job)?;
+            return Ok(());
+        }
+
+        job.progress = Some(JobProgress {
+            percent: 65.0,
+            message: Some("Kokoro is synthesizing speech from the script.".to_string()),
+        });
+        job.log_tail
+            .push(format!("loading Kokoro cache {}", cache_root.display()));
+        self.append_event(job, "running", "kokoro synthesis started")?;
+
+        let speed = request
+            .parameters
+            .get("speed")
+            .and_then(Value::as_f64)
+            .map(|speed| speed as f32)
+            .unwrap_or(1.0);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(io::Error::other)?;
+        let synth = runtime.block_on(async {
+            let tts = KokoroTts::new(&model_path, &voices_path)
+                .await
+                .map_err(|error| io::Error::other(error.to_string()))?;
+            tts.synth(text, Voice::new(voice).with_speed(speed))
+                .await
+                .map_err(|error| io::Error::other(error.to_string()))
+        });
+        let (samples, took) = match synth {
+            Ok(result) => result,
+            Err(error) => {
+                job.status = JobStatus::Failed;
+                job.progress = Some(JobProgress {
+                    percent: 100.0,
+                    message: Some("Kokoro synthesis failed.".to_string()),
+                });
+                job.cancellation = CancellationState::NotCancellable;
+                job.actionable_error = Some(ActionableRuntimeError {
+                    code: "tts.kokoro_synthesis_failed".to_string(),
+                    summary: "Kokoro synthesis failed".to_string(),
+                    recovery: error.to_string(),
+                });
+                self.write_error_report(job)?;
+                return Ok(());
+            }
+        };
+
+        let record_root = PathBuf::from(&job.record_root);
+        let audio_path = record_root.join("artifacts").join("kokoro-tts.wav");
+        write_pcm_f32_wav(&audio_path, &samples, 24_000)?;
+        let duration_ms = samples.len() as u64 * 1000 / 24_000;
+        let manifest_path = record_root.join("output-manifest.json");
+        write_json(
+            &manifest_path,
+            &serde_json::json!({
+                "jobId": job.id,
+                "workflow": request.workflow,
+                "providerId": request.provider_id,
+                "modelId": request.model_id,
+                "modelVersion": request.parameters.get("modelVersion"),
+                "language": request.parameters.get("language"),
+                "voice": voice,
+                "speakerLabels": request.parameters.get("speakerLabels"),
+                "voiceProfileIds": request.parameters.get("voiceProfileIds"),
+                "seed": request.parameters.get("seed"),
+                "inputText": text,
+                "sampleRateHz": 24_000,
+                "channels": 1,
+                "durationMs": duration_ms,
+                "sampleCount": samples.len(),
+                "synthesisMs": took.as_millis(),
+                "artifact": audio_path,
+                "note": "Real Kokoro speech synthesis from verified local cache; no Python runtime was used.",
+            }),
+        )?;
+        job.status = JobStatus::Succeeded;
+        job.progress = Some(JobProgress {
+            percent: 100.0,
+            message: Some("Kokoro wrote a real generated speech WAV.".to_string()),
+        });
+        job.cancellation = CancellationState::Completed;
+        job.log_tail.push(format!(
+            "wrote kokoro-tts.wav with {} samples in {} ms",
+            samples.len(),
+            took.as_millis()
+        ));
+        job.artifacts = vec![
+            artifact(
+                RuntimeArtifactKind::AudioPreview,
+                &audio_path,
+                "audio/wav",
+                "Generated Kokoro speech WAV",
+            )?,
+            artifact(
+                RuntimeArtifactKind::OutputManifest,
+                &manifest_path,
+                "application/json",
+                "Generated speech manifest and provenance",
             )?,
         ];
         Ok(())
@@ -1294,11 +1467,49 @@ fn adapter_for_model(
             ModelRuntime::Local if state.model_id == "kokoro-82m" => {
                 ProviderAdapterKind::NativeRust
             }
+            ModelRuntime::Local if state.model_id == "native-smoke" => {
+                ProviderAdapterKind::NativeRust
+            }
             ModelRuntime::Local => ProviderAdapterKind::LocalExecutable,
             ModelRuntime::ExternalApi => ProviderAdapterKind::ManagedApi,
             ModelRuntime::ResearchOnly => ProviderAdapterKind::ResearchOnly,
         })
         .unwrap_or(ProviderAdapterKind::ResearchOnly)
+}
+
+fn validate_request_gates(request: &RuntimeJobRequest) -> Option<ActionableRuntimeError> {
+    if matches!(
+        request.workflow,
+        CapabilityWorkflow::VoiceClone | CapabilityWorkflow::VoiceConversion
+    ) && request
+        .parameters
+        .get("voiceConsentRecorded")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return Some(ActionableRuntimeError {
+            code: "voice.consent_required".to_string(),
+            summary: "Voice consent is required".to_string(),
+            recovery:
+                "Record explicit consent metadata before running voice cloning or conversion."
+                    .to_string(),
+        });
+    }
+    None
+}
+
+fn kokoro_cache_root() -> PathBuf {
+    if let Ok(root) = std::env::var("SOUNDWORKS_MODEL_CACHE") {
+        return PathBuf::from(root).join("kokoro-82m");
+    }
+    std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("Library")
+        .join("Application Support")
+        .join("SoundWorks")
+        .join("models")
+        .join("kokoro-82m")
 }
 
 fn status_event(status: &JobStatus) -> &'static str {
@@ -1376,6 +1587,29 @@ fn write_smoke_wav(path: &Path) -> io::Result<()> {
     fs::write(path, bytes)
 }
 
+fn write_pcm_f32_wav(path: &Path, samples: &[f32], sample_rate: u32) -> io::Result<()> {
+    let data_bytes = samples.len() as u32 * 2;
+    let mut bytes = Vec::with_capacity(44 + data_bytes as usize);
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&sample_rate.to_le_bytes());
+    bytes.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
+    bytes.extend_from_slice(&16u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&data_bytes.to_le_bytes());
+    for sample in samples {
+        let clamped = sample.clamp(-1.0, 1.0);
+        let pcm = (clamped * i16::MAX as f32) as i16;
+        bytes.extend_from_slice(&pcm.to_le_bytes());
+    }
+    fs::write(path, bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1386,6 +1620,7 @@ mod tests {
     };
     use crate::domain::{JobKind, ModelRuntime};
     use crate::manifests::{CapabilityWorkflow, ModelInstallStatus, ProviderCatalog};
+    use std::collections::BTreeMap;
     use std::fs;
     use std::path::PathBuf;
 
@@ -1502,11 +1737,12 @@ mod tests {
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "hexgrad".to_string(),
-                    model_id: "kokoro-82m".to_string(),
+                    model_id: "native-smoke".to_string(),
                     kind: JobKind::GenerateAudio,
                     workflow: CapabilityWorkflow::Tts,
                     prompt: "Runtime smoke read".to_string(),
                     source_surface: "TTS Studio".to_string(),
+                    parameters: BTreeMap::new(),
                 },
             )
             .expect("enqueue succeeds");
@@ -1543,6 +1779,7 @@ mod tests {
                     workflow: CapabilityWorkflow::Sfx,
                     prompt: "Missing runtime".to_string(),
                     source_surface: "SFX Studio".to_string(),
+                    parameters: BTreeMap::new(),
                 },
             )
             .expect("failed job persists");
@@ -1556,6 +1793,136 @@ mod tests {
     }
 
     #[test]
+    fn kokoro_tts_adapter_requires_real_cache_files() {
+        let store = RuntimeJobStore::new(temp_runtime_root("kokoro-missing"));
+        let overview = kokoro_overview(&store, temp_runtime_root("missing-cache"));
+        let mut parameters = BTreeMap::new();
+        parameters.insert(
+            "cachePath".to_string(),
+            serde_json::json!(temp_runtime_root("missing-cache")),
+        );
+        parameters.insert("voice".to_string(), serde_json::json!("af_heart"));
+
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "kokoro-82m".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Real speech requires cache files.".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters,
+                },
+            )
+            .expect("failed Kokoro job persists");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Failed);
+        assert_eq!(
+            job.actionable_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("tts.kokoro_cache_missing")
+        );
+    }
+
+    #[test]
+    #[ignore = "requires local Kokoro ONNX model and voice files in SOUNDWORKS_MODEL_CACHE or the default SoundWorks model cache"]
+    fn kokoro_tts_adapter_generates_real_speech_from_local_cache() {
+        let store = RuntimeJobStore::new(temp_runtime_root("kokoro-real"));
+        let cache_root = super::kokoro_cache_root();
+        let overview = kokoro_overview(&store, cache_root.clone());
+        let mut parameters = BTreeMap::new();
+        parameters.insert(
+            "cachePath".to_string(),
+            serde_json::json!(cache_root.display().to_string()),
+        );
+        parameters.insert("voice".to_string(), serde_json::json!("af_heart"));
+        parameters.insert("language".to_string(), serde_json::json!("en-US"));
+        parameters.insert("speakerLabels".to_string(), serde_json::json!(["Narrator"]));
+        parameters.insert(
+            "voiceProfileIds".to_string(),
+            serde_json::json!(["voice-profile-narrator"]),
+        );
+        parameters.insert("voiceConsentRecorded".to_string(), serde_json::json!(true));
+
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "kokoro-82m".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "SoundWorks generated this speech from Kokoro.".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters,
+                },
+            )
+            .expect("Kokoro job runs");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+        assert!(job.artifacts.iter().any(|artifact| {
+            artifact.kind == RuntimeArtifactKind::AudioPreview
+                && artifact.summary.contains("Generated Kokoro speech")
+                && artifact.bytes > 44
+                && PathBuf::from(&artifact.path).is_file()
+        }));
+
+        let library = crate::ProjectLibraryStore::new(temp_runtime_root("kokoro-library"));
+        let saved = library
+            .import_runtime_artifact_from_store(
+                crate::ImportRuntimeArtifactRequest {
+                    job_id: job.id.clone(),
+                    project_id: None,
+                    name: Some("Kokoro real speech smoke".to_string()),
+                    scope: None,
+                    tags: vec!["tts".to_string(), "generated-speech".to_string()],
+                },
+                &store,
+            )
+            .expect("generated speech imports into the project library");
+        assert_eq!(
+            saved.asset_library.selected_item.item.item_type,
+            crate::asset_library::LibraryItemType::VoiceClip
+        );
+        let playback = library
+            .playback_for_item(&saved.asset_library.selected_item.item.id)
+            .expect("playback check works");
+        assert!(playback.playable);
+    }
+
+    #[test]
+    fn voice_conversion_runtime_request_requires_explicit_consent() {
+        let store = RuntimeJobStore::new(temp_runtime_root("voice-consent"));
+        let overview = installed_overview(&store);
+
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "native-smoke".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::VoiceConversion,
+                    prompt: "Convert this read into a target voice.".to_string(),
+                    source_surface: "Voice Lab".to_string(),
+                    parameters: BTreeMap::new(),
+                },
+            )
+            .expect("consent-blocked job persists");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Failed);
+        assert_eq!(
+            job.actionable_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("voice.consent_required")
+        );
+    }
+
+    #[test]
     fn runtime_job_store_cancels_running_job_and_retries_failed_job() {
         let store = RuntimeJobStore::new(temp_runtime_root("cancel-retry"));
         let overview = installed_overview(&store);
@@ -1565,11 +1932,12 @@ mod tests {
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "hexgrad".to_string(),
-                    model_id: "kokoro-82m".to_string(),
+                    model_id: "native-smoke".to_string(),
                     kind: JobKind::GenerateAudio,
                     workflow: CapabilityWorkflow::Tts,
                     prompt: "hold-for-cancel".to_string(),
                     source_surface: "TTS Studio".to_string(),
+                    parameters: BTreeMap::new(),
                 },
             )
             .expect("running job persists");
@@ -1592,6 +1960,7 @@ mod tests {
                     workflow: CapabilityWorkflow::Sfx,
                     prompt: "Missing runtime".to_string(),
                     source_surface: "SFX Studio".to_string(),
+                    parameters: BTreeMap::new(),
                 },
             )
             .expect("failed job persists");
@@ -1615,14 +1984,15 @@ mod tests {
             },
             model_states: vec![super::ModelRuntimeState {
                 provider_id: "hexgrad".to_string(),
-                model_id: "kokoro-82m".to_string(),
-                model_name: "Kokoro 82M".to_string(),
+                model_id: "native-smoke".to_string(),
+                model_name: "Native smoke adapter".to_string(),
                 runtime: ModelRuntime::Local,
                 workflows: vec![CapabilityWorkflow::Tts],
                 availability: RuntimeAvailability::Installed,
                 install_status: ModelInstallStatus::Installed,
                 cache: ModelCacheState {
-                    package_id: Some("onnx-community/Kokoro-82M-v1.0-ONNX".to_string()),
+                    cache_path: None,
+                    package_id: Some("soundworks-native-smoke".to_string()),
                     status: CacheStatus::Ready,
                     expected_size_mb: Some(1450),
                     disk_usage_mb: Some(1450),
@@ -1645,6 +2015,16 @@ mod tests {
             jobs: store.read_jobs().unwrap_or_default(),
             validation_checks: vec![],
         }
+    }
+
+    fn kokoro_overview(store: &RuntimeJobStore, cache_root: PathBuf) -> RuntimeOverview {
+        let mut overview = installed_overview(store);
+        overview.model_states[0].model_id = "kokoro-82m".to_string();
+        overview.model_states[0].model_name = "Kokoro 82M".to_string();
+        overview.model_states[0].cache.cache_path = Some(cache_root.display().to_string());
+        overview.model_states[0].cache.package_id =
+            Some("onnx-community/Kokoro-82M-v1.0-ONNX".to_string());
+        overview
     }
 
     fn temp_runtime_root(label: &str) -> PathBuf {

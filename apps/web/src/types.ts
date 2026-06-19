@@ -644,6 +644,49 @@ export type AssetLibraryOverview = {
   }>;
 };
 
+export type CreateProjectRequest = {
+  name: string;
+};
+
+export type ImportRuntimeArtifactRequest = {
+  jobId: string;
+  projectId?: string | null;
+  name?: string | null;
+  scope?: LibraryScope | null;
+  tags: string[];
+};
+
+export type LibraryMutationAction =
+  | "favorite"
+  | "reject"
+  | "archive"
+  | "restore"
+  | "promote-to-global"
+  | "add-tag";
+
+export type LibraryMutationRequest = {
+  itemId: string;
+  action: LibraryMutationAction;
+  tag?: string | null;
+};
+
+export type LibraryItemDetail = AssetLibraryOverview["selectedItem"];
+
+export type ProjectLibraryActionResult = {
+  workspace: WorkspaceOverview;
+  assetLibrary: AssetLibraryOverview;
+  selectedItem: LibraryItemDetail;
+  message: string;
+};
+
+export type LibraryPlayback = {
+  itemId: string;
+  playable: boolean;
+  path?: string | null;
+  mimeType?: string | null;
+  reason?: string | null;
+};
+
 export type WorkspaceOverview = {
   schemaVersion: number;
   workspace: {

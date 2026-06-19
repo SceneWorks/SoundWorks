@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import {
   fallbackOverview,
   fallbackAssetLibrary,
@@ -21,8 +21,13 @@ import type {
   AppOverview,
   AssetLibraryOverview,
   CompositionEditorOverview,
+  CreateProjectRequest,
   ExportWorkflowOverview,
+  ImportRuntimeArtifactRequest,
+  LibraryMutationRequest,
+  LibraryPlayback,
   MvpValidationOverview,
+  ProjectLibraryActionResult,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -230,6 +235,99 @@ export async function loadAssetLibraryOverview(): Promise<AssetLibraryOverview> 
   } catch {
     return fallbackAssetLibrary;
   }
+}
+
+export async function createSoundWorksProject(
+  request: CreateProjectRequest,
+): Promise<ProjectLibraryActionResult> {
+  try {
+    return await invoke<ProjectLibraryActionResult>(
+      "create_soundworks_project",
+      {
+        request,
+      },
+    );
+  } catch {
+    return fallbackProjectLibraryResult(
+      "Create project requires the Tauri desktop shell; web preview cannot write the local SoundWorks library.",
+    );
+  }
+}
+
+export async function openSoundWorksProject(
+  projectId: string,
+): Promise<ProjectLibraryActionResult> {
+  try {
+    return await invoke<ProjectLibraryActionResult>("open_soundworks_project", {
+      projectId,
+    });
+  } catch {
+    return fallbackProjectLibraryResult(
+      "Open project requires the Tauri desktop shell; web preview cannot read the persisted SoundWorks workspace.",
+    );
+  }
+}
+
+export async function importRuntimeArtifactToLibrary(
+  request: ImportRuntimeArtifactRequest,
+): Promise<ProjectLibraryActionResult> {
+  try {
+    return await invoke<ProjectLibraryActionResult>(
+      "import_runtime_artifact_to_library",
+      { request },
+    );
+  } catch {
+    return fallbackProjectLibraryResult(
+      "Saving runtime artifacts requires the Tauri desktop shell; web preview cannot copy audio into the library.",
+    );
+  }
+}
+
+export async function mutateLibraryItem(
+  request: LibraryMutationRequest,
+): Promise<ProjectLibraryActionResult> {
+  try {
+    return await invoke<ProjectLibraryActionResult>("mutate_library_item", {
+      request,
+    });
+  } catch {
+    return fallbackProjectLibraryResult(
+      "Library mutations require the Tauri desktop shell; web preview cannot persist metadata sidecars.",
+    );
+  }
+}
+
+export async function loadLibraryPlayback(
+  itemId: string,
+): Promise<LibraryPlayback> {
+  let playback: LibraryPlayback;
+  try {
+    playback = await invoke<LibraryPlayback>("get_library_playback", {
+      itemId,
+    });
+  } catch {
+    playback = {
+      itemId,
+      playable: false,
+      reason:
+        "Preview requires the Tauri desktop shell so SoundWorks can authorize local audio file playback.",
+    };
+  }
+
+  return playback.path
+    ? { ...playback, path: convertFileSrc(playback.path) }
+    : playback;
+}
+
+function fallbackProjectLibraryResult(
+  message: string,
+): ProjectLibraryActionResult {
+  return {
+    workspace: fallbackWorkspace,
+    assetLibrary: fallbackAssetLibrary,
+    selectedItem: fallbackAssetLibrary.selectedItem,
+    message,
+  };
 }
 
 export async function loadExportWorkflowOverview(): Promise<ExportWorkflowOverview> {

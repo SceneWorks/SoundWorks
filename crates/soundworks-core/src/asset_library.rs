@@ -128,6 +128,28 @@ impl AssetLibraryOverview {
             validation_checks: validation_checks(&items),
         })
     }
+
+    pub fn reference_with_persisted_items(
+        mut persisted_items: Vec<LibraryItemCard>,
+        selected_item_id: Option<&str>,
+    ) -> Result<Self, StoragePathError> {
+        let mut overview = Self::reference()?;
+        let has_persisted_items = !persisted_items.is_empty();
+        overview.items.append(&mut persisted_items);
+        overview.scopes = scope_summaries(&overview.items, &overview.collections);
+        overview.filters = LibraryFilterModel::from_items(&overview.items);
+        overview.validation_checks = validation_checks(&overview.items);
+
+        if selected_item_id.is_some() || has_persisted_items {
+            let selected_item = selected_item_id
+                .and_then(|id| overview.items.iter().find(|item| item.id == id))
+                .or_else(|| overview.items.last())
+                .cloned()
+                .expect("reference library includes at least one item");
+            overview.selected_item = detail_for_item(&selected_item);
+        }
+        Ok(overview)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,7 +193,7 @@ pub enum LibraryItemType {
 }
 
 impl LibraryItemType {
-    fn from_asset_kind(kind: AudioAssetKind) -> Self {
+    pub fn from_asset_kind(kind: AudioAssetKind) -> Self {
         match kind {
             AudioAssetKind::VoiceClip => Self::VoiceClip,
             AudioAssetKind::MusicClip => Self::MusicClip,
@@ -187,7 +209,7 @@ impl LibraryItemType {
         }
     }
 
-    fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
             Self::VoiceClip => "Voice clip",
             Self::MusicClip => "Music clip",
@@ -203,6 +225,19 @@ impl LibraryItemType {
             Self::MixdownExport => "Mixdown/Export",
             Self::PromptRecipePreset => "Prompt/Recipe preset",
         }
+    }
+}
+
+pub fn detail_for_item(item: &LibraryItemCard) -> LibraryItemDetail {
+    LibraryItemDetail {
+        item: item.clone(),
+        version_history: version_history(item),
+        recipe: item.recipe.clone(),
+        provenance_links: provenance_links_for_item(item),
+        collection_ids: item.collection_ids.clone(),
+        version_count: item.current_version.as_ref().map_or(0, |_| 1),
+        source_picker_targets: source_picker_targets_for_item(item),
+        notes: detail_notes_for_item(item),
     }
 }
 
@@ -975,6 +1010,128 @@ fn reference_collections() -> Vec<LibraryCollectionView> {
             drag_into_studios: vec!["TTS Studio".to_string(), "Voice Lab".to_string()],
         },
     ]
+}
+
+fn scope_summaries(
+    items: &[LibraryItemCard],
+    collections: &[LibraryCollectionView],
+) -> Vec<LibraryScopeSummary> {
+    let mut project_ids = items
+        .iter()
+        .filter_map(|item| item.project_id.clone())
+        .collect::<BTreeSet<_>>();
+    project_ids.insert("project-demo".to_string());
+
+    let mut scopes = project_ids
+        .into_iter()
+        .map(|project_id| LibraryScopeSummary {
+            id: project_id.clone(),
+            label: if project_id == "project-demo" {
+                "Demo SoundWorks Project".to_string()
+            } else {
+                project_id.clone()
+            },
+            scope: LibraryScope::Project {
+                project_id: project_id.clone(),
+            },
+            ownership: LibraryOwnership::ProjectLocal,
+            asset_count: items
+                .iter()
+                .filter(|item| item.project_id.as_deref() == Some(project_id.as_str()))
+                .count(),
+            collection_count: collections
+                .iter()
+                .filter(|collection| match &collection.collection.scope {
+                    LibraryScope::Project {
+                        project_id: collection_project_id,
+                    } => collection_project_id == &project_id,
+                    LibraryScope::GlobalLibrary => false,
+                })
+                .count(),
+            can_promote_to_global: true,
+        })
+        .collect::<Vec<_>>();
+
+    scopes.push(LibraryScopeSummary {
+        id: "global-library".to_string(),
+        label: "Global audio library".to_string(),
+        scope: LibraryScope::GlobalLibrary,
+        ownership: LibraryOwnership::Global,
+        asset_count: items
+            .iter()
+            .filter(|item| matches!(item.scope, LibraryScope::GlobalLibrary))
+            .count(),
+        collection_count: collections
+            .iter()
+            .filter(|collection| matches!(collection.collection.scope, LibraryScope::GlobalLibrary))
+            .count(),
+        can_promote_to_global: false,
+    });
+    scopes
+}
+
+fn provenance_links_for_item(item: &LibraryItemCard) -> Vec<LibraryProvenanceLink> {
+    if let Some(version) = &item.current_version {
+        let sidecar_path = version
+            .file
+            .storage_path
+            .rsplit_once('/')
+            .map(|(dir, _)| format!("{dir}/metadata/recipe-provenance.json"))
+            .unwrap_or_else(|| format!("soundworks-library/metadata/{}.json", item.id));
+        return vec![LibraryProvenanceLink {
+            id: format!("provenance-{}", item.id),
+            label: "Persisted asset provenance sidecar".to_string(),
+            sidecar_path,
+            inspectable: true,
+        }];
+    }
+
+    item.asset
+        .as_ref()
+        .map(|asset| {
+            asset
+                .provenance_ids
+                .iter()
+                .map(|id| LibraryProvenanceLink {
+                    id: id.clone(),
+                    label: "Asset provenance record".to_string(),
+                    sidecar_path: format!("soundworks-library/provenance/{id}.json"),
+                    inspectable: true,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn source_picker_targets_for_item(item: &LibraryItemCard) -> Vec<String> {
+    match item.item_type {
+        LibraryItemType::VoiceClip | LibraryItemType::VoiceProfile => {
+            vec!["TTS Studio".to_string(), "Voice Lab".to_string()]
+        }
+        LibraryItemType::Sfx | LibraryItemType::Ambience => {
+            vec!["SFX + Ambience".to_string(), "Mixer timeline".to_string()]
+        }
+        LibraryItemType::InstrumentSample | LibraryItemType::Loop | LibraryItemType::Stem => {
+            vec!["Samples + Loops".to_string(), "Mixer timeline".to_string()]
+        }
+        LibraryItemType::Song | LibraryItemType::MusicClip | LibraryItemType::MixdownExport => {
+            vec!["Song Studio".to_string(), "Mixer timeline".to_string()]
+        }
+        _ => vec!["Asset Library".to_string()],
+    }
+}
+
+fn detail_notes_for_item(item: &LibraryItemCard) -> Vec<String> {
+    let mut notes = vec![];
+    if item.quick_audition.previewable {
+        notes.push("Preview uses a persisted audio file when the path exists.".to_string());
+    } else {
+        notes.push("Preview is unavailable until a real audio file is attached.".to_string());
+    }
+    if item.recipe.is_some() {
+        notes.push("Recipe metadata remains inspectable from the asset detail.".to_string());
+    }
+    notes
 }
 
 fn lifecycle_actions() -> Vec<LibraryLifecycleAction> {

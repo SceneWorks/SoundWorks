@@ -79,6 +79,12 @@ button {
   outline: none;
 }
 
+.nav-button.active {
+  background: #e5f0ea;
+  color: #17342e;
+  border-color: #c8dbd2;
+}
+
 .workspace {
   display: grid;
   align-content: start;
@@ -249,6 +255,17 @@ h1 {
 .samples-header h2 {
   color: #12231f;
   font-size: 1.35rem;
+}
+
+.action-status {
+  margin: 0;
+  color: #52625b;
+  font-size: 0.9rem;
+}
+
+.library-audio-preview {
+  width: min(100%, 560px);
+  min-height: 36px;
 }
 
 .primary-action {

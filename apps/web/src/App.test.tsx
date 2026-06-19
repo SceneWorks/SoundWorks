@@ -59,15 +59,46 @@ describe("App", () => {
     expect(screen.getByTitle("Queue SFX generation")).toBeEnabled();
     expect(screen.getAllByText("Tight hatch impact").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Engine room bed").length).toBeGreaterThan(0);
-    expect(screen.getByText("MOSS-SoundEffect")).toBeInTheDocument();
+    expect(screen.getAllByText("MOSS-SoundEffect").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        "Best first SFX spike because an Apache-licensed MLX path exists for local Mac validation.",
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        "Best first SFX spike because an Apache-licensed MLX path exists for local Mac validation.",
+        "AudioX, MMAudio, and ThinkSound remain deferred to the video-to-audio story.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "airlock-approach-silent.mp4" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Queue video-to-audio generation")).toBeEnabled();
+    expect(screen.getAllByText("Door servo").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Boot steps").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pressure seal").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("MMAudio").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("AudioX").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("ThinkSound").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Text-to-SFX candidate only; use for Foley bed comparison, not video-conditioned sync.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Airlock synchronized Foley"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Source video is user-owned and cleared for generated Foley."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "soundworks-exports/project-demo/airlock-approach/video-to-audio-provenance.json",
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "AudioX, MMAudio, and ThinkSound remain deferred to the video-to-audio story.",
+        "Real provider adapters and generated audio bytes still require later runnable model integration.",
       ),
     ).toBeInTheDocument();
     expect(

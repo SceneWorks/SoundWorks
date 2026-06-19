@@ -11,6 +11,7 @@ import type {
   SfxStudioOverview,
   SongStudioOverview,
   TtsStudioOverview,
+  VideoToAudioOverview,
   VoiceLabOverview,
 } from "./types";
 
@@ -101,7 +102,7 @@ export const fallbackOverview: AppOverview = {
       id: "video-to-audio",
       name: "Video to Audio",
       route: "/studios/video-to-audio",
-      status: "planned",
+      status: "scaffolded",
     },
   ],
   commands: [
@@ -188,6 +189,18 @@ export const fallbackOverview: AppOverview = {
       direction: "ui-to-backend",
       purpose:
         "Load waveform review transport, preview caches, lightweight edit actions, non-destructive edited versions, comparison state, and recipe provenance.",
+    },
+    {
+      name: "get_rights_safety_overview",
+      direction: "ui-to-backend",
+      purpose:
+        "Load rights, consent, model-license, disclosure, watermark, and export provenance policy gates.",
+    },
+    {
+      name: "get_video_to_audio_overview",
+      direction: "ui-to-backend",
+      purpose:
+        "Load multimodal video/image/audio-conditioned Foley workflow state, provider readiness, sync preview, provenance, safety gates, and export package metadata.",
     },
   ],
   providerCatalog: {
@@ -430,6 +443,20 @@ export const fallbackOverview: AppOverview = {
     disclosureCount: 2,
     canExport: false,
     watermarkPolicy: "advisory-until-provider-support",
+  },
+  videoToAudio: {
+    schemaVersion: 1,
+    sourceDurationMs: 14400,
+    targetRangeCount: 3,
+    detectedEventCount: 5,
+    syncPointCount: 5,
+    providerCount: 1,
+    scorecardCount: 4,
+    canSubmit: true,
+    selectedProviderId: "soundworks-reference",
+    selectedModelId: "reference-generation-suite",
+    savedAssetKind: "sfx",
+    exportTargetCount: 2,
   },
 };
 
@@ -4604,6 +4631,418 @@ export const fallbackSfxStudio: SfxStudioOverview = {
       status: "passed",
       summary:
         "AudioX, MMAudio, and ThinkSound remain deferred to the video-to-audio story.",
+    },
+  ],
+};
+
+export const fallbackVideoToAudio: VideoToAudioOverview = {
+  schemaVersion: 1,
+  projectId: "project-demo",
+  source: {
+    videoReferenceId: "ref-video-airlock-approach",
+    videoAssetId: "asset-reference-video-airlock",
+    filename: "airlock-approach-silent.mp4",
+    durationMs: 14400,
+    frameRate: "24 fps",
+    resolution: "1920x1080",
+    hasSourceAudio: false,
+    imageReferenceIds: ["ref-keyframe-door-panel"],
+    referenceAudioAssetIds: ["asset-reference-metal-room-tone"],
+    ownershipAttestation: "User-owned previs clip cleared for generated Foley.",
+  },
+  direction: {
+    prompt:
+      "Generate synchronized sci-fi airlock Foley: servo whirr, boot steps, metal hatch hit, pressure seal, and low room tone.",
+    negativePrompt: "music, dialogue, crowd, melody, alarm loop",
+    syncMode: "frame-synchronized",
+    requestedOutputs: ["sfx", "ambience"],
+    durationMs: 14400,
+    regeneratePolicy: "selected-ranges",
+    exportTarget: "SceneWorks video audio track package",
+  },
+  targetRanges: [
+    {
+      id: "range-door-servo",
+      label: "Door servo",
+      range: { startMs: 1000, endMs: 3300 },
+      objectLabel: "airlock hatch",
+      region: { x: 0.58, y: 0.18, width: 0.28, height: 0.55 },
+      requestedAction: "mechanical motor ramp with subtle metal resonance",
+    },
+    {
+      id: "range-footsteps",
+      label: "Boot steps",
+      range: { startMs: 3650, endMs: 6900 },
+      objectLabel: "crew boots",
+      region: { x: 0.28, y: 0.58, width: 0.22, height: 0.3 },
+      requestedAction: "three dampened footsteps aligned to contact frames",
+    },
+    {
+      id: "range-pressure-seal",
+      label: "Pressure seal",
+      range: { startMs: 8200, endMs: 11600 },
+      objectLabel: "door gasket",
+      region: null,
+      requestedAction: "hatch impact, air hiss, and pressure release tail",
+    },
+  ],
+  detectedEvents: [
+    {
+      id: "event-servo-start",
+      label: "Servo start",
+      atMs: 1120,
+      confidence: 0.86,
+      objectLabel: "airlock hatch",
+      requestedSound: "servo ramp",
+    },
+    {
+      id: "event-step-1",
+      label: "Footstep contact",
+      atMs: 3920,
+      confidence: 0.81,
+      objectLabel: "crew boots",
+      requestedSound: "boot step",
+    },
+    {
+      id: "event-step-2",
+      label: "Footstep contact",
+      atMs: 5180,
+      confidence: 0.79,
+      objectLabel: "crew boots",
+      requestedSound: "boot step",
+    },
+    {
+      id: "event-hatch-hit",
+      label: "Hatch lock",
+      atMs: 8640,
+      confidence: 0.88,
+      objectLabel: "door gasket",
+      requestedSound: "metal impact",
+    },
+    {
+      id: "event-pressure-tail",
+      label: "Pressure tail",
+      atMs: 10900,
+      confidence: 0.74,
+      objectLabel: null,
+      requestedSound: "air hiss",
+    },
+  ],
+  providerOptions: [
+    {
+      providerId: "soundworks-reference",
+      modelId: "reference-generation-suite",
+      modelVersion: "0.1.0",
+      displayName:
+        "SoundWorks Reference Capability Registry / Reference Audio Generation Suite",
+      workflow: "video-to-audio",
+      runtime: "local",
+      runnable: true,
+      installStatus: "packaged",
+      outputAssetKinds: ["sfx", "ambience"],
+      outputFormat: "wav",
+      sampleRateHz: 48000,
+      channelLayout: "stereo",
+      supportsVideo: true,
+      supportsText: true,
+      supportsReferenceAudio: false,
+      supportsRangeRefinement: true,
+      supportsObjectRegions: true,
+      commercialUseAllowed: true,
+      limitations: [
+        "Reference provider proves workflow contract only; real video-to-audio adapters remain model-integration work.",
+      ],
+    },
+  ],
+  selectedProvider: {
+    providerId: "soundworks-reference",
+    modelId: "reference-generation-suite",
+    modelVersion: "0.1.0",
+    workflow: "video-to-audio",
+    runtime: "local",
+    accepted: true,
+    blocker: null,
+  },
+  providerScorecards: [
+    {
+      candidateId: "mmaudio",
+      name: "MMAudio",
+      provider: "MMAudio authors",
+      lanes: ["video-to-audio", "sfx"],
+      status: "promising-spike",
+      productEligibility: "research-only",
+      readiness: "research-only",
+      runtimePath: "python-poc-only",
+      commercialUse: "unknown",
+      recommended: true,
+      supports: ["video-conditioning", "frame-sync", "text-to-sfx"],
+      blockers: ["License terms and no-Python product path unresolved"],
+      notes: "Primary video-to-audio benchmark candidate.",
+    },
+    {
+      candidateId: "audiox",
+      name: "AudioX",
+      provider: "AudioX authors",
+      lanes: ["sfx", "video-to-audio", "ambience"],
+      status: "promising-spike",
+      productEligibility: "research-only",
+      readiness: "research-only",
+      runtimePath: "python-poc-only",
+      commercialUse: "unknown",
+      recommended: false,
+      supports: [
+        "text-to-sfx",
+        "video-conditioning",
+        "image-conditioning",
+        "reference-audio-conditioning",
+      ],
+      blockers: ["License, weights, and runtime packaging need validation"],
+      notes: "Good multimodal benchmark; not product-ready.",
+    },
+    {
+      candidateId: "thinksound",
+      name: "ThinkSound",
+      provider: "FunAudioLLM",
+      lanes: ["video-to-audio", "sfx", "ambience"],
+      status: "promising-spike",
+      productEligibility: "research-only",
+      readiness: "research-only",
+      runtimePath: "python-poc-only",
+      commercialUse: "unknown",
+      recommended: false,
+      supports: [
+        "video-conditioning",
+        "object-region-refinement",
+        "natural-language-editing",
+        "frame-sync",
+      ],
+      blockers: ["License and dependency footprint unresolved"],
+      notes: "Useful for reasoning-heavy video-to-audio comparisons.",
+    },
+    {
+      candidateId: "moss-soundeffect",
+      name: "MOSS-SoundEffect",
+      provider: "OpenMOSS",
+      lanes: ["sfx", "ambience"],
+      status: "promising-spike",
+      productEligibility: "product-candidate",
+      readiness: "text-only-sfx",
+      runtimePath: "native-library-binding",
+      commercialUse: "allowed",
+      recommended: false,
+      supports: ["text-to-sfx"],
+      blockers: [
+        "Text-to-SFX candidate only; use for Foley bed comparison, not video-conditioned sync.",
+      ],
+      notes:
+        "Best first SFX spike because an Apache-licensed MLX path exists for local Mac validation.",
+    },
+  ],
+  syncPreview: {
+    id: "preview-airlock-foley-sync",
+    durationMs: 14400,
+    sampleRateHz: 48000,
+    channelLayout: "stereo",
+    waveformPreviewPath:
+      "soundworks-library/projects/project-demo/sfx/asset-video-airlock-foley/version-video-airlock-foley-a/previews/waveform.json",
+    syncPoints: [
+      { id: "sync-event-servo-start", atMs: 1120, label: "Servo start", confidence: 0.86 },
+      { id: "sync-event-step-1", atMs: 3920, label: "Footstep contact", confidence: 0.81 },
+      { id: "sync-event-step-2", atMs: 5180, label: "Footstep contact", confidence: 0.79 },
+      { id: "sync-event-hatch-hit", atMs: 8640, label: "Hatch lock", confidence: 0.88 },
+      { id: "sync-event-pressure-tail", atMs: 10900, label: "Pressure tail", confidence: 0.74 },
+    ],
+    segments: [
+      {
+        id: "segment-servo",
+        targetRangeId: "range-door-servo",
+        label: "Servo ramp",
+        range: { startMs: 1000, endMs: 3300 },
+        assetKind: "sfx",
+        syncConfidence: 0.84,
+        editable: true,
+      },
+      {
+        id: "segment-steps",
+        targetRangeId: "range-footsteps",
+        label: "Boot steps",
+        range: { startMs: 3650, endMs: 6900 },
+        assetKind: "sfx",
+        syncConfidence: 0.78,
+        editable: true,
+      },
+      {
+        id: "segment-pressure",
+        targetRangeId: "range-pressure-seal",
+        label: "Pressure seal",
+        range: { startMs: 8200, endMs: 11600 },
+        assetKind: "sfx",
+        syncConfidence: 0.86,
+        editable: true,
+      },
+      {
+        id: "segment-room-tone",
+        targetRangeId: "range-full-bed",
+        label: "Room tone bed",
+        range: { startMs: 0, endMs: 14400 },
+        assetKind: "ambience",
+        syncConfidence: 0.72,
+        editable: true,
+      },
+    ],
+    warnings: [
+      "Real model sync confidence must be replaced with generated output analysis before release.",
+      "Reference audio is captured as provenance; current provider option does not condition on it.",
+    ],
+  },
+  submission: {
+    canSubmit: true,
+    job: {
+      id: "job-video-airlock-foley",
+      recipeId: "recipe-video-airlock-foley",
+      kind: "generate-audio",
+      status: "queued",
+      outputVersionIds: ["version-video-airlock-foley-a"],
+      error: null,
+    },
+    recipe: {
+      id: "recipe-video-airlock-foley",
+      workflow: "video-to-audio",
+      outputAssetIds: ["asset-video-airlock-foley"],
+    },
+    blockingReasons: [],
+    warnings: [
+      "Real model sync confidence must be replaced with generated output analysis before release.",
+      "Reference audio is captured as provenance; current provider option does not condition on it.",
+      "Reference contract is queueable, but real generated audio quality is not proven.",
+    ],
+  },
+  savedOutput: {
+    asset: {
+      id: "asset-video-airlock-foley",
+      kind: "sfx",
+      name: "Airlock synchronized Foley",
+      tags: ["video-to-audio", "foley", "airlock", "sync"],
+      currentVersionId: "version-video-airlock-foley-a",
+    },
+    version: {
+      id: "version-video-airlock-foley-a",
+      file: {
+        storagePath:
+          "soundworks-library/projects/project-demo/sfx/asset-video-airlock-foley/version-video-airlock-foley-a/media.wav",
+        format: "wav",
+      },
+      technical: {
+        sampleRateHz: 48000,
+        channels: 2,
+        durationMs: 14400,
+        loudnessLufs: -18,
+      },
+    },
+    waveformPreviewReady: true,
+    synchronizedToVideo: true,
+  },
+  exportPackage: {
+    id: "export-video-airlock-foley",
+    mixdownPath:
+      "soundworks-exports/project-demo/airlock-approach/foley-mixdown.wav",
+    sidecarPath:
+      "soundworks-exports/project-demo/airlock-approach/video-to-audio-provenance.json",
+    includesSyncPoints: true,
+    includesSourceMediaRefs: true,
+    includesDetectedEvents: true,
+    includesRights: true,
+    destinationTargets: [
+      "SoundWorks composition timeline",
+      "SceneWorks video audio-track package",
+    ],
+    requiredFields: [
+      "sourceVideoReferenceId",
+      "sourceProjectId",
+      "timeRanges",
+      "syncPoints",
+      "modelProvider",
+      "sourceMediaRights",
+      "aiDisclosureRequired",
+    ],
+  },
+  provenance: {
+    recipeId: "recipe-video-airlock-foley",
+    sourceReferenceIds: [
+      "ref-video-airlock-approach",
+      "ref-keyframe-door-panel",
+      "ref-asset-reference-metal-room-tone",
+    ],
+    sidecarPath:
+      "soundworks-library/projects/project-demo/sfx/asset-video-airlock-foley/version-video-airlock-foley-a/metadata/recipe-provenance.json",
+    capturedFields: [
+      "source video asset and ownership attestation",
+      "image keyframe references",
+      "reference audio asset IDs",
+      "time ranges and object labels",
+      "3 targeted Foley ranges",
+      "sync points and confidence scores",
+      "provider/model/runtime and license gate state",
+    ],
+    roundTripNotes: [
+      "Saved output can be dragged into the multitrack editor as synchronized SFX.",
+      "SceneWorks handoff package remains validated by sc-6202 once target import code is implemented.",
+    ],
+  },
+  safetyGates: [
+    {
+      id: "source-media-rights",
+      status: "passed",
+      summary: "Source video is user-owned and cleared for generated Foley.",
+      enforcement: "Allow generation and preserve ownership note in the sidecar.",
+    },
+    {
+      id: "protected-media-imitation",
+      status: "passed",
+      summary:
+        "Prompt avoids requests to imitate protected film, game, or library sounds.",
+      enforcement:
+        "Block export if protected-media imitation language is introduced.",
+    },
+    {
+      id: "real-provider-audio",
+      status: "warning",
+      summary:
+        "Reference contract is queueable, but real generated audio quality is not proven.",
+      enforcement:
+        "Keep provider scorecards research-only until runnable smoke output is attached.",
+    },
+  ],
+  validationChecks: [
+    {
+      id: "video_audio.source_inputs",
+      status: "passed",
+      summary:
+        "Workflow captures video, image keyframe, reference audio, and natural-language direction inputs.",
+    },
+    {
+      id: "video_audio.range_refinement",
+      status: "passed",
+      summary:
+        "Target ranges preserve time spans, object labels, optional regions, and requested sounds.",
+    },
+    {
+      id: "video_audio.capability_boundary",
+      status: "passed",
+      summary:
+        "Provider scorecards distinguish video-conditioned candidates from text-only SFX candidates.",
+    },
+    {
+      id: "video_audio.export_sidecar",
+      status: "passed",
+      summary:
+        "Export package includes source media, sync points, detected events, rights, and disclosure fields.",
+    },
+    {
+      id: "video_audio.real_provider_evidence",
+      status: "warning",
+      summary:
+        "Real provider adapters and generated audio bytes still require later runnable model integration.",
     },
   ],
 };

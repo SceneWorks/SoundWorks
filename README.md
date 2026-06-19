@@ -2,7 +2,7 @@
 
 SoundWorks is the audio-first sister product to SceneWorks. It is planned as a local-first creative desktop app for generating, organizing, editing, and exporting AI-assisted audio assets and compositions.
 
-Current status: architecture baseline, initial Rust/React/Tauri scaffold, Rust audio domain/storage/recipe contracts, provider manifests, worker runtime/packaging contracts, source-backed model evaluation scorecards, Text-to-Speech Studio, Voice Lab, SFX Studio, Samples + Loops, Song Studio, and Waveform Review workflow contracts. The implementation source of truth is Shortcut epic [6148](https://app.shortcut.com/trefry/epic/6148), with the initial baseline captured in this repository.
+Current status: architecture baseline, initial Rust/React/Tauri scaffold, Rust audio domain/storage/recipe contracts, provider manifests, worker runtime/packaging contracts, source-backed model evaluation scorecards, Text-to-Speech Studio, Voice Lab, SFX Studio, Video to Audio, Samples + Loops, Song Studio, and Waveform Review workflow contracts. The implementation source of truth is Shortcut epic [6148](https://app.shortcut.com/trefry/epic/6148), with the initial baseline captured in this repository.
 
 ## Product Scope
 
@@ -32,6 +32,7 @@ SoundWorks covers the full audio creation surface tracked in the epic:
 - `docs/tts-studio.md` - TTS Studio script, speaker, consent, provider-limit, submission, and saved-output workflow contract.
 - `docs/voice-lab.md` - Voice Lab cloning, fine-tuning, conversion, safety, scorecard, and saved-output workflow contract.
 - `docs/sfx-studio.md` - SFX Studio prompt, variant, loop-point, provider-scorecard, post-processing, export, and saved-output workflow contract.
+- `docs/video-to-audio.md` - multimodal video/image/audio-conditioned Foley, sync preview, provider-scorecard, provenance, safety, export, and saved-output workflow contract.
 - `docs/samples-loops.md` - Samples + Loops instrument, BPM/key, sample-pack, scorecard, QA, and saved-output workflow contract.
 - `docs/song-studio.md` - Song Studio lyrics, structure, style, stems, provider-scorecard, variant, export-target, and saved-output workflow contract.
 - `docs/composition-editor.md` - Multitrack timeline, clip editing, mixer, render, component-decision, and SceneWorks handoff contract.
@@ -40,7 +41,7 @@ SoundWorks covers the full audio creation surface tracked in the epic:
 - `docs/implementation-plan.md` - Shortcut-backed implementation order and success criteria.
 - `apps/web/` - React/Vite UI workspace.
 - `apps/desktop/` - Tauri desktop shell and Rust command boundary.
-- `crates/soundworks-core/` - shared Rust contracts for the app shell, domain model, storage schema, provider manifests, worker runtime state, model evaluation scorecards, TTS Studio, Voice Lab, SFX Studio, Samples + Loops, Song Studio, Multitrack Editor, Waveform Review, recipe fixtures, jobs, provenance, and composition state.
+- `crates/soundworks-core/` - shared Rust contracts for the app shell, domain model, storage schema, provider manifests, worker runtime state, model evaluation scorecards, TTS Studio, Voice Lab, SFX Studio, Video to Audio, Samples + Loops, Song Studio, Multitrack Editor, Waveform Review, recipe fixtures, jobs, provenance, and composition state.
 
 ## Development
 

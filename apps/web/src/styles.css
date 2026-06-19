@@ -217,6 +217,7 @@ h1 {
 .mvp-validation-panel,
 .voice-lab-panel,
 .sfx-studio-panel,
+.video-to-audio-panel,
 .samples-studio-panel,
 .review-workspace-panel,
 .rights-safety-panel {
@@ -230,6 +231,7 @@ h1 {
 .mvp-header,
 .voice-lab-header,
 .sfx-header,
+.video-header,
 .samples-header {
   display: flex;
   align-items: center;
@@ -243,6 +245,7 @@ h1 {
 .mvp-header h2,
 .voice-lab-header h2,
 .sfx-header h2,
+.video-header h2,
 .samples-header h2 {
   color: #12231f;
   font-size: 1.35rem;
@@ -294,6 +297,16 @@ h1 {
 .sfx-action:not(:disabled):hover,
 .sfx-action:not(:disabled):focus-visible {
   background: #465024;
+}
+
+.video-action {
+  background: #3f5f6f;
+  border-color: #344f5d;
+}
+
+.video-action:not(:disabled):hover,
+.video-action:not(:disabled):focus-visible {
+  background: #344f5d;
 }
 
 .samples-action {
@@ -352,6 +365,7 @@ h1 {
 .mvp-metrics,
 .voice-lab-metrics,
 .sfx-metrics,
+.video-metrics,
 .samples-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -364,6 +378,7 @@ h1 {
 .mvp-metrics div,
 .voice-lab-metrics div,
 .sfx-metrics div,
+.video-metrics div,
 .samples-metrics div {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
@@ -382,6 +397,7 @@ h1 {
 .mvp-metrics strong,
 .voice-lab-metrics strong,
 .sfx-metrics strong,
+.video-metrics strong,
 .samples-metrics strong {
   color: #17342e;
   font-size: 1.22rem;
@@ -395,6 +411,7 @@ h1 {
 .mvp-metrics span,
 .voice-lab-metrics span,
 .sfx-metrics span,
+.video-metrics span,
 .samples-metrics span {
   grid-column: 2;
   color: #626e68;
@@ -1115,6 +1132,7 @@ h1 {
 .tts-layout,
 .voice-lab-layout,
 .sfx-layout,
+.video-layout,
 .samples-layout,
 .review-layout {
   display: grid;
@@ -1125,6 +1143,8 @@ h1 {
 
 .sfx-main,
 .sfx-side,
+.video-main,
+.video-side,
 .samples-main,
 .samples-side,
 .review-main,
@@ -1311,6 +1331,132 @@ h1 {
   background: #fffdf8;
   border: 1px solid #ded9ce;
   border-radius: 8px;
+}
+
+.video-source-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  color: #17231f;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.video-source-panel p,
+.video-source-panel small {
+  overflow-wrap: anywhere;
+}
+
+.video-source-panel p {
+  line-height: 1.45;
+}
+
+.video-source-panel small {
+  color: #66726b;
+}
+
+.video-range-list,
+.video-event-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.video-range,
+.video-event {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  color: #17231f;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.video-range div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.video-range strong,
+.video-range small,
+.video-range p,
+.video-range span,
+.video-event strong,
+.video-event span,
+.video-event small {
+  overflow-wrap: anywhere;
+}
+
+.video-range small,
+.video-range span,
+.video-event span,
+.video-event small {
+  color: #66726b;
+  font-size: 0.8rem;
+}
+
+.sync-timeline {
+  display: grid;
+  grid-template-rows: repeat(4, 34px);
+  gap: 8px;
+  min-height: 184px;
+  padding: 14px;
+  overflow: hidden;
+  background: #17231f;
+  border-radius: 8px;
+}
+
+.sync-segment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 9px;
+  color: #eef7ef;
+  background: #3f8371;
+  border: 1px solid #69aa95;
+  border-radius: 8px;
+}
+
+.sync-segment strong,
+.sync-segment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-segment span {
+  color: #cfe9dc;
+  font-size: 0.75rem;
+  font-weight: 760;
+}
+
+.video-review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.video-sidecar {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  color: #17231f;
+  background: #fffdf8;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+}
+
+.video-sidecar p {
+  color: #66726b;
+  overflow-wrap: anywhere;
 }
 
 .sfx-prompt-panel p,
@@ -2424,6 +2570,11 @@ h1 {
   .sfx-control-grid,
   .sfx-variant-grid,
   .sfx-review-grid,
+  .video-layout,
+  .video-metrics,
+  .video-range-list,
+  .video-event-grid,
+  .video-review-grid,
   .samples-layout,
   .samples-metrics,
   .samples-control-grid,

@@ -9,6 +9,7 @@ import {
   Disc3,
   Download,
   FileAudio,
+  FileVideo,
   Gauge,
   HardDrive,
   Library,
@@ -38,6 +39,7 @@ import {
   fallbackSongStudio,
   fallbackSfxStudio,
   fallbackTtsStudio,
+  fallbackVideoToAudio,
   fallbackVoiceLab,
 } from "./appData";
 import {
@@ -53,6 +55,7 @@ import {
   loadSongStudioOverview,
   loadSfxStudioOverview,
   loadTtsStudioOverview,
+  loadVideoToAudioOverview,
   loadVoiceLabOverview,
 } from "./tauri";
 import type {
@@ -68,6 +71,7 @@ import type {
   SongStudioOverview,
   SfxStudioOverview,
   TtsStudioOverview,
+  VideoToAudioOverview,
   VoiceLabOverview,
 } from "./types";
 
@@ -151,6 +155,8 @@ export function App() {
     useState<ReviewWorkspaceOverview>(fallbackReviewWorkspace);
   const [rightsSafety, setRightsSafety] =
     useState<RightsSafetyOverview>(fallbackRightsSafety);
+  const [videoToAudio, setVideoToAudio] =
+    useState<VideoToAudioOverview>(fallbackVideoToAudio);
 
   useEffect(() => {
     let active = true;
@@ -233,6 +239,12 @@ export function App() {
       }
     });
 
+    loadVideoToAudioOverview().then((nextVideoToAudio) => {
+      if (active) {
+        setVideoToAudio(nextVideoToAudio);
+      }
+    });
+
     return () => {
       active = false;
     };
@@ -262,6 +274,15 @@ export function App() {
         ),
       ),
     [sfxStudio.providerScorecards],
+  );
+  const videoCandidateFocus = useMemo(
+    () =>
+      videoToAudio.providerScorecards.filter((scorecard) =>
+        ["mmaudio", "audiox", "thinksound", "moss-soundeffect"].includes(
+          scorecard.candidateId,
+        ),
+      ),
+    [videoToAudio.providerScorecards],
   );
   const samplesCandidateFocus = useMemo(
     () =>
@@ -1534,6 +1555,9 @@ export function App() {
                           {scorecard.lanes.map(workflowLabel).join(" / ")}
                         </small>
                         <p>{scorecard.notes}</p>
+                        {scorecard.blockers[0] ? (
+                          <p>{scorecard.blockers[0]}</p>
+                        ) : null}
                       </div>
                       {scorecard.recommended ? <span>pick</span> : null}
                     </article>
@@ -1725,6 +1749,9 @@ export function App() {
                           {scorecard.lanes.map(workflowLabel).join(" / ")}
                         </small>
                         <p>{scorecard.notes}</p>
+                        {scorecard.blockers[0] ? (
+                          <p>{scorecard.blockers[0]}</p>
+                        ) : null}
                       </div>
                       {scorecard.recommended ? <span>pick</span> : null}
                     </article>
@@ -1764,6 +1791,232 @@ export function App() {
             </ol>
             <ol className="voice-checks" aria-label="SFX validation checks">
               {sfxStudio.validationChecks.map((check) => (
+                <li className={check.status} key={check.id}>
+                  <CircleCheck aria-hidden="true" size={16} />
+                  <span>{check.summary}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="video-to-audio-panel" aria-label="Video to Audio">
+          <div className="video-header">
+            <div>
+              <p className="eyebrow">Video to Audio</p>
+              <h2>{videoToAudio.source.filename}</h2>
+            </div>
+            <button
+              className="primary-action video-action"
+              disabled={!videoToAudio.submission.canSubmit}
+              type="button"
+              title="Queue video-to-audio generation"
+            >
+              <FileVideo aria-hidden="true" size={18} />
+              <span>
+                {videoToAudio.submission.canSubmit ? "Generate" : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="video-metrics" aria-label="Video-to-audio status">
+            <div>
+              <FileVideo aria-hidden="true" size={18} />
+              <strong>{formatDuration(videoToAudio.source.durationMs)}</strong>
+              <span>{videoToAudio.source.frameRate}</span>
+            </div>
+            <div>
+              <SlidersHorizontal aria-hidden="true" size={18} />
+              <strong>{overview.videoToAudio.targetRangeCount}</strong>
+              <span>ranges</span>
+            </div>
+            <div>
+              <Activity aria-hidden="true" size={18} />
+              <strong>{overview.videoToAudio.syncPointCount}</strong>
+              <span>sync points</span>
+            </div>
+            <div>
+              <ClipboardCheck aria-hidden="true" size={18} />
+              <strong>{overview.videoToAudio.scorecardCount}</strong>
+              <span>scorecards</span>
+            </div>
+          </div>
+
+          <div className="video-layout">
+            <div className="video-main">
+              <section
+                className="video-source-panel"
+                aria-label="Video source and direction"
+              >
+                <div className="subpanel-heading">
+                  <h3>Source and direction</h3>
+                  <span>{videoToAudio.source.resolution}</span>
+                </div>
+                <p>{videoToAudio.direction.prompt}</p>
+                <small>{videoToAudio.direction.negativePrompt}</small>
+                <div className="candidate-strip">
+                  <span>{statusLabel(videoToAudio.direction.syncMode)}</span>
+                  <span>{videoToAudio.source.hasSourceAudio ? "source audio" : "silent video"}</span>
+                  <span>{videoToAudio.source.imageReferenceIds.length} keyframe</span>
+                  <span>
+                    {videoToAudio.source.referenceAudioAssetIds.length} reference audio
+                  </span>
+                </div>
+              </section>
+
+              <div className="video-range-list" aria-label="Target ranges">
+                {videoToAudio.targetRanges.map((range) => (
+                  <article className="video-range" key={range.id}>
+                    <div>
+                      <strong>{range.label}</strong>
+                      <small>
+                        {formatDuration(range.range.startMs)}-
+                        {formatDuration(range.range.endMs)}
+                      </small>
+                    </div>
+                    <p>{range.requestedAction}</p>
+                    <span>{range.objectLabel ?? "full frame"}</span>
+                  </article>
+                ))}
+              </div>
+
+              <div className="sync-timeline" aria-label="Sync preview">
+                {videoToAudio.syncPreview.segments.map((segment) => (
+                  <article
+                    className="sync-segment"
+                    key={segment.id}
+                    style={{
+                      marginLeft: `${(segment.range.startMs / videoToAudio.syncPreview.durationMs) * 100}%`,
+                      width: `${Math.max(
+                        8,
+                        ((segment.range.endMs - segment.range.startMs) /
+                          videoToAudio.syncPreview.durationMs) *
+                          100,
+                      )}%`,
+                    }}
+                  >
+                    <strong>{segment.label}</strong>
+                    <span>{Math.round(segment.syncConfidence * 100)}%</span>
+                  </article>
+                ))}
+              </div>
+
+              <div className="video-event-grid" aria-label="Detected events">
+                {videoToAudio.detectedEvents.map((event) => (
+                  <div className="video-event" key={event.id}>
+                    <strong>{event.label}</strong>
+                    <span>{formatDuration(event.atMs)}</span>
+                    <small>{event.requestedSound}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="video-side">
+              <section
+                className="tts-subpanel"
+                aria-label="Video-to-audio provider options"
+              >
+                <div className="subpanel-heading">
+                  <h3>Provider</h3>
+                  <span>{videoToAudio.providerOptions.length}</span>
+                </div>
+                {videoToAudio.providerOptions.map((provider) => (
+                  <article
+                    className="sfx-provider-option"
+                    key={`${provider.workflow}-${provider.modelId}`}
+                  >
+                    <strong>{provider.displayName}</strong>
+                    <small>
+                      {statusLabel(provider.installStatus)} /{" "}
+                      {provider.sampleRateHz} Hz /{" "}
+                      {statusLabel(provider.channelLayout)}
+                    </small>
+                    <p>
+                      {[
+                        provider.supportsVideo ? "video" : null,
+                        provider.supportsText ? "text" : null,
+                        provider.supportsRangeRefinement ? "ranges" : null,
+                        provider.supportsObjectRegions ? "regions" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" / ")}
+                    </p>
+                  </article>
+                ))}
+              </section>
+
+              <section
+                className="tts-subpanel"
+                aria-label="Video-to-audio scorecards"
+              >
+                <div className="subpanel-heading">
+                  <h3>Scorecards</h3>
+                  <span>{videoToAudio.providerScorecards.length}</span>
+                </div>
+                <div className="voice-provider-list">
+                  {videoCandidateFocus.map((scorecard) => (
+                    <article
+                      className={`voice-provider ${scorecard.readiness}`}
+                      key={scorecard.candidateId}
+                    >
+                      <div>
+                        <strong>{scorecard.name}</strong>
+                        <small>
+                          {statusLabel(scorecard.readiness)} /{" "}
+                          {scorecard.supports.map(statusLabel).join(" / ")}
+                        </small>
+                        <p>{scorecard.notes}</p>
+                        {scorecard.blockers[0] ? (
+                          <p>{scorecard.blockers[0]}</p>
+                        ) : null}
+                      </div>
+                      {scorecard.recommended ? <span>pick</span> : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Video output">
+                <div className="subpanel-heading">
+                  <h3>Output</h3>
+                  <span>{videoToAudio.submission.job.status}</span>
+                </div>
+                <div className="output-card">
+                  <strong>{videoToAudio.savedOutput.asset.name}</strong>
+                  <small>
+                    {videoToAudio.savedOutput.asset.kind} /{" "}
+                    {videoToAudio.savedOutput.asset.currentVersionId}
+                  </small>
+                  <p>{videoToAudio.savedOutput.version.file.storagePath}</p>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div className="video-review-grid">
+            <ol className="voice-checks" aria-label="Video-to-audio gates">
+              {videoToAudio.safetyGates.map((gate) => (
+                <li className={gate.status} key={gate.id}>
+                  <ShieldCheck aria-hidden="true" size={16} />
+                  <span>{gate.summary}</span>
+                </li>
+              ))}
+            </ol>
+            <section className="video-sidecar" aria-label="Video sidecar">
+              <div className="subpanel-heading">
+                <h3>Sidecar</h3>
+                <span>{videoToAudio.exportPackage.requiredFields.length}</span>
+              </div>
+              <p>{videoToAudio.exportPackage.sidecarPath}</p>
+              <div className="candidate-strip">
+                {videoToAudio.exportPackage.destinationTargets.map((target) => (
+                  <span key={target}>{target}</span>
+                ))}
+              </div>
+            </section>
+            <ol className="voice-checks" aria-label="Video-to-audio validation">
+              {videoToAudio.validationChecks.map((check) => (
                 <li className={check.status} key={check.id}>
                   <CircleCheck aria-hidden="true" size={16} />
                   <span>{check.summary}</span>

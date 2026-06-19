@@ -85,11 +85,11 @@ describe("App", () => {
         "Text-to-SFX candidate only; use for Foley bed comparison, not video-conditioned sync.",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText("Airlock synchronized Foley")).toBeInTheDocument();
     expect(
-      screen.getByText("Airlock synchronized Foley"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Source video is user-owned and cleared for generated Foley."),
+      screen.getByText(
+        "Source video is user-owned and cleared for generated Foley.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -223,8 +223,22 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "SoundWorks can render the package; SceneWorks import validation remains sc-6202.",
+        "SoundWorks can render a SceneWorks handoff package; direct attachment waits for a SceneWorks-side importer.",
       ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/sceneworks-handoff\.json/).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("heading", { name: "SceneWorks compatibility" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Current SceneWorks project imports do not accept standalone audio files/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Attach or replace the video's audio track"),
     ).toBeInTheDocument();
     expect(screen.getByTitle("SoundWorks export gate")).toBeDisabled();
     expect(

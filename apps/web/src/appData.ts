@@ -576,7 +576,8 @@ export const fallbackWorkspace: WorkspaceOverview = {
       scope: { kind: "globalLibrary" },
       active: false,
       itemCount: 3,
-      emptyState: "Promote reusable voices, loops, references, and presets here.",
+      emptyState:
+        "Promote reusable voices, loops, references, and presets here.",
     },
   ],
   projectAssets: [
@@ -738,14 +739,16 @@ export const fallbackWorkspace: WorkspaceOverview = {
     {
       id: "library-scope-language",
       area: "Library scope",
-      convention: "Keep project assets and reusable global assets visibly separate.",
+      convention:
+        "Keep project assets and reusable global assets visibly separate.",
       soundworksApplication:
         "Project Library and Global Library filters are first-class controls.",
     },
     {
       id: "provenance-detail",
       area: "Asset detail",
-      convention: "Asset cards preserve recipe, version, source, and export provenance.",
+      convention:
+        "Asset cards preserve recipe, version, source, and export provenance.",
       soundworksApplication:
         "Links, copies, and promotions create reuse events and keep provenance sidecars inspectable.",
     },
@@ -1468,9 +1471,9 @@ export const fallbackMvpValidation: MvpValidationOverview = {
       id: "limit-sceneworks-import",
       area: "SceneWorks handoff",
       summary:
-        "SoundWorks export package metadata exists, but SceneWorks import/attachment validation is tracked by sc-6202.",
+        "SoundWorks export package metadata, target video identity, compatibility checks, and provenance manifest are defined; direct runtime attachment still needs a SceneWorks-side importer.",
       mitigation:
-        "Do not claim end-to-end SceneWorks import until the target source is implemented and tested.",
+        "Do not claim in-app SceneWorks attachment until the target importer endpoint is implemented and tested in SceneWorks.",
       blocksMvp: false,
     },
     {
@@ -1797,7 +1800,7 @@ export const fallbackExportWorkflow: ExportWorkflowOverview = {
       ready: true,
       presetIds: ["preset-sceneworks-video-track"],
       notes: [
-        "First-class handoff package is ready; actual SceneWorks import is tracked by sc-6202.",
+        "Handoff package, target video metadata, compatibility checks, and provenance manifest are ready; current SceneWorks source still needs an audio-track importer for direct runtime attachment.",
       ],
     },
   ],
@@ -1812,7 +1815,7 @@ export const fallbackExportWorkflow: ExportWorkflowOverview = {
     canExport: true,
     blockingReasons: [],
     warnings: [
-      "SceneWorks target is stored as handoff metadata until sc-6202 defines the import contract.",
+      "SceneWorks direct audio import is not present in current source; export writes a package and manifest for the SceneWorks-side importer.",
     ],
     outputPaths: [
       "soundworks-exports/project-demo/demo-timeline/mixdown.wav",
@@ -1876,18 +1879,139 @@ export const fallbackExportWorkflow: ExportWorkflowOverview = {
       "soundworks-exports/project-demo/demo-timeline/sceneworks-audio-track.zip",
     renderedMixdownPath:
       "soundworks-exports/project-demo/demo-timeline/mixdown.wav",
+    packageManifestPath:
+      "soundworks-exports/project-demo/demo-timeline/sceneworks-handoff.json",
     provenanceSidecarPath:
       "soundworks-exports/project-demo/demo-timeline/soundworks-export.json",
     includesOptionalStems: true,
-    intendedProjectId: "sceneworks-project-placeholder",
-    intendedVideoAssetId: "video-target-placeholder",
+    optionalStemPaths: [
+      "soundworks-exports/project-demo/demo-timeline/stems/track-voice.wav",
+      "soundworks-exports/project-demo/demo-timeline/stems/track-loop.wav",
+    ],
+    importStrategy: "file-package",
+    attachmentMode: "attach-or-replace",
+    intendedProjectId: "sceneworks-project-demo",
+    intendedVideoAssetId: "asset_scene_video_airlock",
+    sceneWorksProjectPath: "SceneWorks/projects/sceneworks-project-demo",
+    targetVideoSidecarPath:
+      "assets/videos/asset_scene_video_airlock.sceneworks.json",
+    sceneWorksAssetType: "video",
+    sceneWorksMimeType: "video/mp4",
     durationMs: 11163,
+    targetVideoDurationMs: 12000,
+    startOffsetMs: 0,
     sampleRateHz: 48000,
     channels: 2,
     loudnessLufs: -16,
     truePeakDbfs: -1,
     markerCount: 1,
     sectionCount: 1,
+    replaceExistingAudio: true,
+    roundTripRecipeUrl:
+      "soundworks://project/project-demo/compositions/composition-demo/exports/export-demo-composition-sceneworks",
+    sourceEvidence: [
+      {
+        sourceRepo: "SceneWorks",
+        filePath: "crates/sceneworks-core/src/project_store.rs",
+        lineHint: "import_asset",
+        finding:
+          "Manual imports currently accept image/* and video/* content, write a .sceneworks.json sidecar, and store free-form provenance under the asset extra field.",
+      },
+      {
+        sourceRepo: "SceneWorks",
+        filePath: "crates/sceneworks-worker/src/video_jobs.rs",
+        lineHint: "AudioTrack",
+        finding:
+          "Generated video jobs can carry synchronized interleaved PCM audio internally as sample rate, channel count, and f32 samples.",
+      },
+      {
+        sourceRepo: "SceneWorks",
+        filePath: "crates/sceneworks-core/src/contracts.rs",
+        lineHint: "AssetType",
+        finding:
+          "The persisted asset contract currently has image, video, upload, frame, render, document, and pose types; there is no standalone audio asset type.",
+      },
+    ],
+    compatibilityChecks: [
+      {
+        id: "target.video.sidecar",
+        status: "passed",
+        summary:
+          "Target SceneWorks video asset id and sidecar path are carried in the handoff manifest.",
+        mitigation:
+          "Use the sidecar path to attach or replace audio metadata without guessing the video asset.",
+      },
+      {
+        id: "duration.fits",
+        status: "passed",
+        summary:
+          "SoundWorks mixdown duration 11.163s fits inside the 12.000s target video window at offset 0.",
+        mitigation:
+          "If the mixdown is longer, require trim, loop, or explicit overflow approval before export.",
+      },
+      {
+        id: "sample_rate.channels",
+        status: "passed",
+        summary:
+          "Package uses 48kHz stereo WAV/FLAC, matching the video worker's explicit sample-rate/channel metadata shape.",
+        mitigation:
+          "Transcode to 48kHz stereo before handoff when source material differs.",
+      },
+      {
+        id: "loudness.true_peak",
+        status: "passed",
+        summary:
+          "Mixdown is normalized to -16 LUFS with -1 dBTP ceiling for video-safe playback.",
+        mitigation:
+          "Block export when clipping is detected or loudness analysis is missing.",
+      },
+      {
+        id: "direct.audio.import",
+        status: "warning",
+        summary:
+          "Current SceneWorks project imports do not accept standalone audio files, so the first integration is a handoff package rather than direct upload.",
+        mitigation:
+          "Add a SceneWorks-side audio-track attachment endpoint or package importer before claiming runtime attachment.",
+      },
+      {
+        id: "round_trip.recipe",
+        status: "passed",
+        summary:
+          "The manifest includes a soundworks:// round-trip URL back to the source composition export.",
+        mitigation:
+          "SceneWorks can show this link as provenance until native round-trip editing is implemented.",
+      },
+    ],
+    attachmentSteps: [
+      {
+        id: "select-target-video",
+        label: "Choose SceneWorks project and video asset",
+        required: true,
+        source: "SoundWorks handoff target picker",
+        target: "SceneWorks project id plus video asset sidecar path",
+      },
+      {
+        id: "render-package",
+        label: "Render mixdown and optional stems",
+        required: true,
+        source: "SoundWorks composition renderer",
+        target: "mixdown.wav, stems folder, and sceneworks-handoff.json",
+      },
+      {
+        id: "attach-or-replace",
+        label: "Attach or replace the video's audio track",
+        required: true,
+        source: "SceneWorks package importer",
+        target: "video asset audio metadata and media reference",
+      },
+      {
+        id: "show-provenance",
+        label: "Expose SoundWorks provenance and round-trip link",
+        required: true,
+        source: "SoundWorks export sidecar",
+        target: "SceneWorks asset detail provenance panel",
+      },
+    ],
   },
   validationChecks: [
     {
@@ -1912,6 +2036,18 @@ export const fallbackExportWorkflow: ExportWorkflowOverview = {
       passed: true,
       summary:
         "Song and DAW exports handle master files plus stems when available.",
+    },
+    {
+      id: "sceneworks.source_documented",
+      passed: true,
+      summary:
+        "SceneWorks source requirements are documented: current imports are image/video assets with provenance in sidecar extra fields, while audio is internal video-job PCM.",
+    },
+    {
+      id: "sceneworks.compatibility",
+      passed: true,
+      summary:
+        "SceneWorks handoff validates duration, sample rate, channels, loudness, target video identity, stale exports, and direct-import limitations.",
     },
   ],
 };
@@ -3495,7 +3631,7 @@ export const fallbackCompositionEditor: CompositionEditorOverview = {
     renderReady: true,
     loudnessCheck: "composition sits at -16.2 LUFS with -1.1 dBTP peak",
     warnings: [
-      "SceneWorks attachment remains tracked by sc-6202.",
+      "SceneWorks package export is defined; direct runtime attachment needs a SceneWorks importer.",
       "Offline render must be revalidated once a production Web Audio editor is adopted.",
     ],
     trackStates: [
@@ -3542,14 +3678,29 @@ export const fallbackCompositionEditor: CompositionEditorOverview = {
     ],
   },
   tools: [
-    { id: "select", label: "Select", enabled: true, appliesTo: ["clip", "track"] },
+    {
+      id: "select",
+      label: "Select",
+      enabled: true,
+      appliesTo: ["clip", "track"],
+    },
     { id: "trim", label: "Trim", enabled: true, appliesTo: ["clip"] },
     { id: "split", label: "Split", enabled: true, appliesTo: ["clip"] },
     { id: "fade", label: "Fade", enabled: true, appliesTo: ["clip"] },
     { id: "duplicate", label: "Duplicate", enabled: true, appliesTo: ["clip"] },
-    { id: "snap-grid", label: "Snap grid", enabled: true, appliesTo: ["timeline"] },
+    {
+      id: "snap-grid",
+      label: "Snap grid",
+      enabled: true,
+      appliesTo: ["timeline"],
+    },
     { id: "zoom", label: "Zoom", enabled: true, appliesTo: ["timeline"] },
-    { id: "mute-solo", label: "Mute/Solo", enabled: true, appliesTo: ["track", "mixer"] },
+    {
+      id: "mute-solo",
+      label: "Mute/Solo",
+      enabled: true,
+      appliesTo: ["track", "mixer"],
+    },
     { id: "render", label: "Render", enabled: true, appliesTo: ["export"] },
   ],
   exportPlan: {
@@ -3576,9 +3727,9 @@ export const fallbackCompositionEditor: CompositionEditorOverview = {
       "rightsSummary",
       "exportPresetId",
     ],
-    sceneWorksReady: false,
+    sceneWorksReady: true,
     sceneWorksWarning:
-      "SoundWorks can render the package; SceneWorks import validation remains sc-6202.",
+      "SoundWorks can render a SceneWorks handoff package; direct attachment waits for a SceneWorks-side importer.",
   },
   componentDecisions: [
     {
@@ -3697,9 +3848,9 @@ export const fallbackCompositionEditor: CompositionEditorOverview = {
     },
     {
       id: "sceneworks-export",
-      passed: false,
+      passed: true,
       summary:
-        "SceneWorks package metadata is ready, but end-to-end SceneWorks attachment remains sc-6202.",
+        "SceneWorks handoff package metadata, target video identity, and compatibility checks are represented for importer validation.",
     },
   ],
 };
@@ -5170,11 +5321,36 @@ export const fallbackVideoToAudio: VideoToAudioOverview = {
     waveformPreviewPath:
       "soundworks-library/projects/project-demo/sfx/asset-video-airlock-foley/version-video-airlock-foley-a/previews/waveform.json",
     syncPoints: [
-      { id: "sync-event-servo-start", atMs: 1120, label: "Servo start", confidence: 0.86 },
-      { id: "sync-event-step-1", atMs: 3920, label: "Footstep contact", confidence: 0.81 },
-      { id: "sync-event-step-2", atMs: 5180, label: "Footstep contact", confidence: 0.79 },
-      { id: "sync-event-hatch-hit", atMs: 8640, label: "Hatch lock", confidence: 0.88 },
-      { id: "sync-event-pressure-tail", atMs: 10900, label: "Pressure tail", confidence: 0.74 },
+      {
+        id: "sync-event-servo-start",
+        atMs: 1120,
+        label: "Servo start",
+        confidence: 0.86,
+      },
+      {
+        id: "sync-event-step-1",
+        atMs: 3920,
+        label: "Footstep contact",
+        confidence: 0.81,
+      },
+      {
+        id: "sync-event-step-2",
+        atMs: 5180,
+        label: "Footstep contact",
+        confidence: 0.79,
+      },
+      {
+        id: "sync-event-hatch-hit",
+        atMs: 8640,
+        label: "Hatch lock",
+        confidence: 0.88,
+      },
+      {
+        id: "sync-event-pressure-tail",
+        atMs: 10900,
+        label: "Pressure tail",
+        confidence: 0.74,
+      },
     ],
     segments: [
       {
@@ -5310,7 +5486,7 @@ export const fallbackVideoToAudio: VideoToAudioOverview = {
     ],
     roundTripNotes: [
       "Saved output can be dragged into the multitrack editor as synchronized SFX.",
-      "SceneWorks handoff package remains validated by sc-6202 once target import code is implemented.",
+      "SceneWorks handoff package can reuse the SC-6202 manifest shape once target import code is implemented in SceneWorks.",
     ],
   },
   safetyGates: [
@@ -5318,7 +5494,8 @@ export const fallbackVideoToAudio: VideoToAudioOverview = {
       id: "source-media-rights",
       status: "passed",
       summary: "Source video is user-owned and cleared for generated Foley.",
-      enforcement: "Allow generation and preserve ownership note in the sidecar.",
+      enforcement:
+        "Allow generation and preserve ownership note in the sidecar.",
     },
     {
       id: "protected-media-imitation",

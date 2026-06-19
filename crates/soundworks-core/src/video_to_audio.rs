@@ -994,7 +994,7 @@ fn provenance(
         round_trip_notes: vec![
             "Saved output can be dragged into the multitrack editor as synchronized SFX."
                 .to_string(),
-            "SceneWorks handoff package remains validated by sc-6202 once target import code is implemented."
+            "SceneWorks handoff package can reuse the SC-6202 manifest shape once target import code is implemented in SceneWorks."
                 .to_string(),
         ],
     }

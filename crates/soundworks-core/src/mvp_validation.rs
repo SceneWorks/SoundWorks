@@ -702,7 +702,7 @@ fn known_limitations() -> Vec<KnownLimitation> {
     vec![
         limitation("limit-no-real-provider-audio", "Provider evidence", "Reference fixtures define contracts but do not yet prove generated audio quality from real selected providers.", "Run first-provider smoke tests and attach artifacts to this matrix.", true),
         limitation("limit-video-to-audio-prototype", "Multimodal SFX", "Video-to-audio has a fixture and gate, but the product workflow remains tracked by sc-6183.", "Keep the workflow blocked until sc-6183 supplies prototype evidence.", true),
-        limitation("limit-sceneworks-import", "SceneWorks handoff", "SoundWorks export package metadata exists, but SceneWorks import/attachment validation is tracked by sc-6202.", "Do not claim end-to-end SceneWorks import until the target source is implemented and tested.", false),
+        limitation("limit-sceneworks-import", "SceneWorks handoff", "SoundWorks export package metadata, target video identity, compatibility checks, and provenance manifest are defined; direct runtime attachment still needs a SceneWorks-side importer.", "Do not claim in-app SceneWorks attachment until the target importer endpoint is implemented and tested in SceneWorks.", false),
         limitation("limit-release-hardware", "Runtime validation", "Mac and Windows release hardware runs are not captured by this static reference matrix.", "Attach release-run artifacts before MVP signoff.", true),
     ]
 }

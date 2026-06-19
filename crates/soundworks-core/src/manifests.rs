@@ -16,7 +16,7 @@ impl ProviderCatalog {
     pub fn reference() -> Self {
         Self {
             schema_version: 1,
-            providers: vec![reference_provider()],
+            providers: vec![reference_provider(), native_recovery_provider()],
         }
     }
 
@@ -582,6 +582,64 @@ fn generation_reference_model() -> ModelManifest {
     }
 }
 
+fn native_recovery_provider() -> ProviderManifest {
+    ProviderManifest {
+        id: "soundworks-native".to_string(),
+        name: "SoundWorks native recovery adapters".to_string(),
+        manifest_version: "0.1.0".to_string(),
+        source: ManifestSource {
+            origin: ManifestOrigin::BuiltInReference,
+            uri: None,
+            notes: Some(
+                "Built-in Rust recovery adapters provide real generated artifacts while ML provider ports remain gated."
+                    .to_string(),
+            ),
+        },
+        models: vec![ModelManifest {
+            id: "native-procedural-music".to_string(),
+            name: "SoundWorks native procedural samples and loops".to_string(),
+            version: Some("0.1.0".to_string()),
+            model_hash: Some("sha256:soundworks-native-procedural-music".to_string()),
+            runtime: ModelRuntime::Local,
+            install: packaged_install("soundworks-native-procedural-music", 1),
+            requirements: local_requirements(256),
+            capabilities: vec![
+                capability(
+                    CapabilityWorkflow::InstrumentSample,
+                    "Procedural instrument samples",
+                    91,
+                    vec![
+                        CapabilityInput::TextPrompt,
+                        CapabilityInput::MusicalKey,
+                        CapabilityInput::Duration,
+                    ],
+                    vec![AudioAssetKind::InstrumentSample],
+                    vec![ChannelLayout::Mono, ChannelLayout::Stereo],
+                    vec![],
+                    music_defaults(),
+                    safety(true, false),
+                ),
+                capability(
+                    CapabilityWorkflow::Loop,
+                    "Procedural tempo-aligned loops",
+                    92,
+                    vec![
+                        CapabilityInput::TextPrompt,
+                        CapabilityInput::Tempo,
+                        CapabilityInput::MusicalKey,
+                        CapabilityInput::Duration,
+                    ],
+                    vec![AudioAssetKind::Loop],
+                    vec![ChannelLayout::Stereo],
+                    vec![],
+                    music_defaults(),
+                    safety(true, false),
+                ),
+            ],
+        }],
+    }
+}
+
 fn utility_reference_model() -> ModelManifest {
     ModelManifest {
         id: "reference-utility-suite".to_string(),
@@ -743,8 +801,8 @@ mod tests {
         let catalog = ProviderCatalog::reference();
 
         assert_eq!(catalog.workflow_coverage(), CapabilityWorkflow::all());
-        assert_eq!(catalog.model_count(), 3);
-        assert_eq!(catalog.capability_count(), 12);
+        assert_eq!(catalog.model_count(), 4);
+        assert_eq!(catalog.capability_count(), 14);
     }
 
     #[test]

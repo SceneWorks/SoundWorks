@@ -293,7 +293,13 @@ pub fn sfx_studio_overview() -> SfxStudioOverview {
 }
 
 pub fn samples_studio_overview() -> SamplesStudioOverview {
-    SamplesStudioOverview::reference().expect("reference Samples Studio is valid")
+    SamplesStudioOverview::from_catalogs(
+        &ProviderCatalog::reference(),
+        &runtime_overview(),
+        &ModelEvaluationCatalog::reference(),
+        &soundworks_core::StoragePathAllocator::new("soundworks-library"),
+    )
+    .expect("Samples Studio is valid")
 }
 
 pub fn song_studio_overview() -> SongStudioOverview {
@@ -379,7 +385,7 @@ mod tests {
         let catalog = provider_catalog();
 
         assert_eq!(catalog.schema_version, 1);
-        assert_eq!(catalog.model_count(), 3);
+        assert_eq!(catalog.model_count(), 4);
     }
 
     #[test]
@@ -575,7 +581,7 @@ mod tests {
 
         assert_eq!(overview.schema_version, 1);
         assert_eq!(overview.variants.len(), 4);
-        assert!(!overview.submission.can_submit);
+        assert!(overview.submission.can_submit);
         assert_eq!(overview.saved_outputs.len(), 3);
         assert_eq!(overview.pack.collection_id, "collection-neon-bass-pack");
     }

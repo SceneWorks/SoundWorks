@@ -387,8 +387,16 @@ impl ProjectLibraryStore {
                     .and_then(Value::as_f64)
                     .map(|value| value as f32),
                 has_clipping: false,
-                bpm: None,
-                musical_key: None,
+                bpm: output_manifest
+                    .as_ref()
+                    .and_then(|manifest| manifest.get("bpm"))
+                    .and_then(Value::as_f64)
+                    .map(|value| value as f32),
+                musical_key: output_manifest
+                    .as_ref()
+                    .and_then(|manifest| manifest.get("musicalKey"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
                 loop_points: output_manifest.as_ref().and_then(loop_points_from_manifest),
             },
             created_by: AssetCreation::Generated {

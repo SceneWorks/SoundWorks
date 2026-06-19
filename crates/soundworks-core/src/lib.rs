@@ -936,7 +936,7 @@ mod tests {
         );
         assert_eq!(payload["workspace"]["projectAssetCount"], 10);
         assert_eq!(payload["workspace"]["globalAssetCount"], 3);
-        assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
+        assert_eq!(payload["providerCatalog"]["capabilityCount"], 14);
         assert_eq!(payload["assetLibrary"]["supportedTypeCount"], 13);
         assert_eq!(payload["exportWorkflow"]["presetCount"], 7);
         assert_eq!(payload["compositionEditor"]["trackCount"], 4);
@@ -1190,9 +1190,9 @@ mod tests {
     fn app_overview_summarizes_provider_capabilities() {
         let overview = AppOverview::baseline();
 
-        assert_eq!(overview.provider_catalog.provider_count, 1);
-        assert_eq!(overview.provider_catalog.model_count, 3);
-        assert_eq!(overview.provider_catalog.capability_count, 12);
+        assert_eq!(overview.provider_catalog.provider_count, 2);
+        assert_eq!(overview.provider_catalog.model_count, 4);
+        assert_eq!(overview.provider_catalog.capability_count, 14);
         assert_eq!(
             overview.provider_catalog.workflows.len(),
             crate::manifests::CapabilityWorkflow::all().len()
@@ -1317,7 +1317,7 @@ mod tests {
         assert_eq!(overview.studios[3].status, ScaffoldStatus::Scaffolded);
         assert_eq!(overview.samples_studio.variant_count, 4);
         assert_eq!(overview.samples_studio.saved_output_count, 3);
-        assert_eq!(overview.samples_studio.provider_count, 2);
+        assert_eq!(overview.samples_studio.provider_count, 4);
         assert_eq!(overview.samples_studio.scorecard_count, 5);
         assert_eq!(
             overview.samples_studio.saved_asset_kinds,

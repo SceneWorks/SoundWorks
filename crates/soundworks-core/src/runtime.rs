@@ -91,6 +91,11 @@ impl RuntimeOverview {
         }) {
             model_states.push(ModelRuntimeState::native_procedural_sfx(inventory));
         }
+        if !model_states.iter().any(|state| {
+            state.provider_id == "soundworks-native" && state.model_id == "native-procedural-music"
+        }) {
+            model_states.push(ModelRuntimeState::native_procedural_music(inventory));
+        }
         let mut jobs = store.read_jobs().unwrap_or_default();
         jobs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
 
@@ -654,6 +659,53 @@ impl ModelRuntimeState {
             reasons: vec![],
         }
     }
+
+    fn native_procedural_music(inventory: &DeviceInventory) -> Self {
+        let selected = inventory
+            .devices
+            .iter()
+            .find(|device| device.available)
+            .map(|device| device.accelerator);
+        Self {
+            provider_id: "soundworks-native".to_string(),
+            model_id: "native-procedural-music".to_string(),
+            model_name: "SoundWorks native procedural samples and loops".to_string(),
+            runtime: ModelRuntime::Local,
+            workflows: vec![
+                CapabilityWorkflow::InstrumentSample,
+                CapabilityWorkflow::Loop,
+            ],
+            availability: RuntimeAvailability::Installed,
+            install_status: ModelInstallStatus::Installed,
+            cache: ModelCacheState {
+                cache_path: None,
+                package_id: Some("soundworks-native-procedural-music".to_string()),
+                status: CacheStatus::Ready,
+                expected_size_mb: Some(1),
+                disk_usage_mb: Some(1),
+                verified: true,
+                evidence:
+                    "built into the Rust runtime; generates procedural one-shots and tempo-aligned loops without Python, model cache, or network calls"
+                        .to_string(),
+                license: LicenseAcceptanceState::Accepted,
+                warmup: WarmupStatus::Cold,
+            },
+            compatibility: RuntimeCompatibility {
+                supported: true,
+                selected_accelerator: selected,
+                min_memory_mb: None,
+                available_memory_mb: inventory
+                    .devices
+                    .iter()
+                    .find(|device| device.available)
+                    .and_then(|device| device.memory_mb),
+                requires_network: false,
+                reasons: vec![],
+            },
+            health: RuntimeHealth::Ready,
+            reasons: vec![],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1110,6 +1162,9 @@ impl RuntimeJobStore {
             ProviderAdapterKind::NativeRust if job.model_id == "native-procedural-sfx" => {
                 self.write_native_sfx_audio(&mut job, request)?
             }
+            ProviderAdapterKind::NativeRust if job.model_id == "native-procedural-music" => {
+                self.write_native_music_audio(&mut job, request)?
+            }
             ProviderAdapterKind::NativeRust => self.write_smoke_audio(&mut job, request)?,
             ProviderAdapterKind::LocalExecutable
             | ProviderAdapterKind::ManagedApi
@@ -1479,6 +1534,185 @@ impl RuntimeJobStore {
         Ok(())
     }
 
+    fn write_native_music_audio(
+        &self,
+        job: &mut RuntimeJobSnapshot,
+        request: &RuntimeJobRequest,
+    ) -> io::Result<()> {
+        let prompt = request.prompt.trim();
+        if prompt.is_empty() {
+            job.status = JobStatus::Failed;
+            job.progress = Some(JobProgress {
+                percent: 100.0,
+                message: Some("Sample or loop prompt is empty.".to_string()),
+            });
+            job.cancellation = CancellationState::NotCancellable;
+            job.actionable_error = Some(ActionableRuntimeError {
+                code: "music.empty_prompt".to_string(),
+                summary: "Sample or loop prompt is empty".to_string(),
+                recovery: "Enter a musical sample or loop prompt before queueing generation."
+                    .to_string(),
+            });
+            self.write_error_report(job)?;
+            return Ok(());
+        }
+
+        let sample_rate = 48_000u32;
+        let channels = 2u16;
+        let bpm = request
+            .parameters
+            .get("bpm")
+            .and_then(Value::as_f64)
+            .map(|value| value as f32)
+            .unwrap_or(120.0)
+            .clamp(40.0, 240.0);
+        let bars = request
+            .parameters
+            .get("bars")
+            .and_then(Value::as_u64)
+            .unwrap_or(4)
+            .clamp(1, 16) as u16;
+        let beats = request
+            .parameters
+            .get("beats")
+            .and_then(Value::as_u64)
+            .unwrap_or(4)
+            .clamp(1, 12) as u16;
+        let loopable = request
+            .parameters
+            .get("loopable")
+            .and_then(Value::as_bool)
+            .unwrap_or(matches!(request.workflow, CapabilityWorkflow::Loop));
+        let musical_key = request
+            .parameters
+            .get("musicalKey")
+            .and_then(Value::as_str)
+            .unwrap_or("A minor");
+        let instrument_family = request
+            .parameters
+            .get("instrumentFamily")
+            .and_then(Value::as_str)
+            .unwrap_or("synth-bass");
+        let articulation = request
+            .parameters
+            .get("articulation")
+            .and_then(Value::as_str)
+            .unwrap_or("pulsed sequence");
+        let velocity = request
+            .parameters
+            .get("velocityEnergy")
+            .and_then(Value::as_u64)
+            .unwrap_or(76)
+            .clamp(1, 100) as f32
+            / 100.0;
+        let duration_ms = request
+            .parameters
+            .get("durationMs")
+            .and_then(Value::as_u64)
+            .unwrap_or_else(|| {
+                if matches!(request.workflow, CapabilityWorkflow::Loop) {
+                    loop_duration_ms(bpm, bars, beats)
+                } else {
+                    900
+                }
+            })
+            .clamp(150, 120_000);
+
+        job.progress = Some(JobProgress {
+            percent: 65.0,
+            message: Some("Rust native music generator is writing tempo-aware audio.".to_string()),
+        });
+        job.log_tail.push(format!(
+            "generating native music: {duration_ms} ms, {bpm} BPM, key {musical_key}, loopable {loopable}"
+        ));
+        self.append_event(job, "running", "native music generation started")?;
+
+        let samples = synthesize_native_music(
+            prompt,
+            request.workflow,
+            duration_ms,
+            sample_rate,
+            bpm,
+            bars,
+            beats,
+            musical_key,
+            instrument_family,
+            articulation,
+            velocity,
+        );
+        let stats = audio_stats(&samples);
+        let record_root = PathBuf::from(&job.record_root);
+        let audio_path = record_root.join("artifacts").join(match request.workflow {
+            CapabilityWorkflow::InstrumentSample => "native-sample.wav",
+            _ => "native-loop.wav",
+        });
+        write_pcm_f32_wav_channels(&audio_path, &samples, sample_rate, channels)?;
+        let frame_count = samples.len() as u64 / channels as u64;
+        let loop_start_sample = loopable.then_some(0);
+        let loop_end_sample = loopable.then_some(frame_count);
+        let manifest_path = record_root.join("output-manifest.json");
+        write_json(
+            &manifest_path,
+            &serde_json::json!({
+                "jobId": job.id,
+                "workflow": request.workflow,
+                "providerId": request.provider_id,
+                "modelId": request.model_id,
+                "prompt": prompt,
+                "negativePrompt": request.parameters.get("negativePrompt"),
+                "instrumentFamily": instrument_family,
+                "articulation": articulation,
+                "tags": request.parameters.get("tags"),
+                "durationMs": duration_ms,
+                "sampleRateHz": sample_rate,
+                "channels": channels,
+                "loudnessLufs": stats.loudness_lufs,
+                "truePeakDbfs": stats.true_peak_dbfs,
+                "bpm": bpm,
+                "musicalKey": musical_key,
+                "bars": bars,
+                "beats": beats,
+                "loopable": loopable,
+                "loopStartSample": loop_start_sample,
+                "loopEndSample": loop_end_sample,
+                "stemCapable": false,
+                "artifact": audio_path,
+                "note": "Real Rust-native procedural sample/loop generation. Full-song ML support remains blocked until a product-safe adapter, license, and runtime cache are verified.",
+                "sourceEvidence": {
+                    "stableAudio3": "https://stability.ai/news-updates/meet-stable-audio-3-the-model-family-built-for-artistic-experimentation-with-open-weight-models",
+                    "aceStep15": "https://github.com/ace-step/ACE-Step-1.5",
+                    "stableAudioOpen": "https://huggingface.co/stabilityai/stable-audio-open-1.0",
+                    "diffRhythm2": "https://huggingface.co/ASLP-lab/DiffRhythm2",
+                    "levo2": "https://github.com/tencent-ailab/SongGeneration",
+                    "heartMuLa": "https://github.com/HeartMuLa/heartlib"
+                }
+            }),
+        )?;
+        job.status = JobStatus::Succeeded;
+        job.progress = Some(JobProgress {
+            percent: 100.0,
+            message: Some("Native music generator wrote a real playable WAV.".to_string()),
+        });
+        job.cancellation = CancellationState::Completed;
+        job.log_tail
+            .push(format!("wrote {} frames of native music", frame_count));
+        job.artifacts = vec![
+            artifact(
+                RuntimeArtifactKind::AudioPreview,
+                &audio_path,
+                "audio/wav",
+                "Generated native sample/loop WAV",
+            )?,
+            artifact(
+                RuntimeArtifactKind::OutputManifest,
+                &manifest_path,
+                "application/json",
+                "Generated sample/loop manifest, BPM/key/loop metadata, and provenance",
+            )?,
+        ];
+        Ok(())
+    }
+
     fn write_error_report(&self, job: &mut RuntimeJobSnapshot) -> io::Result<()> {
         let path = PathBuf::from(&job.record_root).join("error.json");
         write_json(
@@ -1661,6 +1895,9 @@ fn adapter_for_model(
             ModelRuntime::Local if state.model_id == "native-procedural-sfx" => {
                 ProviderAdapterKind::NativeRust
             }
+            ModelRuntime::Local if state.model_id == "native-procedural-music" => {
+                ProviderAdapterKind::NativeRust
+            }
             ModelRuntime::Local if state.model_id == "native-smoke" => {
                 ProviderAdapterKind::NativeRust
             }
@@ -1833,6 +2070,118 @@ fn synthesize_native_sfx(
     samples
 }
 
+fn synthesize_native_music(
+    prompt: &str,
+    workflow: CapabilityWorkflow,
+    duration_ms: u64,
+    sample_rate: u32,
+    bpm: f32,
+    bars: u16,
+    beats: u16,
+    musical_key: &str,
+    instrument_family: &str,
+    articulation: &str,
+    velocity: f32,
+) -> Vec<f32> {
+    let frame_count = (sample_rate as u64 * duration_ms / 1000).max(1) as usize;
+    let mut samples = Vec::with_capacity(frame_count * 2);
+    let mut noise = hash_prompt(&format!(
+        "{prompt}|{musical_key}|{instrument_family}|{articulation}"
+    ));
+    let root = key_frequency(musical_key);
+    let minor = musical_key.to_ascii_lowercase().contains("minor");
+    let scale = if minor {
+        [0.0, 3.0, 5.0, 7.0, 10.0, 12.0, 15.0, 17.0]
+    } else {
+        [0.0, 4.0, 7.0, 9.0, 12.0, 16.0, 19.0, 21.0]
+    };
+    let beat_duration = 60.0 / bpm.max(1.0);
+    let step_duration = (beat_duration / 2.0).max(0.05);
+    let total_steps = (bars.max(1) as usize * beats.max(1) as usize * 2).max(1);
+    let prompt_lower = prompt.to_ascii_lowercase();
+    let bright = prompt_lower.contains("lead")
+        || prompt_lower.contains("pluck")
+        || instrument_family.to_ascii_lowercase().contains("keys");
+    let bass =
+        prompt_lower.contains("bass") || instrument_family.to_ascii_lowercase().contains("bass");
+    let one_shot = matches!(workflow, CapabilityWorkflow::InstrumentSample);
+    let amplitude = 0.16 + velocity.clamp(0.0, 1.0) * 0.24;
+
+    for frame in 0..frame_count {
+        let t = frame as f32 / sample_rate as f32;
+        let progress = frame as f32 / frame_count as f32;
+        let step = ((t / step_duration).floor() as usize).min(total_steps.saturating_sub(1));
+        let degree = scale[(step + (noise as usize % scale.len())) % scale.len()];
+        let octave = if bass {
+            0.5
+        } else if bright {
+            2.0
+        } else {
+            1.0
+        };
+        let freq = root * octave * 2.0_f32.powf(degree / 12.0);
+        let beat_phase = (t % step_duration) / step_duration;
+        let gate = if one_shot {
+            (-progress * 9.0).exp()
+        } else {
+            let attack = (beat_phase * 18.0).clamp(0.0, 1.0);
+            let release = (1.0 - beat_phase).clamp(0.0, 1.0).powf(0.7);
+            (attack * release).max(0.08)
+        };
+        noise = lcg(noise);
+        let white = ((noise >> 8) as f32 / u32::MAX as f32) * 2.0 - 1.0;
+        let fundamental = (std::f32::consts::TAU * freq * t).sin();
+        let harmonic = (std::f32::consts::TAU * freq * 2.0 * t).sin() * 0.32;
+        let sub = (std::f32::consts::TAU * freq * 0.5 * t).sin() * if bass { 0.42 } else { 0.16 };
+        let click = if one_shot || step % 4 == 0 {
+            white * (-beat_phase * 38.0).exp() * 0.18
+        } else {
+            0.0
+        };
+        let tone = (fundamental + harmonic + sub + click) * gate * amplitude;
+        let shape = if one_shot {
+            tone.tanh()
+        } else {
+            let bar_position = step as f32 / total_steps as f32;
+            let phrase = 0.82 + 0.18 * (std::f32::consts::TAU * bar_position).sin();
+            (tone * phrase).tanh()
+        };
+        let pan = (std::f32::consts::TAU * 0.11 * t).sin() * if one_shot { 0.04 } else { 0.16 };
+        samples.push((shape * (1.0 - pan)).clamp(-0.95, 0.95));
+        samples.push((shape * (1.0 + pan)).clamp(-0.95, 0.95));
+    }
+
+    samples
+}
+
+fn loop_duration_ms(bpm: f32, bars: u16, beats: u16) -> u64 {
+    let beat_count = bars.max(1) as f32 * beats.max(1) as f32;
+    ((60_000.0 / bpm.max(1.0)) * beat_count).round() as u64
+}
+
+fn key_frequency(musical_key: &str) -> f32 {
+    let key = musical_key
+        .split_whitespace()
+        .next()
+        .unwrap_or("A")
+        .to_ascii_uppercase();
+    match key.as_str() {
+        "C" | "C1" => 32.70,
+        "C#" | "DB" => 34.65,
+        "D" | "D1" => 36.71,
+        "D#" | "EB" => 38.89,
+        "E" | "E1" => 41.20,
+        "F" | "F1" => 43.65,
+        "F#" | "GB" => 46.25,
+        "G" | "G1" => 49.00,
+        "G#" | "AB" => 51.91,
+        "A" | "A1" => 55.00,
+        "A#" | "BB" => 58.27,
+        "B" | "B1" => 61.74,
+        _ => 55.00,
+    }
+}
+
 fn audio_stats(samples: &[f32]) -> AudioStats {
     let mut sum_squares = 0.0f32;
     let mut peak = 0.0f32;
@@ -1938,7 +2287,7 @@ mod tests {
         assert_eq!(runtime.schema_version, super::RUNTIME_SCHEMA_VERSION);
         assert_eq!(runtime.status_counts.installed, 0);
         assert_eq!(runtime.status_counts.available, 0);
-        assert_eq!(runtime.status_counts.unavailable, 3);
+        assert_eq!(runtime.status_counts.unavailable, 4);
         assert!(runtime
             .validation_checks
             .iter()
@@ -2002,7 +2351,7 @@ mod tests {
             RuntimeAvailability::Unavailable
         );
         assert_eq!(runtime.status_counts.available, 1);
-        assert_eq!(runtime.status_counts.unavailable, 2);
+        assert_eq!(runtime.status_counts.unavailable, 3);
     }
 
     #[test]
@@ -2276,6 +2625,165 @@ mod tests {
     }
 
     #[test]
+    fn native_music_adapter_generates_playable_loop_with_bpm_key_metadata() {
+        let store = RuntimeJobStore::new(temp_runtime_root("native-music-loop"));
+        let overview = native_music_overview(&store);
+        let mut parameters = BTreeMap::new();
+        parameters.insert("bpm".to_string(), serde_json::json!(120.0));
+        parameters.insert("bars".to_string(), serde_json::json!(4));
+        parameters.insert("beats".to_string(), serde_json::json!(4));
+        parameters.insert("loopable".to_string(), serde_json::json!(true));
+        parameters.insert("musicalKey".to_string(), serde_json::json!("A minor"));
+        parameters.insert(
+            "instrumentFamily".to_string(),
+            serde_json::json!("synth-bass"),
+        );
+        parameters.insert(
+            "articulation".to_string(),
+            serde_json::json!("pulsed sequence"),
+        );
+        parameters.insert("velocityEnergy".to_string(), serde_json::json!(76));
+        parameters.insert(
+            "tags".to_string(),
+            serde_json::json!(["loop", "synthwave", "bass"]),
+        );
+
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "soundworks-native".to_string(),
+                    model_id: "native-procedural-music".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Loop,
+                    prompt: "Tight analog synth bass four-bar loop for a neon chase cue."
+                        .to_string(),
+                    source_surface: "Samples + Loops".to_string(),
+                    parameters,
+                },
+            )
+            .expect("native music loop job runs");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+        assert!(job.artifacts.iter().any(|artifact| {
+            artifact.kind == RuntimeArtifactKind::AudioPreview
+                && artifact.summary.contains("Generated native sample/loop")
+                && artifact.bytes > 44
+                && PathBuf::from(&artifact.path).is_file()
+        }));
+
+        let library = crate::ProjectLibraryStore::new(temp_runtime_root("native-music-library"));
+        let saved = library
+            .import_runtime_artifact_from_store(
+                crate::ImportRuntimeArtifactRequest {
+                    job_id: job.id.clone(),
+                    project_id: None,
+                    name: Some("Native generated synth bass loop".to_string()),
+                    scope: None,
+                    tags: vec![
+                        "loop".to_string(),
+                        "generated-audio".to_string(),
+                        "synthwave".to_string(),
+                    ],
+                },
+                &store,
+            )
+            .expect("generated loop imports into the project library");
+        assert_eq!(
+            saved.asset_library.selected_item.item.item_type,
+            crate::asset_library::LibraryItemType::Loop
+        );
+        let technical = &saved
+            .asset_library
+            .selected_item
+            .item
+            .current_version
+            .as_ref()
+            .expect("current version")
+            .technical;
+        assert_eq!(technical.sample_rate_hz, 48_000);
+        assert_eq!(technical.channels, 2);
+        assert_eq!(technical.bpm, Some(120.0));
+        assert_eq!(technical.musical_key.as_deref(), Some("A minor"));
+        assert!(technical.loop_points.is_some());
+        assert!(technical.loudness_lufs.is_some());
+
+        let playback = library
+            .playback_for_item(&saved.asset_library.selected_item.item.id)
+            .expect("playback check works");
+        assert!(playback.playable);
+    }
+
+    #[test]
+    fn native_music_adapter_generates_playable_instrument_sample() {
+        let store = RuntimeJobStore::new(temp_runtime_root("native-music-sample"));
+        let overview = native_music_overview(&store);
+        let mut parameters = BTreeMap::new();
+        parameters.insert("durationMs".to_string(), serde_json::json!(700));
+        parameters.insert("loopable".to_string(), serde_json::json!(false));
+        parameters.insert("musicalKey".to_string(), serde_json::json!("C2"));
+        parameters.insert(
+            "instrumentFamily".to_string(),
+            serde_json::json!("synth-bass"),
+        );
+        parameters.insert("articulation".to_string(), serde_json::json!("short stab"));
+        parameters.insert("velocityEnergy".to_string(), serde_json::json!(84));
+
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "soundworks-native".to_string(),
+                    model_id: "native-procedural-music".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::InstrumentSample,
+                    prompt: "Short synth bass stab one-shot with a clean transient.".to_string(),
+                    source_surface: "Samples + Loops".to_string(),
+                    parameters,
+                },
+            )
+            .expect("native music sample job runs");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+        assert!(job.artifacts.iter().any(|artifact| {
+            artifact.kind == RuntimeArtifactKind::AudioPreview
+                && artifact.bytes > 44
+                && PathBuf::from(&artifact.path).is_file()
+        }));
+
+        let library = crate::ProjectLibraryStore::new(temp_runtime_root("native-sample-library"));
+        let saved = library
+            .import_runtime_artifact_from_store(
+                crate::ImportRuntimeArtifactRequest {
+                    job_id: job.id.clone(),
+                    project_id: None,
+                    name: Some("Native generated synth bass stab".to_string()),
+                    scope: None,
+                    tags: vec![
+                        "instrument-sample".to_string(),
+                        "generated-audio".to_string(),
+                    ],
+                },
+                &store,
+            )
+            .expect("generated sample imports into the project library");
+        assert_eq!(
+            saved.asset_library.selected_item.item.item_type,
+            crate::asset_library::LibraryItemType::InstrumentSample
+        );
+        assert!(saved
+            .asset_library
+            .selected_item
+            .item
+            .current_version
+            .as_ref()
+            .expect("current version")
+            .technical
+            .loop_points
+            .is_none());
+    }
+
+    #[test]
     fn voice_conversion_runtime_request_requires_explicit_consent() {
         let store = RuntimeJobStore::new(temp_runtime_root("voice-consent"));
         let overview = installed_overview(&store);
@@ -2420,6 +2928,24 @@ mod tests {
                 unavailable: 0,
             },
             model_states: vec![super::ModelRuntimeState::native_procedural_sfx(
+                &DeviceInventory::reference_mac(),
+            )],
+            jobs: store.read_jobs().unwrap_or_default(),
+            validation_checks: vec![],
+        }
+    }
+
+    fn native_music_overview(store: &RuntimeJobStore) -> RuntimeOverview {
+        RuntimeOverview {
+            schema_version: super::RUNTIME_SCHEMA_VERSION,
+            packaging_policy: RuntimePackagingPolicy::shipped_desktop(),
+            devices: DeviceInventory::reference_mac().devices,
+            status_counts: super::RuntimeStatusCounts {
+                installed: 1,
+                available: 0,
+                unavailable: 0,
+            },
+            model_states: vec![super::ModelRuntimeState::native_procedural_music(
                 &DeviceInventory::reference_mac(),
             )],
             jobs: store.read_jobs().unwrap_or_default(),

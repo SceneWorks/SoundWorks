@@ -26,7 +26,8 @@ Each candidate gets a cache subdirectory named by candidate ID, such as `kokoro-
 - Voice clone: `chatterbox` needs a product-safe provider package before enablement.
 - Voice conversion: `rvc` remains consent-gated and needs isolated external-executable packaging.
 - SFX: `moss-soundeffect` is the first ML SFX product candidate, but remains missing-cache until the MLX/provider files verify. SC-6471 also exposes `soundworks-native/native-procedural-sfx` through the runtime overview as a built-in Rust-native recovery adapter; it is not a model-cache candidate and does not satisfy MOSS inference validation.
-- Song: `ace-step-1-5` needs packaged runtime proof before enablement.
+- Samples and loops: SC-6472 exposes `soundworks-native/native-procedural-music` as a built-in Rust-native recovery adapter for one-shots and tempo-aligned loops. It is not a model-cache candidate and does not satisfy ACE-Step, Stable Audio, or HeartMuLa inference validation.
+- Song: `ace-step-1-5` needs packaged runtime proof before enablement; full-song generation remains blocked until a candidate has verified cache files, product-safe runtime packaging, and acceptable license/commercial-use evidence.
 - Video-to-audio: `mmaudio` remains blocked for shipped product use because current evidence points to a Python research stack.
 
 ## Commands

@@ -9,6 +9,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 - `crates/soundworks-core/src/domain.rs` defines stable serializable domain types.
 - `crates/soundworks-core/src/storage.rs` defines schema migration contracts and collision-resistant media/preview/sidecar paths.
 - `crates/soundworks-core/src/fixtures.rs` defines canonical fixture outputs for TTS, SFX, instrument samples, loops, songs, projects, and timeline compositions.
+- `crates/soundworks-core/src/workspace.rs` defines the project workspace, global library, source picker, link/copy/promote reuse actions, composition links, SceneWorks parity notes, and validation checks.
 - `crates/soundworks-core/src/tts.rs` defines the Text-to-Speech Studio workflow state layered over the shared domain, recipe, provider, runtime, and storage contracts.
 - `crates/soundworks-core/src/voice_lab.rs` defines the Voice Lab workflow state for consented profiles, clone/fine-tune/conversion modes, source-audio conversion, safety gates, provider scorecards, and saved voice-clip outputs.
 - `crates/soundworks-core/src/sfx.rs` defines the SFX Studio workflow state for text-first sound effects and ambience generation, provider capability controls, variant comparison, loop inspection, post-processing, export state, scorecards, and saved outputs.
@@ -20,6 +21,7 @@ Confidence: medium-high. These contracts cover the full story acceptance surface
 ## Represented Concepts
 
 - Workspaces, projects, global-library scope, and project-local scope.
+- Project workspace state: active and recent projects, global library state, project/global scope controls, source picker policy, global asset transfer actions, composition asset links, and SceneWorks-style parity notes.
 - Audio assets and asset versions, including voice clips, music clips, SFX, songs, instrument samples, loops, stems, ambience, reference audio, compositions, and mixdowns.
 - Technical metadata: sample rate, bit depth, channel count, duration, loudness, true peak, clipping, BPM, key, and loop points.
 - Generation recipes for TTS, voice conversion, SFX, instrument samples, loops, songs, video-to-audio, edits, and composition renders.
@@ -75,6 +77,15 @@ Structured metadata is intended for SQLite. The first schema contract covers:
 - `video_to_audio_saved_outputs`
 - `video_to_audio_export_packages`
 - `video_to_audio_safety_gates`
+- `workspace_records`
+- `workspace_project_cards`
+- `workspace_global_libraries`
+- `workspace_scope_controls`
+- `workspace_source_picker_policies`
+- `workspace_transfer_actions`
+- `workspace_composition_asset_links`
+- `workspace_parity_notes`
+- `workspace_validation_checks`
 - `samples_studio_prompts`
 - `samples_studio_variants`
 - `samples_studio_provider_scorecards`
@@ -118,6 +129,7 @@ Rust tests verify:
 - Version-specific storage paths and preview/sidecar locations.
 - Rejection of unsafe storage path segments.
 - Migration coverage for the required domain tables.
+- Workspace serialization, project/global scope coverage, source picker policy, link/copy/promote reuse actions, composition links, and provenance preservation.
 - TTS Studio serialization, consent/provider gating, generation-plan chunking, and saved voice-clip output linkage.
 - Voice Lab serialization, distinct mode coverage, RVC voice-conversion routing, consent/provider gating, and saved converted voice-clip output linkage.
 - SFX Studio serialization, capability-driven controls, MOSS scorecard recommendation, multimodal boundary deferral, variant comparison, recipe provenance, saved SFX/ambience output linkage, and loop-point coverage.

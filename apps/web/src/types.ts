@@ -25,6 +25,7 @@ export type AppOverview = {
   };
   studios: StudioSurface[];
   commands: CommandBoundary[];
+  workspace: WorkspaceSummary;
   providerCatalog: ProviderCatalogOverview;
   assetLibrary: AssetLibrarySummary;
   exportWorkflow: ExportWorkflowSummary;
@@ -39,6 +40,21 @@ export type AppOverview = {
   reviewWorkspace: ReviewWorkspaceSummary;
   rightsSafety: RightsSafetySummary;
   videoToAudio: VideoToAudioSummary;
+};
+
+export type WorkspaceSummary = {
+  schemaVersion: number;
+  projectCount: number;
+  projectAssetCount: number;
+  globalAssetCount: number;
+  linkedGlobalAssetCount: number;
+  transferActionCount: number;
+  sourcePickerTargetCount: number;
+  parityNoteCount: number;
+  activeProjectId: string;
+  globalLibraryId: string;
+  canCreateProject: boolean;
+  canOpenProject: boolean;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -566,6 +582,116 @@ export type AssetLibraryOverview = {
     passed: boolean;
     summary: string;
   }>;
+};
+
+export type WorkspaceOverview = {
+  schemaVersion: number;
+  workspace: {
+    id: string;
+    globalLibraryId: string;
+    recentProjectIds: string[];
+  };
+  activeProject: WorkspaceProjectCard;
+  recentProjects: WorkspaceProjectCard[];
+  globalLibrary: {
+    id: string;
+    label: string;
+    assetCount: number;
+    reusableVoiceCount: number;
+    reusablePresetCount: number;
+    reusableCollectionCount: number;
+    storageRoot: string;
+    canBrowse: boolean;
+  };
+  scopeControls: Array<{
+    id: string;
+    label: string;
+    scope: LibraryScope;
+    active: boolean;
+    itemCount: number;
+    emptyState: string;
+  }>;
+  projectAssets: WorkspaceAssetReference[];
+  globalAssets: WorkspaceAssetReference[];
+  sourcePicker: {
+    id: string;
+    activeProjectId: string;
+    defaultScope: LibraryScope;
+    allowsGlobalSources: boolean;
+    importModes: Array<"link" | "copy" | "promote-project-asset">;
+    targetSurfaces: string[];
+    provenanceRequirements: string[];
+  };
+  transferActions: Array<{
+    id: string;
+    label: string;
+    mode: "link" | "copy" | "promote-project-asset";
+    sourceItemId: string;
+    targetProjectId?: string | null;
+    targetScope: LibraryScope;
+    preservesProvenance: boolean;
+    createsNewAssetId: boolean;
+    createsReuseEvent: boolean;
+    enabled: boolean;
+    summary: string;
+  }>;
+  compositionLinks: Array<{
+    id: string;
+    compositionId: string;
+    projectId: string;
+    assetId: string;
+    versionId: string;
+    sourceScope: LibraryScope;
+    projectUsage: string;
+    preservesOriginalAssetId: boolean;
+    provenanceSidecarPath: string;
+    warning?: string | null;
+  }>;
+  parityNotes: Array<{
+    id: string;
+    area: string;
+    convention: string;
+    soundworksApplication: string;
+  }>;
+  validationChecks: Array<{
+    id: string;
+    passed: boolean;
+    summary: string;
+  }>;
+};
+
+export type WorkspaceProjectCard = {
+  project: {
+    id: string;
+    name: string;
+    storageRoot: string;
+    assetIds: string[];
+    compositionIds: string[];
+    recipeIds: string[];
+    jobIds: string[];
+  };
+  openedAt: string;
+  assetCount: number;
+  compositionCount: number;
+  localRecipeCount: number;
+  linkedGlobalAssetCount: number;
+  canOpen: boolean;
+  canCreateFromTemplate: boolean;
+  status: "active" | "recent" | "template";
+};
+
+export type WorkspaceAssetReference = {
+  itemId: string;
+  name: string;
+  itemType: string;
+  scope: LibraryScope;
+  ownership: string;
+  projectId?: string | null;
+  sourceWorkflow?: string | null;
+  provenanceId: string;
+  sourcePickerEligible: boolean;
+  timelinePlaceable: boolean;
+  compositionUsageCount: number;
 };
 
 export type LibraryItemCard = {

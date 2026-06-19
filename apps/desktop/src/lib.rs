@@ -3,6 +3,7 @@ use soundworks_core::{
     ModelEvaluationCatalog, MvpValidationOverview, ProviderCatalog, ReviewWorkspaceOverview,
     RightsSafetyOverview, RuntimeOverview, SamplesStudioOverview, SfxStudioOverview,
     SongStudioOverview, TtsStudioOverview, VideoToAudioOverview, VoiceLabOverview,
+    WorkspaceOverview,
 };
 
 #[tauri::command]
@@ -13,6 +14,11 @@ fn get_app_overview() -> AppOverview {
 #[tauri::command]
 fn get_provider_catalog() -> ProviderCatalog {
     provider_catalog()
+}
+
+#[tauri::command]
+fn get_workspace_overview() -> WorkspaceOverview {
+    workspace_overview()
 }
 
 #[tauri::command]
@@ -93,6 +99,10 @@ pub fn provider_catalog() -> ProviderCatalog {
     ProviderCatalog::reference()
 }
 
+pub fn workspace_overview() -> WorkspaceOverview {
+    WorkspaceOverview::reference().expect("reference workspace is valid")
+}
+
 pub fn asset_library_overview() -> AssetLibraryOverview {
     AssetLibraryOverview::reference().expect("reference Asset Library is valid")
 }
@@ -155,6 +165,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         .invoke_handler(tauri::generate_handler![
             get_app_overview,
             get_provider_catalog,
+            get_workspace_overview,
             get_asset_library_overview,
             get_export_workflow_overview,
             get_composition_editor_overview,
@@ -186,7 +197,7 @@ mod tests {
         export_workflow_overview, model_evaluation_catalog, mvp_validation_overview,
         provider_catalog, review_workspace_overview, rights_safety_overview, runtime_overview,
         samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
-        video_to_audio_overview, voice_lab_overview,
+        video_to_audio_overview, voice_lab_overview, workspace_overview,
     };
 
     #[test]
@@ -217,6 +228,22 @@ mod tests {
             .iter()
             .any(|facet| facet.id == "lifecycle"));
         assert_eq!(library.selected_item.item.id, "asset-loop-001");
+    }
+
+    #[test]
+    fn workspace_command_returns_project_and_global_library_state() {
+        let workspace = workspace_overview();
+
+        assert_eq!(workspace.schema_version, 1);
+        assert_eq!(workspace.active_project.project.id, "project-demo");
+        assert_eq!(workspace.global_library.id, "global-library");
+        assert_eq!(workspace.project_assets.len(), 10);
+        assert_eq!(workspace.global_assets.len(), 3);
+        assert!(workspace.source_picker.allows_global_sources);
+        assert!(workspace
+            .transfer_actions
+            .iter()
+            .any(|action| action.id == "promote-loop-to-global"));
     }
 
     #[test]

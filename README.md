@@ -2,7 +2,7 @@
 
 SoundWorks is the audio-first sister product to SceneWorks. It is planned as a local-first creative desktop app for generating, organizing, editing, and exporting AI-assisted audio assets and compositions.
 
-Current status: architecture baseline, initial Rust/React/Tauri scaffold, Rust audio domain/storage/recipe contracts, provider manifests, worker runtime/packaging contracts, source-backed model evaluation scorecards, Text-to-Speech Studio, Voice Lab, SFX Studio, Video to Audio, Samples + Loops, Song Studio, and Waveform Review workflow contracts. The implementation source of truth is Shortcut epic [6148](https://app.shortcut.com/trefry/epic/6148), with the initial baseline captured in this repository.
+Current status: architecture baseline, initial Rust/React/Tauri scaffold, Rust audio domain/storage/recipe contracts, provider manifests, worker runtime/packaging contracts, source-backed model evaluation scorecards, project workspace/global library, Text-to-Speech Studio, Voice Lab, SFX Studio, Video to Audio, Samples + Loops, Song Studio, and Waveform Review workflow contracts. The implementation source of truth is Shortcut epic [6148](https://app.shortcut.com/trefry/epic/6148), with the initial baseline captured in this repository.
 
 ## Product Scope
 
@@ -28,6 +28,7 @@ SoundWorks covers the full audio creation surface tracked in the epic:
 - `docs/domain-contracts.md` - Rust domain, storage path, recipe, and fixture contract reference.
 - `docs/provider-manifests.md` - provider/model manifest schema, capability matching, defaults, and app boundary.
 - `docs/runtime-packaging.md` - worker runtime, model install/cache, job progress/cancellation, and no-Python shipped runtime contract.
+- `docs/workspace-global-library.md` - project workspace, global asset library, source picker, link/copy/promote reuse, and SceneWorks-style scope conventions.
 - `docs/model-evaluation.md` - source-backed candidate model scorecards, fixtures, status gates, and first spike recommendations.
 - `docs/tts-studio.md` - TTS Studio script, speaker, consent, provider-limit, submission, and saved-output workflow contract.
 - `docs/voice-lab.md` - Voice Lab cloning, fine-tuning, conversion, safety, scorecard, and saved-output workflow contract.
@@ -41,7 +42,7 @@ SoundWorks covers the full audio creation surface tracked in the epic:
 - `docs/implementation-plan.md` - Shortcut-backed implementation order and success criteria.
 - `apps/web/` - React/Vite UI workspace.
 - `apps/desktop/` - Tauri desktop shell and Rust command boundary.
-- `crates/soundworks-core/` - shared Rust contracts for the app shell, domain model, storage schema, provider manifests, worker runtime state, model evaluation scorecards, TTS Studio, Voice Lab, SFX Studio, Video to Audio, Samples + Loops, Song Studio, Multitrack Editor, Waveform Review, recipe fixtures, jobs, provenance, and composition state.
+- `crates/soundworks-core/` - shared Rust contracts for the app shell, project workspace, domain model, storage schema, provider manifests, worker runtime state, model evaluation scorecards, TTS Studio, Voice Lab, SFX Studio, Video to Audio, Samples + Loops, Song Studio, Multitrack Editor, Waveform Review, recipe fixtures, jobs, provenance, and composition state.
 
 ## Development
 

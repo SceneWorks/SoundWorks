@@ -1037,6 +1037,93 @@ CREATE TABLE video_to_audio_safety_gates (
 );
 ",
     },
+    SchemaMigration {
+        version: 18,
+        name: "workspace_global_library",
+        sql: "
+CREATE TABLE workspace_records (
+  id TEXT PRIMARY KEY,
+  global_library_id TEXT NOT NULL,
+  recent_project_ids_json TEXT NOT NULL,
+  active_project_id TEXT NOT NULL REFERENCES projects(id)
+);
+CREATE TABLE workspace_project_cards (
+  project_id TEXT PRIMARY KEY REFERENCES projects(id),
+  opened_at TEXT NOT NULL,
+  asset_count INTEGER NOT NULL,
+  composition_count INTEGER NOT NULL,
+  local_recipe_count INTEGER NOT NULL,
+  linked_global_asset_count INTEGER NOT NULL,
+  can_open INTEGER NOT NULL,
+  can_create_from_template INTEGER NOT NULL,
+  status TEXT NOT NULL
+);
+CREATE TABLE workspace_global_libraries (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  asset_count INTEGER NOT NULL,
+  reusable_voice_count INTEGER NOT NULL,
+  reusable_preset_count INTEGER NOT NULL,
+  reusable_collection_count INTEGER NOT NULL,
+  storage_root TEXT NOT NULL,
+  can_browse INTEGER NOT NULL
+);
+CREATE TABLE workspace_scope_controls (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  scope_kind TEXT NOT NULL,
+  project_id TEXT,
+  active INTEGER NOT NULL,
+  item_count INTEGER NOT NULL,
+  empty_state TEXT NOT NULL
+);
+CREATE TABLE workspace_source_picker_policies (
+  id TEXT PRIMARY KEY,
+  active_project_id TEXT NOT NULL REFERENCES projects(id),
+  default_scope_json TEXT NOT NULL,
+  allows_global_sources INTEGER NOT NULL,
+  import_modes_json TEXT NOT NULL,
+  target_surfaces_json TEXT NOT NULL,
+  provenance_requirements_json TEXT NOT NULL
+);
+CREATE TABLE workspace_transfer_actions (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  source_item_id TEXT NOT NULL REFERENCES asset_library_items(item_id),
+  target_project_id TEXT REFERENCES projects(id),
+  target_scope_json TEXT NOT NULL,
+  preserves_provenance INTEGER NOT NULL,
+  creates_new_asset_id INTEGER NOT NULL,
+  creates_reuse_event INTEGER NOT NULL,
+  enabled INTEGER NOT NULL,
+  summary TEXT NOT NULL
+);
+CREATE TABLE workspace_composition_asset_links (
+  id TEXT PRIMARY KEY,
+  composition_id TEXT NOT NULL REFERENCES compositions(id),
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  source_scope_json TEXT NOT NULL,
+  project_usage TEXT NOT NULL,
+  preserves_original_asset_id INTEGER NOT NULL,
+  provenance_sidecar_path TEXT NOT NULL,
+  warning TEXT
+);
+CREATE TABLE workspace_parity_notes (
+  id TEXT PRIMARY KEY,
+  area TEXT NOT NULL,
+  convention TEXT NOT NULL,
+  soundworks_application TEXT NOT NULL
+);
+CREATE TABLE workspace_validation_checks (
+  id TEXT PRIMARY KEY,
+  passed INTEGER NOT NULL,
+  summary TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

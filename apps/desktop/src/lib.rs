@@ -1,10 +1,11 @@
 use soundworks_core::{
-    AppOverview, AssetLibraryOverview, CompositionEditorOverview, ExportWorkflowOverview,
+    AppOverview, AssetLibraryOverview, CompositionEditorOverview, CreateProjectRequest,
+    ExportWorkflowOverview, ImportRuntimeArtifactRequest, LibraryMutationRequest, LibraryPlayback,
     ModelEvaluationCatalog, ModelManagerOperation, ModelManagerOverview, MvpValidationOverview,
-    ProviderCatalog, ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeJobArtifact,
-    RuntimeJobRequest, RuntimeJobSnapshot, RuntimeJobStore, RuntimeOverview, SamplesStudioOverview,
-    SfxStudioOverview, SongStudioOverview, TtsStudioOverview, VideoToAudioOverview,
-    VoiceLabOverview, WorkspaceOverview,
+    ProjectLibraryActionResult, ProjectLibraryStore, ProviderCatalog, ReviewWorkspaceOverview,
+    RightsSafetyOverview, RuntimeJobArtifact, RuntimeJobRequest, RuntimeJobSnapshot,
+    RuntimeJobStore, RuntimeOverview, SamplesStudioOverview, SfxStudioOverview, SongStudioOverview,
+    TtsStudioOverview, VideoToAudioOverview, VoiceLabOverview, WorkspaceOverview,
 };
 
 #[tauri::command]
@@ -25,6 +26,37 @@ fn get_workspace_overview() -> WorkspaceOverview {
 #[tauri::command]
 fn get_asset_library_overview() -> AssetLibraryOverview {
     asset_library_overview()
+}
+
+#[tauri::command]
+fn create_soundworks_project(
+    request: CreateProjectRequest,
+) -> Result<ProjectLibraryActionResult, String> {
+    create_project(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn open_soundworks_project(project_id: String) -> Result<ProjectLibraryActionResult, String> {
+    open_project(project_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn import_runtime_artifact_to_library(
+    request: ImportRuntimeArtifactRequest,
+) -> Result<ProjectLibraryActionResult, String> {
+    import_runtime_artifact(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn mutate_library_item(
+    request: LibraryMutationRequest,
+) -> Result<ProjectLibraryActionResult, String> {
+    mutate_item(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_library_playback(item_id: String) -> Result<LibraryPlayback, String> {
+    library_playback(item_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -128,7 +160,15 @@ fn get_video_to_audio_overview() -> VideoToAudioOverview {
 }
 
 pub fn app_overview() -> AppOverview {
-    AppOverview::baseline()
+    let mut overview = AppOverview::baseline();
+    let store = ProjectLibraryStore::default();
+    if let Ok(workspace) = store.workspace_overview() {
+        overview.workspace = soundworks_core::WorkspaceSummary::from_overview(&workspace);
+    }
+    if let Ok(library) = store.asset_library_overview(None) {
+        overview.asset_library = soundworks_core::AssetLibrarySummary::from_overview(&library);
+    }
+    overview
 }
 
 pub fn provider_catalog() -> ProviderCatalog {
@@ -136,11 +176,41 @@ pub fn provider_catalog() -> ProviderCatalog {
 }
 
 pub fn workspace_overview() -> WorkspaceOverview {
-    WorkspaceOverview::reference().expect("reference workspace is valid")
+    ProjectLibraryStore::default()
+        .workspace_overview()
+        .unwrap_or_else(|_| WorkspaceOverview::reference().expect("reference workspace is valid"))
 }
 
 pub fn asset_library_overview() -> AssetLibraryOverview {
-    AssetLibraryOverview::reference().expect("reference Asset Library is valid")
+    ProjectLibraryStore::default()
+        .asset_library_overview(None)
+        .unwrap_or_else(|_| {
+            AssetLibraryOverview::reference().expect("reference Asset Library is valid")
+        })
+}
+
+pub fn create_project(
+    request: CreateProjectRequest,
+) -> std::io::Result<ProjectLibraryActionResult> {
+    ProjectLibraryStore::default().create_project(request)
+}
+
+pub fn open_project(project_id: String) -> std::io::Result<ProjectLibraryActionResult> {
+    ProjectLibraryStore::default().open_project(&project_id)
+}
+
+pub fn import_runtime_artifact(
+    request: ImportRuntimeArtifactRequest,
+) -> std::io::Result<ProjectLibraryActionResult> {
+    ProjectLibraryStore::default().import_runtime_artifact(request)
+}
+
+pub fn mutate_item(request: LibraryMutationRequest) -> std::io::Result<ProjectLibraryActionResult> {
+    ProjectLibraryStore::default().mutate_library_item(request)
+}
+
+pub fn library_playback(item_id: String) -> std::io::Result<LibraryPlayback> {
+    ProjectLibraryStore::default().playback_for_item(&item_id)
 }
 
 pub fn export_workflow_overview() -> ExportWorkflowOverview {
@@ -250,6 +320,11 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_provider_catalog,
             get_workspace_overview,
             get_asset_library_overview,
+            create_soundworks_project,
+            open_soundworks_project,
+            import_runtime_artifact_to_library,
+            mutate_library_item,
+            get_library_playback,
             get_export_workflow_overview,
             get_composition_editor_overview,
             get_runtime_overview,

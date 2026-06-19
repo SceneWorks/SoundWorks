@@ -181,6 +181,152 @@ impl WorkspaceOverview {
             ),
         })
     }
+
+    pub fn from_library(
+        workspace: Workspace,
+        active_project: Project,
+        recent_projects: Vec<Project>,
+        library: &AssetLibraryOverview,
+    ) -> Self {
+        let project_assets = asset_refs(
+            library,
+            |item| matches!(item.scope, LibraryScope::Project { ref project_id } if project_id == &active_project.id),
+        );
+        let global_assets = asset_refs(library, |item| {
+            matches!(item.scope, LibraryScope::GlobalLibrary)
+                || matches!(
+                    item.ownership,
+                    LibraryOwnership::Global | LibraryOwnership::LinkedGlobal
+                )
+        });
+        let linked_global_count = project_assets
+            .iter()
+            .filter(|asset| {
+                matches!(
+                    asset.ownership,
+                    LibraryOwnership::LinkedGlobal | LibraryOwnership::CopiedFromGlobal
+                )
+            })
+            .count();
+        let active_project_card = project_card(
+            active_project.clone(),
+            project_assets.len(),
+            linked_global_count,
+        );
+        let recent_project_cards = recent_projects
+            .into_iter()
+            .map(|project| {
+                let asset_count = library
+                    .items
+                    .iter()
+                    .filter(|item| item.project_id.as_deref() == Some(project.id.as_str()))
+                    .count();
+                let linked_count = library
+                    .items
+                    .iter()
+                    .filter(|item| {
+                        item.project_id.as_deref() == Some(project.id.as_str())
+                            && matches!(
+                                item.ownership,
+                                LibraryOwnership::LinkedGlobal | LibraryOwnership::CopiedFromGlobal
+                            )
+                    })
+                    .count();
+                let mut card = project_card(project, asset_count, linked_count);
+                if card.project.id != active_project.id {
+                    card.status = WorkspaceProjectStatus::Recent;
+                }
+                card
+            })
+            .collect::<Vec<_>>();
+
+        Self {
+            schema_version: WORKSPACE_SCHEMA_VERSION,
+            workspace: workspace.clone(),
+            active_project: active_project_card,
+            recent_projects: recent_project_cards,
+            global_library: GlobalLibraryCard {
+                id: workspace.global_library_id,
+                label: "Global audio library".to_string(),
+                asset_count: global_assets.len(),
+                reusable_voice_count: global_assets
+                    .iter()
+                    .filter(|asset| asset.item_type == "voice-profile")
+                    .count(),
+                reusable_preset_count: global_assets
+                    .iter()
+                    .filter(|asset| asset.item_type == "prompt-recipe-preset")
+                    .count(),
+                reusable_collection_count: library
+                    .collections
+                    .iter()
+                    .filter(|collection| {
+                        matches!(collection.collection.scope, LibraryScope::GlobalLibrary)
+                    })
+                    .count(),
+                storage_root: "soundworks-library/global".to_string(),
+                can_browse: true,
+            },
+            scope_controls: vec![
+                WorkspaceScopeControl {
+                    id: "scope-project-library".to_string(),
+                    label: "Project library".to_string(),
+                    scope: LibraryScope::Project {
+                        project_id: active_project.id.clone(),
+                    },
+                    active: true,
+                    item_count: project_assets.len(),
+                    empty_state: "Create, import, or save generated audio into this project."
+                        .to_string(),
+                },
+                WorkspaceScopeControl {
+                    id: "scope-global-library".to_string(),
+                    label: "Global library".to_string(),
+                    scope: LibraryScope::GlobalLibrary,
+                    active: false,
+                    item_count: global_assets.len(),
+                    empty_state: "Promote reusable voices, loops, references, and presets here."
+                        .to_string(),
+                },
+            ],
+            project_assets: project_assets.clone(),
+            global_assets: global_assets.clone(),
+            source_picker: SourcePickerPolicy {
+                id: "source-picker-project-plus-global".to_string(),
+                active_project_id: active_project.id.clone(),
+                default_scope: LibraryScope::Project {
+                    project_id: active_project.id.clone(),
+                },
+                allows_global_sources: true,
+                import_modes: vec![
+                    GlobalAssetImportMode::Link,
+                    GlobalAssetImportMode::Copy,
+                    GlobalAssetImportMode::PromoteProjectAsset,
+                ],
+                target_surfaces: vec![
+                    "TTS Studio".to_string(),
+                    "Voice Lab".to_string(),
+                    "Samples + Loops".to_string(),
+                    "Multitrack Editor".to_string(),
+                    "Waveform Review".to_string(),
+                ],
+                provenance_requirements: vec![
+                    "source scope and original asset ID".to_string(),
+                    "source version ID".to_string(),
+                    "recipe or import sidecar".to_string(),
+                    "link/copy/promote event ID".to_string(),
+                ],
+            },
+            transfer_actions: transfer_actions(&active_project, &global_assets),
+            composition_links: vec![],
+            parity_notes: parity_notes(),
+            validation_checks: validation_checks(
+                &project_assets,
+                &global_assets,
+                linked_global_count,
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

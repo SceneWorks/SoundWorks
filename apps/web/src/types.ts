@@ -93,18 +93,44 @@ export type RuntimeJobSnapshot = {
   status: string;
   providerId: string;
   modelId: string;
+  workflow: CapabilityWorkflow;
+  adapter: string;
   progress?: {
     percent: number;
     message?: string | null;
   } | null;
   cancellation: string;
   retryCount: number;
+  createdAt: string;
+  updatedAt: string;
+  recordRoot: string;
+  recipePath: string;
+  modelMetadataPath: string;
+  eventsPath: string;
   logTail: string[];
+  artifacts: RuntimeJobArtifact[];
   actionableError?: {
     code: string;
     summary: string;
     recovery: string;
   } | null;
+};
+
+export type RuntimeJobArtifact = {
+  kind: string;
+  path: string;
+  mimeType: string;
+  bytes: number;
+  summary: string;
+};
+
+export type RuntimeJobRequest = {
+  providerId: string;
+  modelId: string;
+  kind: "generate-audio" | "render-composition" | "export" | "evaluate-model";
+  workflow: CapabilityWorkflow;
+  prompt: string;
+  sourceSurface: string;
 };
 
 export type RuntimeValidationCheck = {

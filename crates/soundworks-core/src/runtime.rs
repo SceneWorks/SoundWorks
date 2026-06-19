@@ -1,10 +1,18 @@
 use crate::domain::{JobKind, JobProgress, JobStatus, ModelRuntime};
+use crate::evaluation::{EvaluationLane, ProductEligibility, ProductRuntimePath};
 use crate::manifests::{
     CapabilityWorkflow, DeviceAccelerator, ModelInstallStatus, ModelManifest, ProviderCatalog,
 };
+use crate::model_manager::{
+    CandidateInstallState, ModelCandidateInstallState, ModelManagerOverview,
+};
 use serde::{Deserialize, Serialize};
+use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-pub const RUNTIME_SCHEMA_VERSION: u32 = 1;
+pub const RUNTIME_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,7 +58,40 @@ impl RuntimeOverview {
             packaging_policy: policy,
             devices: inventory.devices.clone(),
             status_counts: RuntimeStatusCounts::from_model_states(&model_states),
-            jobs: reference_jobs(&model_states),
+            jobs: vec![],
+            model_states,
+            validation_checks,
+        }
+    }
+
+    pub fn from_model_manager(
+        manager: &ModelManagerOverview,
+        inventory: &DeviceInventory,
+        policy: RuntimePackagingPolicy,
+        store: &RuntimeJobStore,
+    ) -> Self {
+        let mut validation_checks = policy.validate_catalog(&ProviderCatalog {
+            schema_version: 1,
+            providers: vec![],
+        });
+        validation_checks.extend(inventory.validation_checks());
+        validation_checks.extend(store.validation_checks());
+
+        let model_states: Vec<ModelRuntimeState> = manager
+            .candidates
+            .iter()
+            .filter(|candidate| candidate.install_state == CandidateInstallState::Installed)
+            .map(|candidate| ModelRuntimeState::from_candidate(candidate, inventory))
+            .collect();
+        let mut jobs = store.read_jobs().unwrap_or_default();
+        jobs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+
+        Self {
+            schema_version: RUNTIME_SCHEMA_VERSION,
+            packaging_policy: policy,
+            devices: inventory.devices.clone(),
+            status_counts: RuntimeStatusCounts::from_model_states(&model_states),
+            jobs,
             model_states,
             validation_checks,
         }
@@ -490,6 +531,76 @@ impl ModelRuntimeState {
             reasons,
         }
     }
+
+    fn from_candidate(candidate: &ModelCandidateInstallState, inventory: &DeviceInventory) -> Self {
+        let workflows: Vec<CapabilityWorkflow> = candidate
+            .lanes
+            .iter()
+            .filter_map(lane_to_workflow)
+            .collect();
+        let runtime = match candidate.runtime_path {
+            ProductRuntimePath::ManagedApi => ModelRuntime::ExternalApi,
+            ProductRuntimePath::PythonPocOnly | ProductRuntimePath::Unknown => {
+                ModelRuntime::ResearchOnly
+            }
+            ProductRuntimePath::RustNative
+            | ProductRuntimePath::NativeLibraryBinding
+            | ProductRuntimePath::ExternalExecutable => ModelRuntime::Local,
+        };
+        let availability = if candidate.cache.verified {
+            RuntimeAvailability::Installed
+        } else {
+            RuntimeAvailability::Unavailable
+        };
+        let health = if availability == RuntimeAvailability::Installed {
+            RuntimeHealth::Ready
+        } else {
+            RuntimeHealth::Blocked
+        };
+        let selected = inventory
+            .devices
+            .iter()
+            .find(|device| device.available)
+            .map(|device| device.accelerator);
+        let mut reasons = candidate.blockers.clone();
+        if candidate.product_eligibility == ProductEligibility::ResearchOnly {
+            reasons.push("Research-only model cannot be product-enabled.".to_string());
+        }
+
+        Self {
+            provider_id: provider_id_for_candidate(candidate),
+            model_id: candidate.candidate_id.clone(),
+            model_name: candidate.name.clone(),
+            runtime,
+            workflows,
+            availability,
+            install_status: ModelInstallStatus::Installed,
+            cache: ModelCacheState {
+                package_id: candidate.download_plan.repository_id.clone(),
+                status: CacheStatus::Ready,
+                expected_size_mb: candidate.download_plan.expected_size_mb,
+                disk_usage_mb: candidate.cache.disk_usage_mb,
+                verified: candidate.cache.verified,
+                evidence: candidate.cache.evidence.clone(),
+                license: LicenseAcceptanceState::Accepted,
+                warmup: WarmupStatus::Cold,
+            },
+            compatibility: RuntimeCompatibility {
+                supported: true,
+                selected_accelerator: selected,
+                min_memory_mb: None,
+                available_memory_mb: inventory
+                    .devices
+                    .iter()
+                    .find(|device| device.available)
+                    .and_then(|device| device.memory_mb),
+                requires_network: false,
+                reasons: vec![],
+            },
+            health,
+            reasons,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -636,11 +747,48 @@ pub struct RuntimeJobSnapshot {
     pub status: JobStatus,
     pub provider_id: String,
     pub model_id: String,
+    pub workflow: CapabilityWorkflow,
+    pub adapter: ProviderAdapterKind,
     pub progress: Option<JobProgress>,
     pub cancellation: CancellationState,
     pub retry_count: u8,
+    pub created_at: String,
+    pub updated_at: String,
+    pub record_root: String,
+    pub recipe_path: String,
+    pub model_metadata_path: String,
+    pub events_path: String,
     pub log_tail: Vec<String>,
+    pub artifacts: Vec<RuntimeJobArtifact>,
     pub actionable_error: Option<ActionableRuntimeError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeJobArtifact {
+    pub kind: RuntimeArtifactKind,
+    pub path: String,
+    pub mime_type: String,
+    pub bytes: u64,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeArtifactKind {
+    AudioPreview,
+    OutputManifest,
+    ErrorReport,
+    Log,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProviderAdapterKind {
+    NativeRust,
+    LocalExecutable,
+    ManagedApi,
+    ResearchOnly,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -669,6 +817,361 @@ pub struct RuntimeJobAdmission {
     pub kind: JobKind,
     pub reason: String,
     pub actionable_error: Option<ActionableRuntimeError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeJobRequest {
+    pub provider_id: String,
+    pub model_id: String,
+    pub kind: JobKind,
+    pub workflow: CapabilityWorkflow,
+    pub prompt: String,
+    pub source_surface: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RuntimeJobStore {
+    root: PathBuf,
+}
+
+impl RuntimeJobStore {
+    pub fn default_root() -> PathBuf {
+        if let Ok(root) = std::env::var("SOUNDWORKS_RUNTIME_ROOT") {
+            return PathBuf::from(root);
+        }
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("Library")
+            .join("Application Support")
+            .join("SoundWorks")
+            .join("runtime")
+    }
+
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    pub fn default() -> Self {
+        Self::new(Self::default_root())
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn enqueue(
+        &self,
+        overview: &RuntimeOverview,
+        request: RuntimeJobRequest,
+    ) -> io::Result<RuntimeJobSnapshot> {
+        let job_id = format!(
+            "job-{}-{}",
+            request.workflow_id_fragment(),
+            timestamp_millis()
+        );
+        let record_root = self.root.join("jobs").join(&job_id);
+        fs::create_dir_all(record_root.join("artifacts"))?;
+        let created_at = timestamp_string();
+        let adapter = adapter_for_model(overview, &request);
+        let admission = overview.admit_job(&request.provider_id, &request.model_id, request.kind);
+
+        write_json(record_root.join("recipe.json"), &request)?;
+        write_json(
+            record_root.join("model.json"),
+            &serde_json::json!({
+                "providerId": request.provider_id,
+                "modelId": request.model_id,
+                "workflow": request.workflow,
+                "adapter": adapter,
+                "admissionAccepted": admission.accepted,
+                "admissionReason": admission.reason,
+            }),
+        )?;
+
+        let mut job = RuntimeJobSnapshot {
+            id: job_id,
+            kind: request.kind,
+            status: JobStatus::Queued,
+            provider_id: request.provider_id.clone(),
+            model_id: request.model_id.clone(),
+            workflow: request.workflow,
+            adapter,
+            progress: Some(JobProgress {
+                percent: 0.0,
+                message: Some("Job persisted in the local runtime queue.".to_string()),
+            }),
+            cancellation: CancellationState::Cancellable,
+            retry_count: 0,
+            created_at: created_at.clone(),
+            updated_at: created_at,
+            record_root: record_root.display().to_string(),
+            recipe_path: record_root.join("recipe.json").display().to_string(),
+            model_metadata_path: record_root.join("model.json").display().to_string(),
+            events_path: record_root.join("events.jsonl").display().to_string(),
+            log_tail: vec!["persisted job record".to_string()],
+            artifacts: vec![],
+            actionable_error: None,
+        };
+        self.append_event(&job, "queued", "persisted job record")?;
+
+        if !admission.accepted {
+            job.status = JobStatus::Failed;
+            job.progress = Some(JobProgress {
+                percent: 100.0,
+                message: Some("Runtime rejected the job before adapter execution.".to_string()),
+            });
+            job.cancellation = CancellationState::NotCancellable;
+            job.updated_at = timestamp_string();
+            job.log_tail.push(admission.reason.clone());
+            job.actionable_error = admission.actionable_error;
+            self.write_error_report(&mut job)?;
+            self.append_event(&job, "failed", "runtime admission rejected job")?;
+            self.write_job(&job)?;
+            return Ok(job);
+        }
+
+        self.run_adapter(job, &request)
+    }
+
+    pub fn cancel(&self, job_id: &str) -> io::Result<Option<RuntimeJobSnapshot>> {
+        let Some(mut job) = self.read_job(job_id)? else {
+            return Ok(None);
+        };
+        if matches!(
+            job.cancellation,
+            CancellationState::Cancellable | CancellationState::Requested
+        ) {
+            job.status = JobStatus::Cancelled;
+            job.cancellation = CancellationState::Completed;
+            job.progress = Some(JobProgress {
+                percent: job
+                    .progress
+                    .as_ref()
+                    .map_or(0.0, |progress| progress.percent),
+                message: Some("Cancellation persisted by runtime job store.".to_string()),
+            });
+            job.updated_at = timestamp_string();
+            job.log_tail.push("cancelled by user request".to_string());
+            self.append_event(&job, "cancelled", "cancelled by user request")?;
+            self.write_job(&job)?;
+        }
+        Ok(Some(job))
+    }
+
+    pub fn retry(
+        &self,
+        overview: &RuntimeOverview,
+        job_id: &str,
+    ) -> io::Result<Option<RuntimeJobSnapshot>> {
+        let Some(job) = self.read_job(job_id)? else {
+            return Ok(None);
+        };
+        let request: RuntimeJobRequest = read_json(Path::new(&job.recipe_path))?;
+        let mut retried = self.enqueue(overview, request)?;
+        retried.retry_count = job.retry_count.saturating_add(1);
+        retried.log_tail.push(format!("retry of {}", job.id));
+        self.write_job(&retried)?;
+        Ok(Some(retried))
+    }
+
+    pub fn artifacts(&self, job_id: &str) -> io::Result<Vec<RuntimeJobArtifact>> {
+        Ok(self
+            .read_job(job_id)?
+            .map(|job| job.artifacts)
+            .unwrap_or_default())
+    }
+
+    pub fn read_jobs(&self) -> io::Result<Vec<RuntimeJobSnapshot>> {
+        let jobs_root = self.root.join("jobs");
+        if !jobs_root.exists() {
+            return Ok(vec![]);
+        }
+        let mut jobs = vec![];
+        for entry in fs::read_dir(jobs_root)? {
+            let path = entry?.path().join("job.json");
+            if path.is_file() {
+                jobs.push(read_json(&path)?);
+            }
+        }
+        Ok(jobs)
+    }
+
+    fn read_job(&self, job_id: &str) -> io::Result<Option<RuntimeJobSnapshot>> {
+        let path = self.root.join("jobs").join(job_id).join("job.json");
+        if path.is_file() {
+            Ok(Some(read_json(path)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn run_adapter(
+        &self,
+        mut job: RuntimeJobSnapshot,
+        request: &RuntimeJobRequest,
+    ) -> io::Result<RuntimeJobSnapshot> {
+        job.status = JobStatus::Running;
+        job.progress = Some(JobProgress {
+            percent: 35.0,
+            message: Some("Provider adapter claimed the job.".to_string()),
+        });
+        job.updated_at = timestamp_string();
+        job.log_tail.push(format!(
+            "{:?} adapter claimed {}:{}",
+            job.adapter, job.provider_id, job.model_id
+        ));
+        self.append_event(&job, "running", "provider adapter claimed job")?;
+        if request
+            .prompt
+            .to_ascii_lowercase()
+            .contains("hold-for-cancel")
+        {
+            job.progress = Some(JobProgress {
+                percent: 50.0,
+                message: Some(
+                    "Provider adapter is holding the job for cancellation QA.".to_string(),
+                ),
+            });
+            job.log_tail
+                .push("holding job for cancellation QA".to_string());
+            self.write_job(&job)?;
+            return Ok(job);
+        }
+
+        match job.adapter {
+            ProviderAdapterKind::NativeRust => self.write_smoke_audio(&mut job, request)?,
+            ProviderAdapterKind::LocalExecutable
+            | ProviderAdapterKind::ManagedApi
+            | ProviderAdapterKind::ResearchOnly => {
+                job.status = JobStatus::Failed;
+                job.progress = Some(JobProgress {
+                    percent: 100.0,
+                    message: Some(
+                        "Provider adapter is not executable in the shipped runtime yet."
+                            .to_string(),
+                    ),
+                });
+                job.cancellation = CancellationState::NotCancellable;
+                job.actionable_error = Some(ActionableRuntimeError {
+                    code: "runtime.adapter_not_executable".to_string(),
+                    summary: "Provider adapter cannot run".to_string(),
+                    recovery: "Install or port a product-safe adapter before retrying this model."
+                        .to_string(),
+                });
+                self.write_error_report(&mut job)?;
+            }
+        }
+
+        job.updated_at = timestamp_string();
+        self.append_event(&job, status_event(&job.status), "adapter finished")?;
+        self.write_job(&job)?;
+        Ok(job)
+    }
+
+    fn write_smoke_audio(
+        &self,
+        job: &mut RuntimeJobSnapshot,
+        request: &RuntimeJobRequest,
+    ) -> io::Result<()> {
+        let record_root = PathBuf::from(&job.record_root);
+        let audio_path = record_root.join("artifacts").join("runtime-smoke.wav");
+        write_smoke_wav(&audio_path)?;
+        let manifest_path = record_root.join("output-manifest.json");
+        write_json(
+            &manifest_path,
+            &serde_json::json!({
+                "jobId": job.id,
+                "workflow": request.workflow,
+                "providerId": request.provider_id,
+                "modelId": request.model_id,
+                "prompt": request.prompt,
+                "artifact": audio_path,
+                "note": "Native Rust smoke artifact proves durable job execution only; real model audio is owned by later workflow stories.",
+            }),
+        )?;
+        job.status = JobStatus::Succeeded;
+        job.progress = Some(JobProgress {
+            percent: 100.0,
+            message: Some("Native Rust adapter wrote an auditable smoke artifact.".to_string()),
+        });
+        job.cancellation = CancellationState::Completed;
+        job.log_tail.push("wrote runtime-smoke.wav".to_string());
+        job.artifacts = vec![
+            artifact(
+                RuntimeArtifactKind::AudioPreview,
+                &audio_path,
+                "audio/wav",
+                "Runtime smoke WAV artifact",
+            )?,
+            artifact(
+                RuntimeArtifactKind::OutputManifest,
+                &manifest_path,
+                "application/json",
+                "Output manifest and provenance",
+            )?,
+        ];
+        Ok(())
+    }
+
+    fn write_error_report(&self, job: &mut RuntimeJobSnapshot) -> io::Result<()> {
+        let path = PathBuf::from(&job.record_root).join("error.json");
+        write_json(
+            &path,
+            &serde_json::json!({
+                "jobId": job.id,
+                "providerId": job.provider_id,
+                "modelId": job.model_id,
+                "error": job.actionable_error,
+                "logTail": job.log_tail,
+            }),
+        )?;
+        job.artifacts = vec![artifact(
+            RuntimeArtifactKind::ErrorReport,
+            &path,
+            "application/json",
+            "Actionable runtime error report",
+        )?];
+        Ok(())
+    }
+
+    fn write_job(&self, job: &RuntimeJobSnapshot) -> io::Result<()> {
+        write_json(PathBuf::from(&job.record_root).join("job.json"), job)
+    }
+
+    fn append_event(&self, job: &RuntimeJobSnapshot, event: &str, message: &str) -> io::Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&job.events_path)?;
+        writeln!(
+            file,
+            "{}",
+            serde_json::json!({
+                "at": timestamp_string(),
+                "jobId": job.id,
+                "event": event,
+                "status": job.status,
+                "message": message,
+            })
+        )
+    }
+
+    fn validation_checks(&self) -> Vec<RuntimeValidationCheck> {
+        if self.root.join("jobs").exists() {
+            vec![RuntimeValidationCheck::passed(
+                "runtime.job_store",
+                "Runtime jobs are read from the durable local job store.",
+            )]
+        } else {
+            vec![RuntimeValidationCheck::warning(
+                "runtime.job_store",
+                "No persisted runtime job store exists yet.",
+                "Queue a generation job to create durable job, recipe, event, manifest, and artifact records.",
+            )]
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -724,76 +1227,173 @@ fn model_requires_python(model: &ModelManifest) -> bool {
     })
 }
 
-fn reference_jobs(model_states: &[ModelRuntimeState]) -> Vec<RuntimeJobSnapshot> {
-    let ready_model = model_states
+impl RuntimeJobRequest {
+    fn workflow_id_fragment(&self) -> &'static str {
+        match self.workflow {
+            CapabilityWorkflow::Tts => "tts",
+            CapabilityWorkflow::VoiceClone => "voice-clone",
+            CapabilityWorkflow::VoiceConversion => "voice-conversion",
+            CapabilityWorkflow::Sfx => "sfx",
+            CapabilityWorkflow::Ambience => "ambience",
+            CapabilityWorkflow::InstrumentSample => "sample",
+            CapabilityWorkflow::Loop => "loop",
+            CapabilityWorkflow::Song => "song",
+            CapabilityWorkflow::StemSeparation => "stem",
+            CapabilityWorkflow::VideoToAudio => "video-audio",
+            CapabilityWorkflow::Edit => "edit",
+            CapabilityWorkflow::CompositionRender => "composition",
+        }
+    }
+}
+
+fn lane_to_workflow(lane: &EvaluationLane) -> Option<CapabilityWorkflow> {
+    Some(match lane {
+        EvaluationLane::Tts => CapabilityWorkflow::Tts,
+        EvaluationLane::VoiceClone => CapabilityWorkflow::VoiceClone,
+        EvaluationLane::VoiceConversion => CapabilityWorkflow::VoiceConversion,
+        EvaluationLane::Sfx => CapabilityWorkflow::Sfx,
+        EvaluationLane::Ambience => CapabilityWorkflow::Ambience,
+        EvaluationLane::InstrumentSample => CapabilityWorkflow::InstrumentSample,
+        EvaluationLane::Loop => CapabilityWorkflow::Loop,
+        EvaluationLane::Song => CapabilityWorkflow::Song,
+        EvaluationLane::StemSeparation => CapabilityWorkflow::StemSeparation,
+        EvaluationLane::VideoToAudio => CapabilityWorkflow::VideoToAudio,
+    })
+}
+
+fn provider_id_for_candidate(candidate: &ModelCandidateInstallState) -> String {
+    candidate
+        .provider
+        .to_ascii_lowercase()
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn adapter_for_model(
+    overview: &RuntimeOverview,
+    request: &RuntimeJobRequest,
+) -> ProviderAdapterKind {
+    overview
+        .model_states
         .iter()
-        .find(|state| state.availability == RuntimeAvailability::Installed);
-    let Some(ready_model) = ready_model else {
-        return vec![];
-    };
+        .find(|state| {
+            state.provider_id == request.provider_id && state.model_id == request.model_id
+        })
+        .map(|state| match state.runtime {
+            ModelRuntime::Local if state.model_id == "kokoro-82m" => {
+                ProviderAdapterKind::NativeRust
+            }
+            ModelRuntime::Local => ProviderAdapterKind::LocalExecutable,
+            ModelRuntime::ExternalApi => ProviderAdapterKind::ManagedApi,
+            ModelRuntime::ResearchOnly => ProviderAdapterKind::ResearchOnly,
+        })
+        .unwrap_or(ProviderAdapterKind::ResearchOnly)
+}
 
-    let mut jobs = vec![RuntimeJobSnapshot {
-        id: "job-runtime-reference-generate".to_string(),
-        kind: JobKind::GenerateAudio,
-        status: JobStatus::Running,
-        provider_id: ready_model.provider_id.clone(),
-        model_id: ready_model.model_id.clone(),
-        progress: Some(JobProgress {
-            percent: 42.0,
-            message: Some("Generating preview audio from queued worker contract.".to_string()),
-        }),
-        cancellation: CancellationState::Cancellable,
-        retry_count: 0,
-        log_tail: vec![
-            "claimed job from local queue".to_string(),
-            "loaded model package from cache".to_string(),
-            "streamed progress event 42%".to_string(),
-        ],
-        actionable_error: None,
-    }];
+fn status_event(status: &JobStatus) -> &'static str {
+    match status {
+        JobStatus::Queued => "queued",
+        JobStatus::Running => "running",
+        JobStatus::Succeeded => "succeeded",
+        JobStatus::Failed => "failed",
+        JobStatus::Cancelled => "cancelled",
+    }
+}
 
-    jobs.push(RuntimeJobSnapshot {
-        id: "job-runtime-reference-cache-repair".to_string(),
-        kind: JobKind::EvaluateModel,
-        status: JobStatus::Failed,
-        provider_id: ready_model.provider_id.clone(),
-        model_id: ready_model.model_id.clone(),
-        progress: Some(JobProgress {
-            percent: 0.0,
-            message: Some("Runtime validation detected a repairable package issue.".to_string()),
-        }),
-        cancellation: CancellationState::NotCancellable,
-        retry_count: 0,
-        log_tail: vec![
-            "verified package manifest".to_string(),
-            "detected cache checksum mismatch".to_string(),
-        ],
-        actionable_error: Some(ActionableRuntimeError {
-            code: "runtime.cache_mismatch".to_string(),
-            summary: "Model package cache needs repair".to_string(),
-            recovery:
-                "Reinstall the provider package or clear the model cache entry before retrying."
-                    .to_string(),
-        }),
-    });
+fn artifact(
+    kind: RuntimeArtifactKind,
+    path: &Path,
+    mime_type: &str,
+    summary: &str,
+) -> io::Result<RuntimeJobArtifact> {
+    Ok(RuntimeJobArtifact {
+        kind,
+        path: path.display().to_string(),
+        mime_type: mime_type.to_string(),
+        bytes: fs::metadata(path)?.len(),
+        summary: summary.to_string(),
+    })
+}
 
-    jobs
+fn write_json(path: impl AsRef<Path>, value: &impl Serialize) -> io::Result<()> {
+    if let Some(parent) = path.as_ref().parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(
+        path,
+        serde_json::to_vec_pretty(value).map_err(io::Error::other)?,
+    )
+}
+
+fn read_json<T: for<'de> Deserialize<'de>>(path: impl AsRef<Path>) -> io::Result<T> {
+    let bytes = fs::read(path)?;
+    serde_json::from_slice(&bytes).map_err(io::Error::other)
+}
+
+fn timestamp_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_millis())
+}
+
+fn timestamp_string() -> String {
+    timestamp_millis().to_string()
+}
+
+fn write_smoke_wav(path: &Path) -> io::Result<()> {
+    let sample_rate = 16_000u32;
+    let samples = sample_rate / 4;
+    let data_bytes = samples * 2;
+    let mut bytes = Vec::with_capacity(44 + data_bytes as usize);
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&sample_rate.to_le_bytes());
+    bytes.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
+    bytes.extend_from_slice(&16u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&data_bytes.to_le_bytes());
+    for index in 0..samples {
+        let phase = (index as f32 / sample_rate as f32) * 440.0 * std::f32::consts::TAU;
+        let sample = (phase.sin() * i16::MAX as f32 * 0.18) as i16;
+        bytes.extend_from_slice(&sample.to_le_bytes());
+    }
+    fs::write(path, bytes)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        DeviceInventory, RuntimeAvailability, RuntimeOverview, RuntimePackagingPolicy,
-        ValidationStatus,
+        CacheStatus, CancellationState, DeviceInventory, LicenseAcceptanceState, ModelCacheState,
+        ProviderAdapterKind, RuntimeArtifactKind, RuntimeAvailability, RuntimeCompatibility,
+        RuntimeHealth, RuntimeJobRequest, RuntimeJobStore, RuntimeOverview, RuntimePackagingPolicy,
+        ValidationStatus, WarmupStatus,
     };
     use crate::domain::{JobKind, ModelRuntime};
-    use crate::manifests::{ModelInstallStatus, ProviderCatalog};
+    use crate::manifests::{CapabilityWorkflow, ModelInstallStatus, ProviderCatalog};
+    use std::fs;
+    use std::path::PathBuf;
 
     #[test]
     fn reference_runtime_blocks_manifest_only_models_and_jobs() {
         let runtime = RuntimeOverview::reference();
 
-        assert_eq!(runtime.schema_version, 1);
+        assert_eq!(runtime.schema_version, super::RUNTIME_SCHEMA_VERSION);
         assert_eq!(runtime.status_counts.installed, 0);
         assert_eq!(runtime.status_counts.available, 0);
         assert_eq!(runtime.status_counts.unavailable, 3);
@@ -890,5 +1490,169 @@ mod tests {
         assert!(runtime
             .cancel_job("job-runtime-reference-generate")
             .is_none());
+    }
+
+    #[test]
+    fn runtime_job_store_executes_and_persists_artifacts() {
+        let store = RuntimeJobStore::new(temp_runtime_root("success"));
+        let overview = installed_overview(&store);
+
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "kokoro-82m".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Runtime smoke read".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                },
+            )
+            .expect("enqueue succeeds");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+        assert_eq!(job.adapter, ProviderAdapterKind::NativeRust);
+        assert!(PathBuf::from(&job.recipe_path).is_file());
+        assert!(PathBuf::from(&job.model_metadata_path).is_file());
+        assert!(PathBuf::from(&job.events_path).is_file());
+        assert!(job.artifacts.iter().any(|artifact| {
+            artifact.kind == RuntimeArtifactKind::AudioPreview
+                && artifact.bytes > 44
+                && PathBuf::from(&artifact.path).is_file()
+        }));
+        assert!(store
+            .read_jobs()
+            .expect("read jobs")
+            .iter()
+            .any(|stored| stored.id == job.id));
+    }
+
+    #[test]
+    fn runtime_job_store_persists_actionable_failure() {
+        let store = RuntimeJobStore::new(temp_runtime_root("failure"));
+        let overview = RuntimeOverview::reference();
+
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "missing-provider".to_string(),
+                    model_id: "missing-model".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Sfx,
+                    prompt: "Missing runtime".to_string(),
+                    source_surface: "SFX Studio".to_string(),
+                },
+            )
+            .expect("failed job persists");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Failed);
+        assert!(job.actionable_error.is_some());
+        assert!(job.artifacts.iter().any(|artifact| {
+            artifact.kind == RuntimeArtifactKind::ErrorReport
+                && PathBuf::from(&artifact.path).is_file()
+        }));
+    }
+
+    #[test]
+    fn runtime_job_store_cancels_running_job_and_retries_failed_job() {
+        let store = RuntimeJobStore::new(temp_runtime_root("cancel-retry"));
+        let overview = installed_overview(&store);
+
+        let running = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "kokoro-82m".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "hold-for-cancel".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                },
+            )
+            .expect("running job persists");
+        assert_eq!(running.status, crate::domain::JobStatus::Running);
+
+        let cancelled = store
+            .cancel(&running.id)
+            .expect("cancel command succeeds")
+            .expect("job exists");
+        assert_eq!(cancelled.status, crate::domain::JobStatus::Cancelled);
+        assert_eq!(cancelled.cancellation, CancellationState::Completed);
+
+        let failed = store
+            .enqueue(
+                &RuntimeOverview::reference(),
+                RuntimeJobRequest {
+                    provider_id: "missing-provider".to_string(),
+                    model_id: "missing-model".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Sfx,
+                    prompt: "Missing runtime".to_string(),
+                    source_surface: "SFX Studio".to_string(),
+                },
+            )
+            .expect("failed job persists");
+        let retried = store
+            .retry(&RuntimeOverview::reference(), &failed.id)
+            .expect("retry command succeeds")
+            .expect("retry job exists");
+        assert_ne!(retried.id, failed.id);
+        assert_eq!(retried.retry_count, 1);
+    }
+
+    fn installed_overview(store: &RuntimeJobStore) -> RuntimeOverview {
+        RuntimeOverview {
+            schema_version: super::RUNTIME_SCHEMA_VERSION,
+            packaging_policy: RuntimePackagingPolicy::shipped_desktop(),
+            devices: DeviceInventory::reference_mac().devices,
+            status_counts: super::RuntimeStatusCounts {
+                installed: 1,
+                available: 0,
+                unavailable: 0,
+            },
+            model_states: vec![super::ModelRuntimeState {
+                provider_id: "hexgrad".to_string(),
+                model_id: "kokoro-82m".to_string(),
+                model_name: "Kokoro 82M".to_string(),
+                runtime: ModelRuntime::Local,
+                workflows: vec![CapabilityWorkflow::Tts],
+                availability: RuntimeAvailability::Installed,
+                install_status: ModelInstallStatus::Installed,
+                cache: ModelCacheState {
+                    package_id: Some("onnx-community/Kokoro-82M-v1.0-ONNX".to_string()),
+                    status: CacheStatus::Ready,
+                    expected_size_mb: Some(1450),
+                    disk_usage_mb: Some(1450),
+                    verified: true,
+                    evidence: "verified test cache".to_string(),
+                    license: LicenseAcceptanceState::Accepted,
+                    warmup: WarmupStatus::Cold,
+                },
+                compatibility: RuntimeCompatibility {
+                    supported: true,
+                    selected_accelerator: Some(crate::manifests::DeviceAccelerator::Cpu),
+                    min_memory_mb: None,
+                    available_memory_mb: Some(32768),
+                    requires_network: false,
+                    reasons: vec![],
+                },
+                health: RuntimeHealth::Ready,
+                reasons: vec![],
+            }],
+            jobs: store.read_jobs().unwrap_or_default(),
+            validation_checks: vec![],
+        }
+    }
+
+    fn temp_runtime_root(label: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "soundworks-runtime-{label}-{}",
+            super::timestamp_millis()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        root
     }
 }

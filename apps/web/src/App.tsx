@@ -51,8 +51,11 @@ import {
   loadAppOverview,
   loadAssetLibraryOverview,
   loadCompositionEditorOverview,
+  cancelRuntimeJob,
+  enqueueRuntimeJob,
   loadExportWorkflowOverview,
   installModelCandidate,
+  retryRuntimeJob,
   loadModelManagerOverview,
   loadMvpValidationOverview,
   loadRightsSafetyOverview,
@@ -78,6 +81,8 @@ import type {
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
+  RuntimeJobRequest,
+  RuntimeJobSnapshot,
   SamplesStudioOverview,
   SongStudioOverview,
   SfxStudioOverview,
@@ -150,6 +155,17 @@ function scopeLabel(scope: { kind: string; projectId?: string }) {
     : (scope.projectId ?? "Project");
 }
 
+function runtimeModelFor(runtime: RuntimeOverview, workflow: string) {
+  return (
+    runtime.modelStates.find(
+      (model) =>
+        model.availability === "installed" &&
+        model.cache.verified &&
+        model.workflows.includes(workflow as RuntimeJobRequest["workflow"]),
+    ) ?? null
+  );
+}
+
 export function App() {
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
@@ -159,6 +175,8 @@ export function App() {
     useState<ModelManagerOperation | null>(
       visibleModelManagerOperation(fallbackModelManager.operations),
     );
+  const [runtimeOperation, setRuntimeOperation] =
+    useState<RuntimeJobSnapshot | null>(fallbackRuntime.jobs[0] ?? null);
   const [workspace, setWorkspace] =
     useState<WorkspaceOverview>(fallbackWorkspace);
   const [assetLibrary, setAssetLibrary] =
@@ -306,6 +324,50 @@ export function App() {
     });
   }
 
+  function refreshRuntime() {
+    loadRuntimeOverview().then((nextRuntime) => {
+      setRuntime(nextRuntime);
+      setRuntimeOperation(nextRuntime.jobs[0] ?? null);
+    });
+  }
+
+  function runRuntimeJob(
+    workflow: RuntimeJobRequest["workflow"],
+    prompt: string,
+  ) {
+    const model = runtimeModelFor(runtime, workflow);
+    const request: RuntimeJobRequest = {
+      providerId: model?.providerId ?? "missing-provider",
+      modelId: model?.modelId ?? "missing-model",
+      kind: "generate-audio",
+      workflow,
+      prompt,
+      sourceSurface: workflowLabel(workflow),
+    };
+    enqueueRuntimeJob(request).then((job) => {
+      setRuntimeOperation(job);
+      refreshRuntime();
+    });
+  }
+
+  function cancelRuntimeOperation(jobId: string) {
+    cancelRuntimeJob(jobId).then((job) => {
+      if (job) {
+        setRuntimeOperation(job);
+      }
+      refreshRuntime();
+    });
+  }
+
+  function retryRuntimeOperation(jobId: string) {
+    retryRuntimeJob(jobId).then((job) => {
+      if (job) {
+        setRuntimeOperation(job);
+      }
+      refreshRuntime();
+    });
+  }
+
   const scaffoldedLayerCount = useMemo(
     () =>
       overview.architecture.layers.filter(
@@ -357,6 +419,14 @@ export function App() {
         ),
       ),
     [songStudio.providerScorecards],
+  );
+  const ttsRuntimeModel = useMemo(
+    () => runtimeModelFor(runtime, "tts"),
+    [runtime],
+  );
+  const sfxRuntimeModel = useMemo(
+    () => runtimeModelFor(runtime, "sfx"),
+    [runtime],
   );
 
   return (
@@ -1674,14 +1744,20 @@ export function App() {
             </div>
             <button
               className="primary-action"
-              disabled={!ttsStudio.submission.canSubmit}
+              disabled={!ttsRuntimeModel}
+              onClick={() =>
+                runRuntimeJob(
+                  "tts",
+                  ttsStudio.script.segments
+                    .map((segment) => segment.text)
+                    .join(" "),
+                )
+              }
               type="button"
               title="Queue TTS generation"
             >
               <Play aria-hidden="true" size={18} />
-              <span>
-                {ttsStudio.submission.canSubmit ? "Queue" : "Blocked"}
-              </span>
+              <span>{ttsRuntimeModel ? "Queue" : "Blocked"}</span>
             </button>
           </div>
 
@@ -1778,12 +1854,27 @@ export function App() {
               <section className="tts-subpanel" aria-label="Saved output">
                 <div className="subpanel-heading">
                   <h3>Output</h3>
-                  <span>{ttsStudio.submission.job.status}</span>
+                  <span>
+                    {runtimeOperation?.status ??
+                      ttsStudio.submission.job.status}
+                  </span>
                 </div>
                 <div className="output-card">
-                  <strong>{ttsStudio.savedOutput.asset.name}</strong>
-                  <small>{ttsStudio.savedOutput.asset.currentVersionId}</small>
-                  <p>{ttsStudio.savedOutput.version.file.storagePath}</p>
+                  <strong>
+                    {runtimeOperation?.workflow === "tts"
+                      ? runtimeOperation.id
+                      : ttsStudio.savedOutput.asset.name}
+                  </strong>
+                  <small>
+                    {runtimeOperation?.workflow === "tts"
+                      ? `${statusLabel(runtimeOperation.status)} / ${runtimeOperation.adapter}`
+                      : ttsStudio.savedOutput.asset.currentVersionId}
+                  </small>
+                  <p>
+                    {runtimeOperation?.workflow === "tts"
+                      ? runtimeOperation.recordRoot
+                      : ttsStudio.savedOutput.version.file.storagePath}
+                  </p>
                 </div>
               </section>
             </div>
@@ -1987,14 +2078,13 @@ export function App() {
             </div>
             <button
               className="primary-action sfx-action"
-              disabled={!sfxStudio.submission.canSubmit}
+              disabled={!sfxRuntimeModel}
+              onClick={() => runRuntimeJob("sfx", sfxStudio.prompt.text)}
               type="button"
               title="Queue SFX generation"
             >
               <Play aria-hidden="true" size={18} />
-              <span>
-                {sfxStudio.submission.canSubmit ? "Generate" : "Blocked"}
-              </span>
+              <span>{sfxRuntimeModel ? "Generate" : "Blocked"}</span>
             </button>
           </div>
 
@@ -3646,9 +3736,33 @@ export function App() {
                           {Math.round(job.progress?.percent ?? 0)}% /{" "}
                           {statusLabel(job.cancellation)}
                         </small>
+                        <em>{job.recordRoot}</em>
+                        {job.artifacts[0] ? (
+                          <em>
+                            {job.artifacts[0].summary}: {job.artifacts[0].path}
+                          </em>
+                        ) : null}
                         {job.actionableError ? (
                           <em>{job.actionableError.recovery}</em>
                         ) : null}
+                        <div className="runtime-job-actions">
+                          <button
+                            className="secondary-action"
+                            disabled={job.cancellation !== "cancellable"}
+                            onClick={() => cancelRuntimeOperation(job.id)}
+                            type="button"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            className="secondary-action"
+                            disabled={job.status !== "failed"}
+                            onClick={() => retryRuntimeOperation(job.id)}
+                            type="button"
+                          >
+                            Retry
+                          </button>
+                        </div>
                       </div>
                     </li>
                   ))}

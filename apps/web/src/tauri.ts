@@ -26,6 +26,9 @@ import type {
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
+  RuntimeJobArtifact,
+  RuntimeJobRequest,
+  RuntimeJobSnapshot,
   ModelManagerOperation,
   ModelManagerOverview,
   SamplesStudioOverview,
@@ -53,12 +56,108 @@ export async function loadRuntimeOverview(): Promise<RuntimeOverview> {
   }
 }
 
+export async function enqueueRuntimeJob(
+  request: RuntimeJobRequest,
+): Promise<RuntimeJobSnapshot> {
+  try {
+    return await invoke<RuntimeJobSnapshot>("enqueue_runtime_job", { request });
+  } catch {
+    return fallbackRuntimeJob(request);
+  }
+}
+
+export async function cancelRuntimeJob(
+  jobId: string,
+): Promise<RuntimeJobSnapshot | null> {
+  try {
+    return await invoke<RuntimeJobSnapshot | null>("cancel_runtime_job", {
+      jobId,
+    });
+  } catch {
+    const job = fallbackRuntime.jobs.find(
+      (candidate) => candidate.id === jobId,
+    );
+    return job
+      ? {
+          ...job,
+          status: "cancelled",
+          cancellation: "completed",
+          progress: {
+            percent: job.progress?.percent ?? 0,
+            message: "Cancellation persisted by runtime fallback.",
+          },
+        }
+      : null;
+  }
+}
+
+export async function retryRuntimeJob(
+  jobId: string,
+): Promise<RuntimeJobSnapshot | null> {
+  try {
+    return await invoke<RuntimeJobSnapshot | null>("retry_runtime_job", {
+      jobId,
+    });
+  } catch {
+    const job = fallbackRuntime.jobs.find(
+      (candidate) => candidate.id === jobId,
+    );
+    return job ? { ...job, retryCount: job.retryCount + 1 } : null;
+  }
+}
+
+export async function loadRuntimeJobArtifacts(
+  jobId: string,
+): Promise<RuntimeJobArtifact[]> {
+  try {
+    return await invoke<RuntimeJobArtifact[]>("get_runtime_job_artifacts", {
+      jobId,
+    });
+  } catch {
+    return (
+      fallbackRuntime.jobs.find((job) => job.id === jobId)?.artifacts ?? []
+    );
+  }
+}
+
 export async function loadModelManagerOverview(): Promise<ModelManagerOverview> {
   try {
     return await invoke<ModelManagerOverview>("get_model_manager_overview");
   } catch {
     return fallbackModelManager;
   }
+}
+
+function fallbackRuntimeJob(request: RuntimeJobRequest): RuntimeJobSnapshot {
+  const now = Date.now().toString();
+  return {
+    id: `fallback-${request.workflow}-${now}`,
+    kind: request.kind,
+    status: "failed",
+    providerId: request.providerId,
+    modelId: request.modelId,
+    workflow: request.workflow,
+    adapter: "research-only",
+    progress: {
+      percent: 100,
+      message: "Runtime command is unavailable in web fallback mode.",
+    },
+    cancellation: "not-cancellable",
+    retryCount: 0,
+    createdAt: now,
+    updatedAt: now,
+    recordRoot: "web-fallback",
+    recipePath: "web-fallback/recipe.json",
+    modelMetadataPath: "web-fallback/model.json",
+    eventsPath: "web-fallback/events.jsonl",
+    logTail: ["Tauri runtime command unavailable"],
+    artifacts: [],
+    actionableError: {
+      code: "runtime.command_unavailable",
+      summary: "Runtime command unavailable",
+      recovery: "Run SoundWorks in the Tauri desktop shell to enqueue jobs.",
+    },
+  };
 }
 
 export async function installModelCandidate(

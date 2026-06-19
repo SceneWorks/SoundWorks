@@ -131,7 +131,9 @@ function countFor(counts: Record<string, number>, key: string) {
 }
 
 function scopeLabel(scope: { kind: string; projectId?: string }) {
-  return scope.kind === "globalLibrary" ? "Global" : scope.projectId ?? "Project";
+  return scope.kind === "globalLibrary"
+    ? "Global"
+    : (scope.projectId ?? "Project");
 }
 
 export function App() {
@@ -406,7 +408,10 @@ export function App() {
           </div>
 
           <div className="workspace-layout">
-            <section className="workspace-projects" aria-label="Recent projects">
+            <section
+              className="workspace-projects"
+              aria-label="Recent projects"
+            >
               {workspace.recentProjects.map((project) => (
                 <article
                   className={
@@ -441,7 +446,9 @@ export function App() {
               <p>{workspace.globalLibrary.storageRoot}</p>
               <div className="asset-tag-row detail-tags">
                 <span>{workspace.globalLibrary.reusableVoiceCount} voice</span>
-                <span>{workspace.globalLibrary.reusablePresetCount} preset</span>
+                <span>
+                  {workspace.globalLibrary.reusablePresetCount} preset
+                </span>
                 <span>
                   {workspace.globalLibrary.reusableCollectionCount} collection
                 </span>
@@ -537,7 +544,10 @@ export function App() {
             </section>
           </div>
 
-          <div className="workspace-parity-strip" aria-label="SceneWorks parity">
+          <div
+            className="workspace-parity-strip"
+            aria-label="SceneWorks parity"
+          >
             {workspace.parityNotes.map((note) => (
               <article key={note.id}>
                 <strong>{note.area}</strong>
@@ -924,7 +934,26 @@ export function App() {
                 <small>
                   {exportWorkflow.sceneWorksHandoff.sampleRateHz} Hz /{" "}
                   {exportWorkflow.sceneWorksHandoff.channels} channels /{" "}
-                  {exportWorkflow.sceneWorksHandoff.markerCount} marker
+                  {exportWorkflow.sceneWorksHandoff.markerCount} marker /{" "}
+                  {statusLabel(exportWorkflow.sceneWorksHandoff.importStrategy)}
+                </small>
+                <div className="asset-tag-row detail-tags">
+                  <span>
+                    {exportWorkflow.sceneWorksHandoff.sceneWorksAssetType}
+                  </span>
+                  <span>
+                    {exportWorkflow.sceneWorksHandoff.sceneWorksMimeType}
+                  </span>
+                  <span>
+                    {exportWorkflow.sceneWorksHandoff.replaceExistingAudio
+                      ? "replace enabled"
+                      : "attach only"}
+                  </span>
+                </div>
+                <p>{exportWorkflow.sceneWorksHandoff.packageManifestPath}</p>
+                <small>
+                  {exportWorkflow.sceneWorksHandoff.intendedProjectId} /{" "}
+                  {exportWorkflow.sceneWorksHandoff.intendedVideoAssetId}
                 </small>
               </section>
             </div>
@@ -987,6 +1016,65 @@ export function App() {
                 ))}
               </ol>
             </section>
+
+            <section
+              className="tts-subpanel"
+              aria-label="SceneWorks compatibility"
+            >
+              <div className="subpanel-heading">
+                <h3>SceneWorks compatibility</h3>
+                <span>
+                  {exportWorkflow.sceneWorksHandoff.compatibilityChecks.length}
+                </span>
+              </div>
+              <ol className="voice-checks">
+                {exportWorkflow.sceneWorksHandoff.compatibilityChecks.map(
+                  (check) => (
+                    <li
+                      className={
+                        check.status === "blocked" ? "failed" : "passed"
+                      }
+                      key={check.id}
+                    >
+                      <ClipboardCheck aria-hidden="true" size={16} />
+                      <span>
+                        <strong>{statusLabel(check.status)}</strong>{" "}
+                        {check.summary}
+                      </span>
+                    </li>
+                  ),
+                )}
+              </ol>
+            </section>
+
+            <section
+              className="tts-subpanel"
+              aria-label="SceneWorks attachment steps"
+            >
+              <div className="subpanel-heading">
+                <h3>SceneWorks attachment</h3>
+                <span>
+                  {exportWorkflow.sceneWorksHandoff.attachmentSteps.length}
+                </span>
+              </div>
+              <ol className="version-list">
+                {exportWorkflow.sceneWorksHandoff.attachmentSteps.map(
+                  (step) => (
+                    <li key={step.id}>
+                      <CircleCheck aria-hidden="true" size={16} />
+                      <div>
+                        <strong>{step.label}</strong>
+                        <small>
+                          {step.source}
+                          {" -> "}
+                          {step.target}
+                        </small>
+                      </div>
+                    </li>
+                  ),
+                )}
+              </ol>
+            </section>
           </div>
         </section>
 
@@ -1039,7 +1127,10 @@ export function App() {
 
           <div className="composition-layout">
             <div className="composition-main">
-              <section className="composition-toolbar" aria-label="Editor tools">
+              <section
+                className="composition-toolbar"
+                aria-label="Editor tools"
+              >
                 {compositionEditor.tools.map((tool) => (
                   <button
                     className={
@@ -1058,13 +1149,20 @@ export function App() {
               </section>
 
               <section className="timeline-board" aria-label="Timeline tracks">
-                <div className="timeline-selection" aria-label="Timeline selection">
+                <div
+                  className="timeline-selection"
+                  aria-label="Timeline selection"
+                >
                   <span>{compositionEditor.timeline.selectedClipId}</span>
                   <span>
-                    cursor {formatDuration(compositionEditor.timeline.playbackCursorMs)}
+                    cursor{" "}
+                    {formatDuration(
+                      compositionEditor.timeline.playbackCursorMs,
+                    )}
                   </span>
                   <span>
-                    loop {formatDuration(compositionEditor.timeline.loopRange.endMs)}
+                    loop{" "}
+                    {formatDuration(compositionEditor.timeline.loopRange.endMs)}
                   </span>
                 </div>
                 <div className="timeline-ruler" aria-label="Timeline ruler">
@@ -1157,7 +1255,9 @@ export function App() {
                       <div className="asset-tag-row">
                         <span>{formatDuration(asset.durationMs)}</span>
                         <span>{statusLabel(asset.sourceWorkflow)}</span>
-                        {asset.draggableToTimeline ? <span>placeable</span> : null}
+                        {asset.draggableToTimeline ? (
+                          <span>placeable</span>
+                        ) : null}
                       </div>
                     </article>
                   ))}
@@ -1195,7 +1295,10 @@ export function App() {
           </div>
 
           <div className="composition-bottom-grid">
-            <section className="tts-subpanel" aria-label="Generated asset flows">
+            <section
+              className="tts-subpanel"
+              aria-label="Generated asset flows"
+            >
               <div className="subpanel-heading">
                 <h3>Studio flows</h3>
                 <span>{compositionEditor.sourceFlows.length}</span>
@@ -1208,7 +1311,8 @@ export function App() {
                   >
                     <CircleCheck aria-hidden="true" size={16} />
                     <span>
-                      <strong>{flow.label}</strong> {statusLabel(flow.assetKind)}
+                      <strong>{flow.label}</strong>{" "}
+                      {statusLabel(flow.assetKind)}
                     </span>
                   </li>
                 ))}
@@ -1233,12 +1337,13 @@ export function App() {
               <small>{compositionEditor.exportPlan.sceneWorksWarning}</small>
             </section>
 
-            <section className="tts-subpanel" aria-label="Editor component decision">
+            <section
+              className="tts-subpanel"
+              aria-label="Editor component decision"
+            >
               <div className="subpanel-heading">
                 <h3>Component decision</h3>
-                <span>
-                  {overview.compositionEditor.recommendedComponentId}
-                </span>
+                <span>{overview.compositionEditor.recommendedComponentId}</span>
               </div>
               <div className="component-decision-list">
                 {compositionEditor.componentDecisions.map((decision) => (
@@ -2065,10 +2170,17 @@ export function App() {
                 <small>{videoToAudio.direction.negativePrompt}</small>
                 <div className="candidate-strip">
                   <span>{statusLabel(videoToAudio.direction.syncMode)}</span>
-                  <span>{videoToAudio.source.hasSourceAudio ? "source audio" : "silent video"}</span>
-                  <span>{videoToAudio.source.imageReferenceIds.length} keyframe</span>
                   <span>
-                    {videoToAudio.source.referenceAudioAssetIds.length} reference audio
+                    {videoToAudio.source.hasSourceAudio
+                      ? "source audio"
+                      : "silent video"}
+                  </span>
+                  <span>
+                    {videoToAudio.source.imageReferenceIds.length} keyframe
+                  </span>
+                  <span>
+                    {videoToAudio.source.referenceAudioAssetIds.length}{" "}
+                    reference audio
                   </span>
                 </div>
               </section>

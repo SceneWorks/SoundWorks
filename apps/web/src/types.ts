@@ -302,17 +302,48 @@ export type ExportWorkflowOverview = {
     presetId: string;
     packagePath: string;
     renderedMixdownPath: string;
+    packageManifestPath: string;
     provenanceSidecarPath: string;
     includesOptionalStems: boolean;
+    optionalStemPaths: string[];
+    importStrategy: string;
+    attachmentMode: string;
     intendedProjectId?: string | null;
     intendedVideoAssetId?: string | null;
+    sceneWorksProjectPath?: string | null;
+    targetVideoSidecarPath?: string | null;
+    sceneWorksAssetType: string;
+    sceneWorksMimeType: string;
     durationMs: number;
+    targetVideoDurationMs: number;
+    startOffsetMs: number;
     sampleRateHz: number;
     channels: number;
     loudnessLufs?: number | null;
     truePeakDbfs?: number | null;
     markerCount: number;
     sectionCount: number;
+    replaceExistingAudio: boolean;
+    roundTripRecipeUrl: string;
+    sourceEvidence: Array<{
+      sourceRepo: string;
+      filePath: string;
+      lineHint: string;
+      finding: string;
+    }>;
+    compatibilityChecks: Array<{
+      id: string;
+      status: string;
+      summary: string;
+      mitigation: string;
+    }>;
+    attachmentSteps: Array<{
+      id: string;
+      label: string;
+      required: boolean;
+      source: string;
+      target: string;
+    }>;
   };
   validationChecks: Array<{
     id: string;

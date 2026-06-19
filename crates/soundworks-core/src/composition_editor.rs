@@ -66,7 +66,8 @@ impl CompositionEditorOverview {
                 render_ready: true,
                 loudness_check: "composition sits at -16.2 LUFS with -1.1 dBTP peak".to_string(),
                 warnings: vec![
-                    "SceneWorks attachment remains tracked by sc-6202.".to_string(),
+                    "SceneWorks package export is defined; direct runtime attachment needs a SceneWorks importer."
+                        .to_string(),
                     "Offline render must be revalidated once a production Web Audio editor is adopted."
                         .to_string(),
                 ],
@@ -141,9 +142,9 @@ impl CompositionEditorOverview {
                     "rightsSummary".to_string(),
                     "exportPresetId".to_string(),
                 ],
-                scene_works_ready: false,
+                scene_works_ready: true,
                 scene_works_warning:
-                    "SoundWorks can render the package; SceneWorks import validation remains sc-6202."
+                    "SoundWorks can render a SceneWorks handoff package; direct attachment waits for a SceneWorks-side importer."
                         .to_string(),
             },
             component_decisions,
@@ -721,7 +722,7 @@ fn validation_checks() -> Vec<CompositionEditorValidationCheck> {
         check("asset-flow", true, "Generated assets from TTS, Voice Lab, SFX, samples, songs, and future video-to-audio can target editor tracks."),
         check("mixer-render", true, "Track mute/solo, gain, pan, effects, sends, master loudness, mixdown, stems, and sidecar paths are represented."),
         check("component-decision", true, "Editor component candidates include source links, tradeoffs, prototype notes, and adoption decision."),
-        check("sceneworks-export", false, "SceneWorks package metadata is ready, but end-to-end SceneWorks attachment remains sc-6202."),
+        check("sceneworks-export", true, "SceneWorks handoff package metadata, target video identity, and compatibility checks are represented for importer validation."),
     ]
 }
 

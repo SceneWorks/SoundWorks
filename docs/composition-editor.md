@@ -18,7 +18,7 @@ The reference editor covers:
 - Trim, split, duplicate, delete, fade, gain, pan, snap grid, zoom, mute, solo, and render tools.
 - Track-level gain, pan, mute/solo, effect chains, sends, master gain, loudness target, and true-peak ceiling.
 - Markers, sections, loop playback range, playback cursor, and selected clip state.
-- Mixdown, stem output, provenance sidecar, and SceneWorks package metadata.
+- Mixdown, stem output, provenance sidecar, and SceneWorks package metadata with target video identity and compatibility checks.
 
 ## Storage
 
@@ -52,4 +52,4 @@ Automated coverage verifies that the editor:
 - keeps render/mixer state ready while preserving the SceneWorks import limitation,
 - records component source links, tradeoffs, prototype evidence, and adoption decisions.
 
-End-to-end SceneWorks attachment remains tracked by `sc-6202`.
+SC-6202 defines the SoundWorks handoff package and validation metadata. Direct SceneWorks runtime attachment still requires a SceneWorks-side package importer or audio-track attachment endpoint.

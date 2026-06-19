@@ -866,6 +866,83 @@ CREATE TABLE mvp_validation_release_gates (
 );
 ",
     },
+    SchemaMigration {
+        version: 16,
+        name: "composition_editor_workflow",
+        sql: "
+CREATE TABLE composition_editor_sessions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  composition_id TEXT NOT NULL REFERENCES compositions(id),
+  selected_tool TEXT NOT NULL,
+  selected_clip_id TEXT NOT NULL,
+  playback_cursor_ms INTEGER NOT NULL,
+  zoom_percent INTEGER NOT NULL,
+  snap_grid_ms INTEGER NOT NULL,
+  loop_enabled INTEGER NOT NULL,
+  loop_range_json TEXT NOT NULL
+);
+CREATE TABLE composition_editor_tracks (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES composition_editor_sessions(id),
+  track_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  gain_db REAL NOT NULL,
+  pan REAL NOT NULL,
+  muted INTEGER NOT NULL,
+  soloed INTEGER NOT NULL,
+  effect_chain_json TEXT NOT NULL,
+  send_targets_json TEXT NOT NULL
+);
+CREATE TABLE composition_editor_clips (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES composition_editor_sessions(id),
+  track_id TEXT NOT NULL,
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  source_scope_json TEXT NOT NULL,
+  timeline_start_ms INTEGER NOT NULL,
+  source_range_json TEXT NOT NULL,
+  fade_in_ms INTEGER NOT NULL,
+  fade_out_ms INTEGER NOT NULL,
+  gain_db REAL NOT NULL,
+  pan REAL NOT NULL,
+  lane INTEGER NOT NULL,
+  edit_capabilities_json TEXT NOT NULL
+);
+CREATE TABLE composition_editor_mixer_state (
+  session_id TEXT PRIMARY KEY REFERENCES composition_editor_sessions(id),
+  master_gain_db REAL NOT NULL,
+  target_lufs REAL NOT NULL,
+  true_peak_ceiling_dbfs REAL NOT NULL,
+  render_ready INTEGER NOT NULL,
+  loudness_check TEXT NOT NULL,
+  warnings_json TEXT NOT NULL
+);
+CREATE TABLE composition_editor_component_decisions (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  license TEXT NOT NULL,
+  fit TEXT NOT NULL,
+  strengths_json TEXT NOT NULL,
+  risks_json TEXT NOT NULL,
+  prototype_evidence TEXT NOT NULL,
+  decision TEXT NOT NULL
+);
+CREATE TABLE composition_editor_render_plans (
+  session_id TEXT PRIMARY KEY REFERENCES composition_editor_sessions(id),
+  can_render_mixdown INTEGER NOT NULL,
+  preset_ids_json TEXT NOT NULL,
+  mixdown_path TEXT NOT NULL,
+  stem_paths_json TEXT NOT NULL,
+  provenance_sidecar_path TEXT NOT NULL,
+  required_provenance_fields_json TEXT NOT NULL,
+  scene_works_ready INTEGER NOT NULL,
+  scene_works_warning TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

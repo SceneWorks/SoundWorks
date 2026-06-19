@@ -28,6 +28,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fallbackOverview,
   fallbackAssetLibrary,
+  fallbackCompositionEditor,
   fallbackExportWorkflow,
   fallbackMvpValidation,
   fallbackRightsSafety,
@@ -42,6 +43,7 @@ import {
 import {
   loadAppOverview,
   loadAssetLibraryOverview,
+  loadCompositionEditorOverview,
   loadExportWorkflowOverview,
   loadMvpValidationOverview,
   loadRightsSafetyOverview,
@@ -56,6 +58,7 @@ import {
 import type {
   AppOverview,
   AssetLibraryOverview,
+  CompositionEditorOverview,
   ExportWorkflowOverview,
   MvpValidationOverview,
   RightsSafetyOverview,
@@ -117,6 +120,10 @@ function countFor(counts: Record<string, number>, key: string) {
   return counts[key] ?? 0;
 }
 
+function scopeLabel(scope: { kind: string; projectId?: string }) {
+  return scope.kind === "globalLibrary" ? "Global" : scope.projectId ?? "Project";
+}
+
 export function App() {
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
@@ -125,6 +132,8 @@ export function App() {
   const [exportWorkflow, setExportWorkflow] = useState<ExportWorkflowOverview>(
     fallbackExportWorkflow,
   );
+  const [compositionEditor, setCompositionEditor] =
+    useState<CompositionEditorOverview>(fallbackCompositionEditor);
   const [mvpValidation, setMvpValidation] = useState<MvpValidationOverview>(
     fallbackMvpValidation,
   );
@@ -167,6 +176,12 @@ export function App() {
     loadExportWorkflowOverview().then((nextExportWorkflow) => {
       if (active) {
         setExportWorkflow(nextExportWorkflow);
+      }
+    });
+
+    loadCompositionEditorOverview().then((nextCompositionEditor) => {
+      if (active) {
+        setCompositionEditor(nextCompositionEditor);
       }
     });
 
@@ -741,6 +756,280 @@ export function App() {
                   </li>
                 ))}
               </ol>
+            </section>
+          </div>
+        </section>
+
+        <section
+          className="composition-editor-panel"
+          aria-label="Multitrack Composition Editor"
+        >
+          <div className="composition-header">
+            <div>
+              <p className="eyebrow">Multitrack editor</p>
+              <h2>{compositionEditor.composition.name}</h2>
+            </div>
+            <button
+              className="primary-action composition-action"
+              disabled={!compositionEditor.exportPlan.canRenderMixdown}
+              title="Render composition mixdown"
+              type="button"
+            >
+              <Disc3 aria-hidden="true" size={18} />
+              <span>
+                {compositionEditor.exportPlan.canRenderMixdown
+                  ? "Render"
+                  : "Blocked"}
+              </span>
+            </button>
+          </div>
+
+          <div className="composition-metrics" aria-label="Editor status">
+            <div>
+              <SlidersHorizontal aria-hidden="true" size={18} />
+              <strong>{overview.compositionEditor.trackCount}</strong>
+              <span>tracks</span>
+            </div>
+            <div>
+              <FileAudio aria-hidden="true" size={18} />
+              <strong>{overview.compositionEditor.clipCount}</strong>
+              <span>clips</span>
+            </div>
+            <div>
+              <Library aria-hidden="true" size={18} />
+              <strong>{overview.compositionEditor.assetBinCount}</strong>
+              <span>assets</span>
+            </div>
+            <div>
+              <Gauge aria-hidden="true" size={18} />
+              <strong>{compositionEditor.timeline.zoomPercent}%</strong>
+              <span>{compositionEditor.timeline.snapGridMs}ms grid</span>
+            </div>
+          </div>
+
+          <div className="composition-layout">
+            <div className="composition-main">
+              <section className="composition-toolbar" aria-label="Editor tools">
+                {compositionEditor.tools.map((tool) => (
+                  <button
+                    className={
+                      tool.id === compositionEditor.timeline.selectedTool
+                        ? "tool-button selected"
+                        : "tool-button"
+                    }
+                    disabled={!tool.enabled}
+                    key={tool.id}
+                    title={tool.label}
+                    type="button"
+                  >
+                    <span>{tool.label}</span>
+                  </button>
+                ))}
+              </section>
+
+              <section className="timeline-board" aria-label="Timeline tracks">
+                <div className="timeline-selection" aria-label="Timeline selection">
+                  <span>{compositionEditor.timeline.selectedClipId}</span>
+                  <span>
+                    cursor {formatDuration(compositionEditor.timeline.playbackCursorMs)}
+                  </span>
+                  <span>
+                    loop {formatDuration(compositionEditor.timeline.loopRange.endMs)}
+                  </span>
+                </div>
+                <div className="timeline-ruler" aria-label="Timeline ruler">
+                  {compositionEditor.timeline.gridLabels.map((label) => (
+                    <span key={label}>{label}</span>
+                  ))}
+                </div>
+                {compositionEditor.tracks.map((track) => (
+                  <article className="timeline-track" key={track.trackId}>
+                    <div className="track-strip">
+                      <strong>{track.name}</strong>
+                      <small>
+                        {statusLabel(track.role)} / {track.gainDb} dB / pan{" "}
+                        {track.pan}
+                      </small>
+                      <span>
+                        {track.muted ? "Muted" : "Live"} /{" "}
+                        {track.soloed ? "Solo" : "Mix"}
+                      </span>
+                    </div>
+                    <div className="clip-lane">
+                      {track.clips.map((clip) => (
+                        <button
+                          className={
+                            clip.clipId ===
+                            compositionEditor.timeline.selectedClipId
+                              ? "timeline-clip selected"
+                              : "timeline-clip"
+                          }
+                          key={clip.clipId}
+                          style={{
+                            marginLeft: `${Math.min(
+                              68,
+                              clip.timelineStartMs / 420,
+                            )}%`,
+                            width: `${Math.max(
+                              16,
+                              Math.min(
+                                38,
+                                (clip.sourceRange.endMs -
+                                  clip.sourceRange.startMs) /
+                                  520,
+                              ),
+                            )}%`,
+                          }}
+                          title={clip.assetName}
+                          type="button"
+                        >
+                          <strong>{clip.assetName}</strong>
+                          <span>{statusLabel(clip.assetKind)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </section>
+
+              <section className="tts-subpanel" aria-label="Editor validation">
+                <div className="subpanel-heading">
+                  <h3>Validation</h3>
+                  <span>{compositionEditor.validationChecks.length}</span>
+                </div>
+                <ol className="voice-checks">
+                  {compositionEditor.validationChecks.map((check) => (
+                    <li
+                      className={check.passed ? "passed" : "failed"}
+                      key={check.id}
+                    >
+                      <ClipboardCheck aria-hidden="true" size={16} />
+                      <span>{check.summary}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </div>
+
+            <div className="composition-side">
+              <section className="tts-subpanel" aria-label="Timeline assets">
+                <div className="subpanel-heading">
+                  <h3>Asset bin</h3>
+                  <span>{compositionEditor.assetBin.length}</span>
+                </div>
+                <div className="asset-bin-list">
+                  {compositionEditor.assetBin.map((asset) => (
+                    <article key={asset.assetId}>
+                      <strong>{asset.name}</strong>
+                      <small>
+                        {statusLabel(asset.kind)} / {scopeLabel(asset.scope)}
+                      </small>
+                      <div className="asset-tag-row">
+                        <span>{formatDuration(asset.durationMs)}</span>
+                        <span>{statusLabel(asset.sourceWorkflow)}</span>
+                        {asset.draggableToTimeline ? <span>placeable</span> : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Mixer state">
+                <div className="subpanel-heading">
+                  <h3>Mixer</h3>
+                  <span>{compositionEditor.mixer.targetLufs} LUFS</span>
+                </div>
+                <p>{compositionEditor.mixer.loudnessCheck}</p>
+                <div className="mixer-list">
+                  {compositionEditor.mixer.trackStates.map((track) => (
+                    <article key={track.trackId}>
+                      <strong>{track.label}</strong>
+                      <small>
+                        {track.gainDb} dB / pan {track.pan}
+                      </small>
+                      <div className="asset-tag-row">
+                        {track.effectChain.map((effect) => (
+                          <span key={`${track.trackId}-${effect}`}>
+                            {effect}
+                          </span>
+                        ))}
+                        {track.sendTargets.map((send) => (
+                          <span key={`${track.trackId}-${send}`}>{send}</span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div className="composition-bottom-grid">
+            <section className="tts-subpanel" aria-label="Generated asset flows">
+              <div className="subpanel-heading">
+                <h3>Studio flows</h3>
+                <span>{compositionEditor.sourceFlows.length}</span>
+              </div>
+              <ol className="voice-checks">
+                {compositionEditor.sourceFlows.map((flow) => (
+                  <li
+                    className={flow.status === "ready" ? "passed" : "failed"}
+                    key={`${flow.workflow}-${flow.assetKind}`}
+                  >
+                    <CircleCheck aria-hidden="true" size={16} />
+                    <span>
+                      <strong>{flow.label}</strong> {statusLabel(flow.assetKind)}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Render plan">
+              <div className="subpanel-heading">
+                <h3>Render plan</h3>
+                <span>
+                  {compositionEditor.exportPlan.canRenderMixdown
+                    ? "ready"
+                    : "blocked"}
+                </span>
+              </div>
+              <p>{compositionEditor.exportPlan.mixdownPath}</p>
+              <div className="asset-tag-row detail-tags">
+                {compositionEditor.exportPlan.presetIds.map((preset) => (
+                  <span key={preset}>{preset}</span>
+                ))}
+              </div>
+              <small>{compositionEditor.exportPlan.sceneWorksWarning}</small>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Editor component decision">
+              <div className="subpanel-heading">
+                <h3>Component decision</h3>
+                <span>
+                  {overview.compositionEditor.recommendedComponentId}
+                </span>
+              </div>
+              <div className="component-decision-list">
+                {compositionEditor.componentDecisions.map((decision) => (
+                  <article
+                    className={
+                      decision.fit === "strong-prototype-candidate"
+                        ? "recommended"
+                        : ""
+                    }
+                    key={decision.id}
+                  >
+                    <strong>{decision.name}</strong>
+                    <small>
+                      {decision.license} / {statusLabel(decision.fit)}
+                    </small>
+                    <p>{decision.prototypeEvidence}</p>
+                    <p>{decision.decision}</p>
+                    <a href={decision.sourceUrl}>{decision.sourceUrl}</a>
+                  </article>
+                ))}
+              </div>
             </section>
           </div>
         </section>

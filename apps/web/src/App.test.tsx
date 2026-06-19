@@ -150,6 +150,33 @@ describe("App", () => {
     expect(
       screen.getByText(/Loop and sample pack exports preserve BPM, key/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Demo timeline" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Render composition mixdown")).toBeEnabled();
+    expect(screen.getByText("clip-voice-intro")).toBeInTheDocument();
+    expect(screen.getByText("Reference cue bed")).toBeInTheDocument();
+    expect(screen.getByText("City Lights vocal stem")).toBeInTheDocument();
+    expect(screen.getAllByText("Metal hatch impact").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Timeline clips preserve project/global source identity and version IDs for reopen safety.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("composition sits at -16.2 LUFS with -1.1 dBTP peak"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("waveform-playlist").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Spike first; do not hard-depend in product code until runtime/export behavior is proven.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "SoundWorks can render the package; SceneWorks import validation remains sc-6202.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByTitle("SoundWorks export gate")).toBeDisabled();
     expect(
       screen.getByText(

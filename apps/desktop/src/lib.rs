@@ -1,8 +1,8 @@
 use soundworks_core::{
-    AppOverview, AssetLibraryOverview, ExportWorkflowOverview, ModelEvaluationCatalog,
-    MvpValidationOverview, ProviderCatalog, ReviewWorkspaceOverview, RightsSafetyOverview,
-    RuntimeOverview, SamplesStudioOverview, SfxStudioOverview, SongStudioOverview,
-    TtsStudioOverview, VoiceLabOverview,
+    AppOverview, AssetLibraryOverview, CompositionEditorOverview, ExportWorkflowOverview,
+    ModelEvaluationCatalog, MvpValidationOverview, ProviderCatalog, ReviewWorkspaceOverview,
+    RightsSafetyOverview, RuntimeOverview, SamplesStudioOverview, SfxStudioOverview,
+    SongStudioOverview, TtsStudioOverview, VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -23,6 +23,11 @@ fn get_asset_library_overview() -> AssetLibraryOverview {
 #[tauri::command]
 fn get_export_workflow_overview() -> ExportWorkflowOverview {
     export_workflow_overview()
+}
+
+#[tauri::command]
+fn get_composition_editor_overview() -> CompositionEditorOverview {
+    composition_editor_overview()
 }
 
 #[tauri::command]
@@ -91,6 +96,10 @@ pub fn export_workflow_overview() -> ExportWorkflowOverview {
     ExportWorkflowOverview::reference()
 }
 
+pub fn composition_editor_overview() -> CompositionEditorOverview {
+    CompositionEditorOverview::reference()
+}
+
 pub fn runtime_overview() -> RuntimeOverview {
     RuntimeOverview::reference()
 }
@@ -139,6 +148,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_provider_catalog,
             get_asset_library_overview,
             get_export_workflow_overview,
+            get_composition_editor_overview,
             get_runtime_overview,
             get_model_evaluation_catalog,
             get_mvp_validation_overview,
@@ -162,10 +172,11 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        app_overview, asset_library_overview, export_workflow_overview, model_evaluation_catalog,
-        mvp_validation_overview, provider_catalog, review_workspace_overview,
-        rights_safety_overview, runtime_overview, samples_studio_overview, sfx_studio_overview,
-        song_studio_overview, tts_studio_overview, voice_lab_overview,
+        app_overview, asset_library_overview, composition_editor_overview,
+        export_workflow_overview, model_evaluation_catalog, mvp_validation_overview,
+        provider_catalog, review_workspace_overview, rights_safety_overview, runtime_overview,
+        samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
+        voice_lab_overview,
     };
 
     #[test]
@@ -206,6 +217,20 @@ mod tests {
         assert_eq!(exports.presets.len(), 7);
         assert!(exports.selected_export.can_export);
         assert!(exports.validation_checks.iter().all(|check| check.passed));
+    }
+
+    #[test]
+    fn composition_editor_command_returns_timeline_and_component_decision() {
+        let editor = composition_editor_overview();
+
+        assert_eq!(editor.schema_version, 1);
+        assert_eq!(editor.tracks.len(), 4);
+        assert_eq!(editor.timeline.selected_clip_id, "clip-voice-intro");
+        assert!(editor.mixer.render_ready);
+        assert!(editor
+            .component_decisions
+            .iter()
+            .any(|decision| decision.id == "waveform-playlist"));
     }
 
     #[test]

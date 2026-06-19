@@ -1,9 +1,10 @@
 use soundworks_core::{
     AppOverview, AssetLibraryOverview, CompositionEditorOverview, ExportWorkflowOverview,
     ModelEvaluationCatalog, ModelManagerOperation, ModelManagerOverview, MvpValidationOverview,
-    ProviderCatalog, ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeOverview,
-    SamplesStudioOverview, SfxStudioOverview, SongStudioOverview, TtsStudioOverview,
-    VideoToAudioOverview, VoiceLabOverview, WorkspaceOverview,
+    ProviderCatalog, ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeJobArtifact,
+    RuntimeJobRequest, RuntimeJobSnapshot, RuntimeJobStore, RuntimeOverview, SamplesStudioOverview,
+    SfxStudioOverview, SongStudioOverview, TtsStudioOverview, VideoToAudioOverview,
+    VoiceLabOverview, WorkspaceOverview,
 };
 
 #[tauri::command]
@@ -39,6 +40,26 @@ fn get_composition_editor_overview() -> CompositionEditorOverview {
 #[tauri::command]
 fn get_runtime_overview() -> RuntimeOverview {
     runtime_overview()
+}
+
+#[tauri::command]
+fn enqueue_runtime_job(request: RuntimeJobRequest) -> Result<RuntimeJobSnapshot, String> {
+    enqueue_job(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn cancel_runtime_job(job_id: String) -> Result<Option<RuntimeJobSnapshot>, String> {
+    cancel_job(job_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn retry_runtime_job(job_id: String) -> Result<Option<RuntimeJobSnapshot>, String> {
+    retry_job(job_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_runtime_job_artifacts(job_id: String) -> Result<Vec<RuntimeJobArtifact>, String> {
+    runtime_job_artifacts(job_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -131,7 +152,42 @@ pub fn composition_editor_overview() -> CompositionEditorOverview {
 }
 
 pub fn runtime_overview() -> RuntimeOverview {
-    RuntimeOverview::reference()
+    RuntimeOverview::from_model_manager(
+        &ModelManagerOverview::reference(),
+        &soundworks_core::DeviceInventory::reference_mac(),
+        soundworks_core::RuntimePackagingPolicy::shipped_desktop(),
+        &RuntimeJobStore::default(),
+    )
+}
+
+pub fn enqueue_job(request: RuntimeJobRequest) -> std::io::Result<RuntimeJobSnapshot> {
+    let store = RuntimeJobStore::default();
+    let overview = RuntimeOverview::from_model_manager(
+        &ModelManagerOverview::reference(),
+        &soundworks_core::DeviceInventory::reference_mac(),
+        soundworks_core::RuntimePackagingPolicy::shipped_desktop(),
+        &store,
+    );
+    store.enqueue(&overview, request)
+}
+
+pub fn cancel_job(job_id: String) -> std::io::Result<Option<RuntimeJobSnapshot>> {
+    RuntimeJobStore::default().cancel(&job_id)
+}
+
+pub fn retry_job(job_id: String) -> std::io::Result<Option<RuntimeJobSnapshot>> {
+    let store = RuntimeJobStore::default();
+    let overview = RuntimeOverview::from_model_manager(
+        &ModelManagerOverview::reference(),
+        &soundworks_core::DeviceInventory::reference_mac(),
+        soundworks_core::RuntimePackagingPolicy::shipped_desktop(),
+        &store,
+    );
+    store.retry(&overview, &job_id)
+}
+
+pub fn runtime_job_artifacts(job_id: String) -> std::io::Result<Vec<RuntimeJobArtifact>> {
+    RuntimeJobStore::default().artifacts(&job_id)
 }
 
 pub fn model_evaluation_catalog() -> ModelEvaluationCatalog {
@@ -197,6 +253,10 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_export_workflow_overview,
             get_composition_editor_overview,
             get_runtime_overview,
+            enqueue_runtime_job,
+            cancel_runtime_job,
+            retry_runtime_job,
+            get_runtime_job_artifacts,
             get_model_evaluation_catalog,
             get_model_manager_overview,
             install_model_candidate,
@@ -319,15 +379,22 @@ mod tests {
     fn runtime_overview_command_returns_worker_state() {
         let runtime = runtime_overview();
 
-        assert_eq!(runtime.schema_version, 1);
-        assert_eq!(runtime.status_counts.installed, 0);
-        assert_eq!(runtime.status_counts.unavailable, 3);
-        assert!(runtime.jobs.is_empty());
+        assert_eq!(
+            runtime.schema_version,
+            soundworks_core::RUNTIME_SCHEMA_VERSION
+        );
+        assert!(runtime
+            .model_states
+            .iter()
+            .all(|state| !state.model_id.starts_with("reference-")));
+        assert!(runtime
+            .jobs
+            .iter()
+            .all(|job| !job.id.starts_with("job-runtime-reference")));
         assert!(runtime
             .validation_checks
             .iter()
-            .any(|check| check.id == "runtime.cache_evidence"
-                && check.status == soundworks_core::ValidationStatus::Failed));
+            .any(|check| check.id == "runtime.job_store"));
     }
 
     #[test]

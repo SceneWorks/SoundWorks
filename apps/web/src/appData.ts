@@ -432,7 +432,30 @@ export const fallbackOverview: AppOverview = {
       name: "get_runtime_overview",
       direction: "ui-to-backend",
       purpose:
-        "Report worker runtime policy, device/model state, job progress, and cancellation readiness.",
+        "Report worker runtime policy, verified model state, persisted jobs, progress, cancellation, and artifact records.",
+    },
+    {
+      name: "enqueue_runtime_job",
+      direction: "ui-to-backend",
+      purpose:
+        "Create a durable runtime job with recipe, model metadata, event log, output manifest, and adapter result.",
+    },
+    {
+      name: "cancel_runtime_job",
+      direction: "ui-to-backend",
+      purpose:
+        "Persist cancellation against a queued or running local runtime job.",
+    },
+    {
+      name: "retry_runtime_job",
+      direction: "ui-to-backend",
+      purpose: "Create a new auditable runtime job from a failed job recipe.",
+    },
+    {
+      name: "get_runtime_job_artifacts",
+      direction: "ui-to-backend",
+      purpose:
+        "Return output manifests, smoke audio artifacts, logs, and actionable error reports for a runtime job.",
     },
     {
       name: "get_model_evaluation_catalog",

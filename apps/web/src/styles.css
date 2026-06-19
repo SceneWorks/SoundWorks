@@ -884,6 +884,11 @@ h1 {
   outline: none;
 }
 
+.secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .export-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
@@ -2668,6 +2673,13 @@ h1 {
 .runtime-list em {
   color: #6b5148;
   font-style: normal;
+}
+
+.runtime-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .runtime-dot {

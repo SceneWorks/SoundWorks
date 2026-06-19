@@ -2,7 +2,7 @@
 
 `sc-6467` adds the recovery surface between source-backed model evaluation and runtime jobs. The model manager is responsible for candidate revalidation, cache verification, install/retry actions, and honest blocked states.
 
-Confidence: high for cache revalidation and model-manager state; medium for runtime readiness. The manager now covers every epic 6148 candidate, verifies Kokoro from the downloaded Hugging Face snapshot cache, and verifies SoundWorks cache paths from disk. Actual provider execution and generated audio remain blocked until later recovery stories wire jobs and adapters.
+Confidence: high for cache revalidation and model-manager state; medium for full provider readiness. The manager now covers every epic 6148 candidate, verifies Kokoro from the downloaded Hugging Face snapshot cache, and verifies SoundWorks cache paths from disk. `sc-6468` consumes this verified state for durable runtime jobs and a native smoke adapter; full provider inference and workflow-quality audio remain owned by the end-to-end lane stories.
 
 ## Guarantees
 

@@ -32,6 +32,7 @@ Video to Audio scorecards are derived from the source-backed model evaluation ca
 - AudioX is tracked as a broad anything-to-audio benchmark with text, video, image, and audio conditioning evidence, but it is not product-ready.
 - ThinkSound is tracked for object-centric refinement and natural-language video audio editing evidence, but remains research-only until packaging and license posture are resolved.
 - MOSS-SoundEffect remains the first text-to-SFX candidate, but it is explicitly marked text-only for this workflow and cannot satisfy video-conditioned synchronization by itself.
+- SC-6471 keeps video-to-audio product execution blocked after revalidation: MMAudio checkpoints are non-commercial, AudioX models are non-commercial/watermarked, and ThinkSound states its code/models/dataset are for research/education only with no commercial use. These candidates also remain Python/PyTorch-oriented, so none can satisfy the shipped Rust/Tauri no-Python runtime gate yet.
 
 Primary evidence refreshed during this slice:
 

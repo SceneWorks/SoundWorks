@@ -39,6 +39,20 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("moss-soundeffect")).toBeInTheDocument();
     expect(
+      screen.getByRole("heading", { name: "Model Manager" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("missing cache")).toBeInTheDocument();
+    expect(
+      screen.getByText(/verified 3 expected file\(s\)/i),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Install Kokoro 82M")).toBeDisabled();
+    expect(
+      screen.getByText("MOSS-SoundEffect install failed cache verification."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Model manager covers 28 epic candidate(s)."),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("heading", { name: "Launch read" }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Producer").length).toBeGreaterThan(0);

@@ -7,6 +7,7 @@ pub mod evaluation;
 pub mod export_workflow;
 pub mod fixtures;
 pub mod manifests;
+pub mod model_manager;
 pub mod mvp_validation;
 pub mod review;
 pub mod rights;
@@ -27,6 +28,7 @@ pub use evaluation::*;
 pub use export_workflow::*;
 pub use fixtures::*;
 pub use manifests::*;
+pub use model_manager::*;
 pub use mvp_validation::*;
 pub use review::*;
 pub use rights::*;
@@ -54,6 +56,7 @@ pub struct AppOverview {
     pub composition_editor: CompositionEditorSummary,
     pub mvp_validation: MvpValidationSummary,
     pub model_evaluation: ModelEvaluationOverview,
+    pub model_manager: ModelManagerSummary,
     pub tts_studio: TtsStudioSummary,
     pub voice_lab: VoiceLabSummary,
     pub sfx_studio: SfxStudioSummary,
@@ -507,6 +510,7 @@ impl AppOverview {
             ),
             mvp_validation: MvpValidationSummary::from_overview(&MvpValidationOverview::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
+            model_manager: ModelManagerOverview::reference().summary,
             tts_studio: TtsStudioSummary::from_overview(
                 &TtsStudioOverview::reference().expect("reference TTS studio is valid"),
             ),
@@ -1148,6 +1152,10 @@ mod tests {
             "mvp_validation_known_limitations",
             "mvp_validation_requirement_coverage",
             "mvp_validation_release_gates",
+            "model_manager_candidates",
+            "model_manager_lane_readiness",
+            "model_manager_operations",
+            "model_manager_validation_checks",
         ] {
             assert!(
                 sql.contains(table),
@@ -1200,6 +1208,8 @@ mod tests {
 
         assert_eq!(overview.model_evaluation.schema_version, 1);
         assert_eq!(overview.model_evaluation.candidate_count, 28);
+        assert_eq!(overview.model_manager.candidate_count, 28);
+        assert!(overview.model_manager.verified_installed_count <= 28);
         assert!(overview
             .model_evaluation
             .recommended_candidate_ids

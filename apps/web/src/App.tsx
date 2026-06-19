@@ -35,6 +35,7 @@ import {
   fallbackCompositionEditor,
   fallbackExportWorkflow,
   fallbackMvpValidation,
+  fallbackModelManager,
   fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
@@ -51,6 +52,8 @@ import {
   loadAssetLibraryOverview,
   loadCompositionEditorOverview,
   loadExportWorkflowOverview,
+  installModelCandidate,
+  loadModelManagerOverview,
   loadMvpValidationOverview,
   loadRightsSafetyOverview,
   loadReviewWorkspaceOverview,
@@ -62,12 +65,15 @@ import {
   loadVideoToAudioOverview,
   loadVoiceLabOverview,
   loadWorkspaceOverview,
+  revalidateModelCandidate,
 } from "./tauri";
 import type {
   AppOverview,
   AssetLibraryOverview,
   CompositionEditorOverview,
   ExportWorkflowOverview,
+  ModelManagerOperation,
+  ModelManagerOverview,
   MvpValidationOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
@@ -130,6 +136,14 @@ function countFor(counts: Record<string, number>, key: string) {
   return counts[key] ?? 0;
 }
 
+function visibleModelManagerOperation(operations: ModelManagerOperation[]) {
+  return (
+    operations.find((operation) => operation.status === "failed") ??
+    operations[0] ??
+    null
+  );
+}
+
 function scopeLabel(scope: { kind: string; projectId?: string }) {
   return scope.kind === "globalLibrary"
     ? "Global"
@@ -139,6 +153,12 @@ function scopeLabel(scope: { kind: string; projectId?: string }) {
 export function App() {
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
+  const [modelManager, setModelManager] =
+    useState<ModelManagerOverview>(fallbackModelManager);
+  const [modelManagerOperation, setModelManagerOperation] =
+    useState<ModelManagerOperation | null>(
+      visibleModelManagerOperation(fallbackModelManager.operations),
+    );
   const [workspace, setWorkspace] =
     useState<WorkspaceOverview>(fallbackWorkspace);
   const [assetLibrary, setAssetLibrary] =
@@ -180,6 +200,15 @@ export function App() {
     loadRuntimeOverview().then((nextRuntime) => {
       if (active) {
         setRuntime(nextRuntime);
+      }
+    });
+
+    loadModelManagerOverview().then((nextModelManager) => {
+      if (active) {
+        setModelManager(nextModelManager);
+        setModelManagerOperation(
+          visibleModelManagerOperation(nextModelManager.operations),
+        );
       }
     });
 
@@ -265,6 +294,17 @@ export function App() {
       active = false;
     };
   }, []);
+
+  function runModelManagerAction(
+    candidateId: string,
+    action: "install" | "revalidate",
+  ) {
+    const runner =
+      action === "install" ? installModelCandidate : revalidateModelCandidate;
+    runner(candidateId).then((operation) => {
+      setModelManagerOperation(operation);
+    });
+  }
 
   const scaffoldedLayerCount = useMemo(
     () =>
@@ -3365,6 +3405,154 @@ export function App() {
                   </li>
                 ),
               )}
+            </ol>
+          </div>
+
+          <div className="panel model-manager-panel">
+            <div className="panel-heading">
+              <h2>Model Manager</h2>
+              <span>{modelManager.summary.candidateCount}</span>
+            </div>
+            <div className="runtime-summary" aria-label="Model manager status">
+              <div>
+                <PackageCheck aria-hidden="true" size={18} />
+                <strong>{modelManager.summary.verifiedInstalledCount}</strong>
+                <span>verified</span>
+              </div>
+              <div>
+                <Download aria-hidden="true" size={18} />
+                <strong>{modelManager.summary.installableCount}</strong>
+                <span>installable</span>
+              </div>
+              <div>
+                <HardDrive aria-hidden="true" size={18} />
+                <strong>{modelManager.summary.missingCacheCount}</strong>
+                <span>missing cache</span>
+              </div>
+              <div>
+                <CircleAlert aria-hidden="true" size={18} />
+                <strong>{modelManager.summary.failedOperationCount}</strong>
+                <span>failed ops</span>
+              </div>
+            </div>
+
+            <div className="runtime-policy">
+              <strong>{modelManager.cacheRoot}</strong>
+              <span>
+                No model is installed until required files verify on disk.
+              </span>
+              {modelManagerOperation ? (
+                <small>
+                  {statusLabel(modelManagerOperation.action)}:{" "}
+                  {statusLabel(modelManagerOperation.status)}
+                </small>
+              ) : null}
+            </div>
+
+            <div className="model-manager-grid">
+              <div className="runtime-stack">
+                <h3>Lane readiness</h3>
+                <ol className="runtime-list">
+                  {modelManager.laneReadiness.map((lane) => (
+                    <li key={`${lane.lane}-${lane.recommendedCandidateId}`}>
+                      <span className={`runtime-dot ${lane.state}`} />
+                      <div>
+                        <strong>{workflowLabel(lane.lane)}</strong>
+                        <small>
+                          {lane.recommendedCandidateId} /{" "}
+                          {statusLabel(lane.state)}
+                        </small>
+                        <em>{lane.summary}</em>
+                        {lane.blocker ? <em>{lane.blocker}</em> : null}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="runtime-stack">
+                <h3>Candidate cache</h3>
+                <ol className="runtime-list model-cache-list">
+                  {modelManager.candidates.slice(0, 10).map((candidate) => (
+                    <li key={candidate.candidateId}>
+                      <span
+                        className={`runtime-dot ${candidate.installState}`}
+                      />
+                      <div>
+                        <strong>{candidate.name}</strong>
+                        <small>
+                          {candidate.candidateId} /{" "}
+                          {statusLabel(candidate.installState)} /{" "}
+                          {candidate.cache.presentFileCount} of{" "}
+                          {candidate.cache.expectedFileCount}
+                        </small>
+                        <em>{candidate.cache.evidence}</em>
+                        {candidate.cache.missingRequiredFiles[0] ? (
+                          <em>
+                            missing{" "}
+                            {candidate.cache.missingRequiredFiles.join(", ")}
+                          </em>
+                        ) : null}
+                        <div className="model-manager-actions">
+                          <button
+                            className="icon-button small"
+                            disabled={!candidate.actions.includes("install")}
+                            onClick={() =>
+                              runModelManagerAction(
+                                candidate.candidateId,
+                                "install",
+                              )
+                            }
+                            title={`Install ${candidate.name}`}
+                            type="button"
+                          >
+                            <Download aria-hidden="true" size={15} />
+                          </button>
+                          <button
+                            className="icon-button small"
+                            onClick={() =>
+                              runModelManagerAction(
+                                candidate.candidateId,
+                                "revalidate",
+                              )
+                            }
+                            title={`Revalidate ${candidate.name}`}
+                            type="button"
+                          >
+                            <CircleCheck aria-hidden="true" size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            {modelManagerOperation ? (
+              <div
+                className={`operation-banner ${modelManagerOperation.status}`}
+              >
+                <strong>{modelManagerOperation.summary}</strong>
+                {modelManagerOperation.recovery ? (
+                  <span>{modelManagerOperation.recovery}</span>
+                ) : null}
+              </div>
+            ) : null}
+
+            <ol className="validation-list" aria-label="Model manager checks">
+              {modelManager.validationChecks.map((check) => (
+                <li
+                  className={check.passed ? "passed" : "failed"}
+                  key={check.id}
+                >
+                  <CircleCheck aria-hidden="true" size={16} />
+                  <span>
+                    {check.summary}
+                    {check.recovery ? <em>{check.recovery}</em> : null}
+                  </span>
+                </li>
+              ))}
             </ol>
           </div>
 

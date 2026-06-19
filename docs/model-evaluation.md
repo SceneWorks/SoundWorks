@@ -4,6 +4,8 @@
 
 Confidence: medium-high for coverage and gating shape; medium for candidate rankings. This slice captures source metadata and repeatable test plans, but it does not claim real model quality until SoundWorks-owned smoke outputs and metrics exist.
 
+`sc-6467` consumes this catalog through the model-manager recovery surface. Evaluation decides which candidates are worth considering; `docs/model-manager.md` decides whether their local cache, expected files, install actions, and blockers are real enough for runtime use.
+
 ## Core Module
 
 - `crates/soundworks-core/src/evaluation.rs` defines `ModelEvaluationCatalog`, candidates, evidence sources, license/runtime assessments, fixtures, score axes, and lane recommendations.

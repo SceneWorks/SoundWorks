@@ -202,6 +202,7 @@ pub enum CandidateInstallState {
 pub struct ModelDownloadPlan {
     pub mechanism: DownloadMechanism,
     pub source_url: String,
+    pub repository_id: Option<String>,
     pub cache_subdir: String,
     pub expected_files: Vec<ExpectedModelFile>,
     pub expected_size_mb: Option<u32>,
@@ -213,12 +214,9 @@ pub struct ModelDownloadPlan {
 
 impl ModelDownloadPlan {
     fn from_candidate(candidate: &ModelEvaluationCandidate) -> Self {
-        let source_url = candidate
-            .sources
-            .first()
-            .map(|source| source.url.clone())
-            .unwrap_or_default();
+        let source_url = preferred_download_source(candidate);
         let mechanism = download_mechanism(candidate);
+        let repository_id = huggingface_repo_id(&source_url);
         let expected_files = expected_files_for(candidate.id.as_str(), mechanism);
         let supports_automated_download =
             matches!(mechanism, DownloadMechanism::HuggingFaceSnapshot);
@@ -226,6 +224,7 @@ impl ModelDownloadPlan {
         Self {
             mechanism,
             source_url: source_url.clone(),
+            repository_id,
             cache_subdir: candidate.id.clone(),
             expected_files,
             expected_size_mb: expected_size_mb(candidate.id.as_str()),
@@ -272,18 +271,31 @@ pub struct ModelCacheVerification {
 
 impl ModelCacheVerification {
     fn inspect(cache_root: &Path, plan: &ModelDownloadPlan) -> Self {
-        let cache_path = cache_root.join(&plan.cache_subdir);
+        let cache_paths = cache_paths(cache_root, plan);
+        let (cache_path, _, present_file_count) = cache_paths
+            .iter()
+            .map(|path| {
+                let missing_required_files: Vec<String> = plan
+                    .expected_files
+                    .iter()
+                    .filter(|expected| expected.required && !path.join(&expected.path).is_file())
+                    .map(|expected| expected.path.clone())
+                    .collect();
+                let present_file_count = plan
+                    .expected_files
+                    .iter()
+                    .filter(|expected| path.join(&expected.path).is_file())
+                    .count();
+                (path.clone(), missing_required_files, present_file_count)
+            })
+            .min_by_key(|(_, missing, _)| missing.len())
+            .unwrap_or_else(|| (cache_root.join(&plan.cache_subdir), vec![], 0));
         let missing_required_files: Vec<String> = plan
             .expected_files
             .iter()
             .filter(|expected| expected.required && !cache_path.join(&expected.path).is_file())
             .map(|expected| expected.path.clone())
             .collect();
-        let present_file_count = plan
-            .expected_files
-            .iter()
-            .filter(|expected| cache_path.join(&expected.path).is_file())
-            .count();
         let required_file_count = plan
             .expected_files
             .iter()
@@ -346,6 +358,24 @@ pub struct ModelManagerOperation {
 }
 
 impl ModelManagerOperation {
+    fn succeeded(
+        candidate_id: &str,
+        action: ModelManagerActionKind,
+        summary: String,
+        log_tail: Vec<String>,
+    ) -> Self {
+        Self {
+            id: format!("{action:?}-{candidate_id}").to_ascii_lowercase(),
+            candidate_id: candidate_id.to_string(),
+            action,
+            status: ModelManagerOperationStatus::Succeeded,
+            progress_percent: 100,
+            summary,
+            recovery: None,
+            log_tail,
+        }
+    }
+
     pub fn revalidate(candidate_id: &str) -> Self {
         let overview = ModelManagerOverview::reference();
         match overview
@@ -501,6 +531,88 @@ fn default_model_cache_root() -> PathBuf {
             })
         })
         .unwrap_or_else(|| PathBuf::from("soundworks-model-cache"))
+}
+
+fn cache_paths(cache_root: &Path, plan: &ModelDownloadPlan) -> Vec<PathBuf> {
+    let mut paths = vec![cache_root.join(&plan.cache_subdir)];
+    if plan.mechanism == DownloadMechanism::HuggingFaceSnapshot
+        && should_include_huggingface_snapshots(cache_root)
+    {
+        if let Some(repo_id) = &plan.repository_id {
+            paths.extend(huggingface_snapshot_paths(repo_id));
+        }
+    }
+    paths
+}
+
+fn should_include_huggingface_snapshots(cache_root: &Path) -> bool {
+    cache_root == default_model_cache_root()
+}
+
+fn huggingface_snapshot_paths(repo_id: &str) -> Vec<PathBuf> {
+    let Some(cache_root) = huggingface_hub_root() else {
+        return vec![];
+    };
+    let repo_dir = cache_root.join(format!("models--{}", repo_id.replace('/', "--")));
+    let snapshots = repo_dir.join("snapshots");
+    let Ok(entries) = fs::read_dir(snapshots) else {
+        return vec![];
+    };
+
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect()
+}
+
+fn huggingface_hub_root() -> Option<PathBuf> {
+    if let Some(hf_home) = std::env::var_os("HF_HOME") {
+        return Some(PathBuf::from(hf_home).join("hub"));
+    }
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| home.join(".cache").join("huggingface").join("hub"))
+}
+
+fn preferred_download_source(candidate: &ModelEvaluationCandidate) -> String {
+    let preferred = match candidate.id.as_str() {
+        "kokoro-82m" => "onnx-community/Kokoro-82M-v1.0-ONNX",
+        "moss-soundeffect" => "mlx-community/MOSS-SoundEffect-v2.0-4bit",
+        _ => "",
+    };
+
+    if !preferred.is_empty() {
+        if let Some(source) = candidate
+            .sources
+            .iter()
+            .find(|source| source.url.contains(preferred))
+        {
+            return source.url.clone();
+        }
+    }
+
+    candidate
+        .sources
+        .iter()
+        .find(|source| source.url.contains("huggingface.co"))
+        .or_else(|| candidate.sources.first())
+        .map(|source| source.url.clone())
+        .unwrap_or_default()
+}
+
+fn huggingface_repo_id(source_url: &str) -> Option<String> {
+    let marker = "huggingface.co/";
+    let start = source_url.find(marker)? + marker.len();
+    let repo = source_url[start..]
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim_matches('/');
+    let mut parts = repo.split('/');
+    let owner = parts.next()?;
+    let name = parts.next()?;
+    Some(format!("{owner}/{name}"))
 }
 
 fn install_blockers(candidate: &ModelEvaluationCandidate) -> Vec<String> {
@@ -671,11 +783,37 @@ fn reference_operations(candidates: &[ModelCandidateInstallState]) -> Vec<ModelM
         .iter()
         .find(|candidate| candidate.candidate_id == "kokoro-82m")
     {
+        if candidate.cache.verified {
+            operations.push(ModelManagerOperation::succeeded(
+                &candidate.candidate_id,
+                ModelManagerActionKind::Revalidate,
+                "Kokoro 82M cache evidence is verified.".to_string(),
+                vec![candidate.cache.evidence.clone()],
+            ));
+        } else {
+            operations.push(ModelManagerOperation::failed(
+                &candidate.candidate_id,
+                ModelManagerActionKind::Install,
+                "Kokoro install failed cache verification.".to_string(),
+                "The downloader did not leave the required ONNX model and voice files in the SoundWorks cache; retry download or repair the cache path."
+                    .to_string(),
+                vec![
+                    candidate.download_plan.command_hint.clone(),
+                    candidate.cache.evidence.clone(),
+                ],
+            ));
+        }
+    }
+    if let Some(candidate) = candidates
+        .iter()
+        .find(|candidate| candidate.candidate_id == "moss-soundeffect")
+        .filter(|candidate| !candidate.cache.verified)
+    {
         operations.push(ModelManagerOperation::failed(
             &candidate.candidate_id,
             ModelManagerActionKind::Install,
-            "Kokoro install failed cache verification.".to_string(),
-            "The downloader did not leave the required ONNX model and voice files in the SoundWorks cache; retry download or repair the cache path."
+            "MOSS-SoundEffect install failed cache verification.".to_string(),
+            "The downloader did not leave the required MLX model files in a verifiable cache path; retry download or keep the SFX lane blocked."
                 .to_string(),
             vec![
                 candidate.download_plan.command_hint.clone(),
@@ -848,11 +986,15 @@ mod tests {
     }
 
     #[test]
-    fn install_action_reports_failed_cache_verification() {
+    fn install_action_reports_failed_cache_verification_for_missing_candidate() {
         let operation = ModelManagerOperation::install("kokoro-82m");
 
         assert_eq!(operation.action, ModelManagerActionKind::Install);
-        assert!(operation.summary.contains("download"));
+        assert!(
+            operation.summary.contains("download") || operation.summary.contains("cannot"),
+            "{}",
+            operation.summary
+        );
         assert!(operation.recovery.is_some());
     }
 

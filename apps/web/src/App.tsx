@@ -136,6 +136,14 @@ function countFor(counts: Record<string, number>, key: string) {
   return counts[key] ?? 0;
 }
 
+function visibleModelManagerOperation(operations: ModelManagerOperation[]) {
+  return (
+    operations.find((operation) => operation.status === "failed") ??
+    operations[0] ??
+    null
+  );
+}
+
 function scopeLabel(scope: { kind: string; projectId?: string }) {
   return scope.kind === "globalLibrary"
     ? "Global"
@@ -149,7 +157,7 @@ export function App() {
     useState<ModelManagerOverview>(fallbackModelManager);
   const [modelManagerOperation, setModelManagerOperation] =
     useState<ModelManagerOperation | null>(
-      fallbackModelManager.operations[0] ?? null,
+      visibleModelManagerOperation(fallbackModelManager.operations),
     );
   const [workspace, setWorkspace] =
     useState<WorkspaceOverview>(fallbackWorkspace);
@@ -198,7 +206,9 @@ export function App() {
     loadModelManagerOverview().then((nextModelManager) => {
       if (active) {
         setModelManager(nextModelManager);
-        setModelManagerOperation(nextModelManager.operations[0] ?? null);
+        setModelManagerOperation(
+          visibleModelManagerOperation(nextModelManager.operations),
+        );
       }
     });
 

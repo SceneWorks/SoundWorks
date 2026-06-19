@@ -872,6 +872,7 @@ export type ModelManagerOverview = {
     downloadPlan: {
       mechanism: string;
       sourceUrl: string;
+      repositoryId?: string | null;
       cacheSubdir: string;
       expectedFiles: Array<{
         path: string;

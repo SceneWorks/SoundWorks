@@ -19,10 +19,10 @@ import type {
 
 const fallbackModelManagerSummary = {
   candidateCount: 28,
-  verifiedInstalledCount: 0,
-  installableCount: 7,
+  verifiedInstalledCount: 1,
+  installableCount: 6,
   blockedCount: 19,
-  missingCacheCount: 2,
+  missingCacheCount: 1,
   failedOperationCount: 1,
 };
 
@@ -65,10 +65,9 @@ export const fallbackModelManager: ModelManagerOverview = {
     {
       lane: "tts",
       recommendedCandidateId: "kokoro-82m",
-      state: "missing-cache",
-      summary:
-        "Kokoro 82M is selected for TTS, but cache verification is incomplete.",
-      blocker: "onnx/model.onnx",
+      state: "verified",
+      summary: "Kokoro 82M has verified cache evidence.",
+      blocker: null,
     },
     {
       lane: "voice-clone",
@@ -114,24 +113,39 @@ export const fallbackModelManager: ModelManagerOverview = {
   candidates: modelManagerCandidates.map(
     ([candidateId, name, provider, lane]) => {
       const installState =
-        candidateId === "kokoro-82m" || candidateId === "moss-soundeffect"
-          ? "missing-cache"
-          : candidateId === "xtts-v2" ||
-              candidateId === "chattts" ||
-              candidateId === "f5-tts" ||
-              candidateId === "audioldm"
-            ? "blocked"
-            : candidateId === "mmaudio" ||
-                candidateId === "audiox" ||
-                candidateId === "thinksound" ||
-                candidateId === "levo-2" ||
-                candidateId === "yue" ||
-                candidateId === "diffrhythm-2" ||
-                candidateId === "khala" ||
-                candidateId === "heartmula" ||
-                candidateId === "muse-song"
-              ? "research-only"
-              : "needs-runtime-port";
+        candidateId === "kokoro-82m"
+          ? "installed"
+          : candidateId === "moss-soundeffect"
+            ? "missing-cache"
+            : candidateId === "xtts-v2" ||
+                candidateId === "chattts" ||
+                candidateId === "f5-tts" ||
+                candidateId === "audioldm"
+              ? "blocked"
+              : candidateId === "mmaudio" ||
+                  candidateId === "audiox" ||
+                  candidateId === "thinksound" ||
+                  candidateId === "levo-2" ||
+                  candidateId === "yue" ||
+                  candidateId === "diffrhythm-2" ||
+                  candidateId === "khala" ||
+                  candidateId === "heartmula" ||
+                  candidateId === "muse-song"
+                ? "research-only"
+                : "needs-runtime-port";
+      const sourceUrl =
+        candidateId === "kokoro-82m"
+          ? "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX"
+          : candidateId === "moss-soundeffect"
+            ? "https://huggingface.co/mlx-community/MOSS-SoundEffect-v2.0-4bit"
+            : "https://huggingface.co";
+      const repositoryId =
+        candidateId === "kokoro-82m"
+          ? "onnx-community/Kokoro-82M-v1.0-ONNX"
+          : candidateId === "moss-soundeffect"
+            ? "mlx-community/MOSS-SoundEffect-v2.0-4bit"
+            : null;
+      const verifiedKokoro = candidateId === "kokoro-82m";
 
       return {
         candidateId,
@@ -139,7 +153,7 @@ export const fallbackModelManager: ModelManagerOverview = {
         provider,
         lanes: [lane],
         sourceLabel: "Primary source",
-        sourceUrl: "https://huggingface.co",
+        sourceUrl,
         licenseLabel:
           installState === "blocked"
             ? "License/runtime blocker"
@@ -149,13 +163,15 @@ export const fallbackModelManager: ModelManagerOverview = {
         productEligibility:
           installState === "missing-cache"
             ? "product-candidate"
-            : installState === "research-only"
-              ? "research-only"
-              : installState === "blocked"
-                ? "blocked"
-                : "needs-runtime-port",
+            : installState === "installed"
+              ? "product-candidate"
+              : installState === "research-only"
+                ? "research-only"
+                : installState === "blocked"
+                  ? "blocked"
+                  : "needs-runtime-port",
         evidenceLevel:
-          installState === "missing-cache"
+          installState === "missing-cache" || installState === "installed"
             ? "install-documented"
             : "source-metadata",
         runtimePath:
@@ -165,7 +181,7 @@ export const fallbackModelManager: ModelManagerOverview = {
         requiresPythonRuntime: installState === "research-only",
         installState,
         blockers:
-          installState === "missing-cache"
+          installState === "missing-cache" || installState === "installed"
             ? []
             : ["Product-safe runtime and cache evidence are not verified."],
         downloadPlan: {
@@ -175,7 +191,8 @@ export const fallbackModelManager: ModelManagerOverview = {
               : installState === "research-only"
                 ? "research-poc"
                 : "hugging-face-snapshot",
-          sourceUrl: "https://huggingface.co",
+          sourceUrl,
+          repositoryId,
           cacheSubdir: candidateId,
           expectedFiles:
             candidateId === "kokoro-82m"
@@ -197,8 +214,10 @@ export const fallbackModelManager: ModelManagerOverview = {
               : candidateId === "kokoro-82m"
                 ? 400
                 : null,
-          requiresLicenseAcceptance: installState !== "missing-cache",
-          supportsAutomatedDownload: installState === "missing-cache",
+          requiresLicenseAcceptance:
+            installState !== "missing-cache" && installState !== "installed",
+          supportsAutomatedDownload:
+            installState === "missing-cache" || installState === "installed",
           commandHint: `Download provider files into ${candidateId}, then revalidate.`,
           notes: [
             "No candidate is installed until expected files exist on disk.",
@@ -206,20 +225,21 @@ export const fallbackModelManager: ModelManagerOverview = {
         },
         cache: {
           cachePath: `~/Library/Application Support/SoundWorks/models/${candidateId}`,
-          verified: false,
+          verified: verifiedKokoro,
           expectedFileCount:
             candidateId === "kokoro-82m" || candidateId === "moss-soundeffect"
               ? 3
               : 1,
-          presentFileCount: 0,
-          missingRequiredFiles:
-            candidateId === "kokoro-82m"
-              ? ["config.json", "onnx/model.onnx", "voices/af_heart.bin"]
-              : candidateId === "moss-soundeffect"
-                ? ["config.json", "model.safetensors", "tokenizer.json"]
-                : ["README.md"],
-          diskUsageMb: null,
-          evidence: `missing cache directory ~/Library/Application Support/SoundWorks/models/${candidateId}`,
+          presentFileCount: verifiedKokoro ? 3 : 0,
+          missingRequiredFiles: verifiedKokoro
+            ? []
+            : candidateId === "moss-soundeffect"
+              ? ["config.json", "model.safetensors", "tokenizer.json"]
+              : ["README.md"],
+          diskUsageMb: verifiedKokoro ? 400 : null,
+          evidence: verifiedKokoro
+            ? "verified 3 expected file(s) under Hugging Face snapshot cache"
+            : `missing cache directory ~/Library/Application Support/SoundWorks/models/${candidateId}`,
         },
         actions:
           installState === "missing-cache"
@@ -230,17 +250,29 @@ export const fallbackModelManager: ModelManagerOverview = {
   ),
   operations: [
     {
-      id: "install-kokoro-82m",
+      id: "revalidate-kokoro-82m",
       candidateId: "kokoro-82m",
+      action: "revalidate",
+      status: "succeeded",
+      progressPercent: 100,
+      summary: "Kokoro 82M cache evidence is verified.",
+      recovery: null,
+      logTail: [
+        "verified 3 expected file(s) under Hugging Face snapshot cache",
+      ],
+    },
+    {
+      id: "install-moss-soundeffect",
+      candidateId: "moss-soundeffect",
       action: "install",
       status: "failed",
       progressPercent: 100,
-      summary: "Kokoro install failed cache verification.",
+      summary: "MOSS-SoundEffect install failed cache verification.",
       recovery:
-        "The downloader did not leave the required ONNX model and voice files in the SoundWorks cache; retry download or repair the cache path.",
+        "The downloader did not leave the required MLX model files in a verifiable cache path; retry download or keep the SFX lane blocked.",
       logTail: [
-        "Download provider files into kokoro-82m, then revalidate.",
-        "missing cache directory ~/Library/Application Support/SoundWorks/models/kokoro-82m",
+        "Download provider files into moss-soundeffect, then revalidate.",
+        "missing cache directory ~/Library/Application Support/SoundWorks/models/moss-soundeffect",
       ],
     },
   ],

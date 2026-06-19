@@ -38,6 +38,7 @@ export type AppOverview = {
   songStudio: SongStudioSummary;
   reviewWorkspace: ReviewWorkspaceSummary;
   rightsSafety: RightsSafetySummary;
+  videoToAudio: VideoToAudioSummary;
 };
 
 export type RuntimeAvailability = "installed" | "available" | "unavailable";
@@ -821,6 +822,21 @@ export type RightsSafetySummary = {
   watermarkPolicy: string;
 };
 
+export type VideoToAudioSummary = {
+  schemaVersion: number;
+  sourceDurationMs: number;
+  targetRangeCount: number;
+  detectedEventCount: number;
+  syncPointCount: number;
+  providerCount: number;
+  scorecardCount: number;
+  canSubmit: boolean;
+  selectedProviderId: string;
+  selectedModelId: string;
+  savedAssetKind: string;
+  exportTargetCount: number;
+};
+
 export type RightsSafetyOverview = {
   schemaVersion: number;
   policy: {
@@ -1537,6 +1553,192 @@ export type SfxStudioOverview = {
   validationChecks: Array<{
     id: string;
     status: "passed" | "warning" | "failed";
+    summary: string;
+  }>;
+};
+
+export type VideoToAudioOverview = {
+  schemaVersion: number;
+  projectId: string;
+  source: {
+    videoReferenceId: string;
+    videoAssetId: string;
+    filename: string;
+    durationMs: number;
+    frameRate: string;
+    resolution: string;
+    hasSourceAudio: boolean;
+    imageReferenceIds: string[];
+    referenceAudioAssetIds: string[];
+    ownershipAttestation: string;
+  };
+  direction: {
+    prompt: string;
+    negativePrompt: string;
+    syncMode: string;
+    requestedOutputs: string[];
+    durationMs: number;
+    regeneratePolicy: string;
+    exportTarget: string;
+  };
+  targetRanges: Array<{
+    id: string;
+    label: string;
+    range: { startMs: number; endMs: number };
+    objectLabel?: string | null;
+    region?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null;
+    requestedAction: string;
+  }>;
+  detectedEvents: Array<{
+    id: string;
+    label: string;
+    atMs: number;
+    confidence: number;
+    objectLabel?: string | null;
+    requestedSound: string;
+  }>;
+  providerOptions: Array<{
+    providerId: string;
+    modelId: string;
+    modelVersion?: string | null;
+    displayName: string;
+    workflow: CapabilityWorkflow;
+    runtime: string;
+    runnable: boolean;
+    installStatus: string;
+    outputAssetKinds: string[];
+    outputFormat: string;
+    sampleRateHz: number;
+    channelLayout: string;
+    supportsVideo: boolean;
+    supportsText: boolean;
+    supportsReferenceAudio: boolean;
+    supportsRangeRefinement: boolean;
+    supportsObjectRegions: boolean;
+    commercialUseAllowed: boolean;
+    limitations: string[];
+  }>;
+  selectedProvider: {
+    providerId: string;
+    modelId: string;
+    modelVersion?: string | null;
+    workflow: CapabilityWorkflow;
+    runtime: string;
+    accepted: boolean;
+    blocker?: string | null;
+  };
+  providerScorecards: Array<{
+    candidateId: string;
+    name: string;
+    provider: string;
+    lanes: string[];
+    status: string;
+    productEligibility: string;
+    readiness: string;
+    runtimePath: string;
+    commercialUse: string;
+    recommended: boolean;
+    supports: string[];
+    blockers: string[];
+    notes: string;
+  }>;
+  syncPreview: {
+    id: string;
+    durationMs: number;
+    sampleRateHz: number;
+    channelLayout: string;
+    waveformPreviewPath: string;
+    syncPoints: Array<{
+      id: string;
+      atMs: number;
+      label: string;
+      confidence: number;
+    }>;
+    segments: Array<{
+      id: string;
+      targetRangeId: string;
+      label: string;
+      range: { startMs: number; endMs: number };
+      assetKind: string;
+      syncConfidence: number;
+      editable: boolean;
+    }>;
+    warnings: string[];
+  };
+  submission: {
+    canSubmit: boolean;
+    job: {
+      id: string;
+      recipeId: string;
+      kind: string;
+      status: string;
+      outputVersionIds: string[];
+      error?: string | null;
+    };
+    recipe: {
+      id: string;
+      workflow: string;
+      outputAssetIds: string[];
+    };
+    blockingReasons: string[];
+    warnings: string[];
+  };
+  savedOutput: {
+    asset: {
+      id: string;
+      kind: string;
+      name: string;
+      tags: string[];
+      currentVersionId: string;
+    };
+    version: {
+      id: string;
+      file: {
+        storagePath: string;
+        format: string;
+      };
+      technical: {
+        sampleRateHz: number;
+        channels: number;
+        durationMs: number;
+        loudnessLufs?: number | null;
+      };
+    };
+    waveformPreviewReady: boolean;
+    synchronizedToVideo: boolean;
+  };
+  exportPackage: {
+    id: string;
+    mixdownPath: string;
+    sidecarPath: string;
+    includesSyncPoints: boolean;
+    includesSourceMediaRefs: boolean;
+    includesDetectedEvents: boolean;
+    includesRights: boolean;
+    destinationTargets: string[];
+    requiredFields: string[];
+  };
+  provenance: {
+    recipeId: string;
+    sourceReferenceIds: string[];
+    sidecarPath: string;
+    capturedFields: string[];
+    roundTripNotes: string[];
+  };
+  safetyGates: Array<{
+    id: string;
+    status: "passed" | "warning" | "blocked";
+    summary: string;
+    enforcement: string;
+  }>;
+  validationChecks: Array<{
+    id: string;
+    status: "passed" | "warning" | "blocked";
     summary: string;
   }>;
 };

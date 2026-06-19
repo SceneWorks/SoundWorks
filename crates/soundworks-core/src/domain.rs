@@ -430,6 +430,11 @@ pub enum StemKind {
 pub struct VideoToAudioRecipe {
     pub prompt: String,
     pub source_video_reference_id: String,
+    pub source_image_reference_ids: Vec<String>,
+    pub source_audio_reference_ids: Vec<String>,
+    pub target_ranges: Vec<VideoAudioTargetRange>,
+    pub detected_event_ids: Vec<String>,
+    pub sync_points: Vec<VideoAudioSyncPoint>,
     pub sync_mode: SyncMode,
 }
 
@@ -438,6 +443,37 @@ pub struct VideoToAudioRecipe {
 pub enum SyncMode {
     SemanticMatch,
     FrameSynchronized,
+    ObjectRegion,
+    ReferenceAudioMatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoAudioTargetRange {
+    pub id: String,
+    pub label: String,
+    pub range: TimeRange,
+    pub object_label: Option<String>,
+    pub region: Option<VideoRegion>,
+    pub requested_action: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoRegion {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoAudioSyncPoint {
+    pub id: String,
+    pub at_ms: u64,
+    pub label: String,
+    pub confidence: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

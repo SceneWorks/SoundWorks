@@ -2,7 +2,7 @@ use soundworks_core::{
     AppOverview, AssetLibraryOverview, CompositionEditorOverview, ExportWorkflowOverview,
     ModelEvaluationCatalog, MvpValidationOverview, ProviderCatalog, ReviewWorkspaceOverview,
     RightsSafetyOverview, RuntimeOverview, SamplesStudioOverview, SfxStudioOverview,
-    SongStudioOverview, TtsStudioOverview, VoiceLabOverview,
+    SongStudioOverview, TtsStudioOverview, VideoToAudioOverview, VoiceLabOverview,
 };
 
 #[tauri::command]
@@ -80,6 +80,11 @@ fn get_rights_safety_overview() -> RightsSafetyOverview {
     rights_safety_overview()
 }
 
+#[tauri::command]
+fn get_video_to_audio_overview() -> VideoToAudioOverview {
+    video_to_audio_overview()
+}
+
 pub fn app_overview() -> AppOverview {
     AppOverview::baseline()
 }
@@ -140,6 +145,10 @@ pub fn rights_safety_overview() -> RightsSafetyOverview {
     RightsSafetyOverview::reference()
 }
 
+pub fn video_to_audio_overview() -> VideoToAudioOverview {
+    VideoToAudioOverview::reference().expect("reference Video to Audio is valid")
+}
+
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -158,7 +167,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_samples_studio_overview,
             get_song_studio_overview,
             get_review_workspace_overview,
-            get_rights_safety_overview
+            get_rights_safety_overview,
+            get_video_to_audio_overview
         ])
 }
 
@@ -176,7 +186,7 @@ mod tests {
         export_workflow_overview, model_evaluation_catalog, mvp_validation_overview,
         provider_catalog, review_workspace_overview, rights_safety_overview, runtime_overview,
         samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
-        voice_lab_overview,
+        video_to_audio_overview, voice_lab_overview,
     };
 
     #[test]
@@ -217,6 +227,20 @@ mod tests {
         assert_eq!(exports.presets.len(), 7);
         assert!(exports.selected_export.can_export);
         assert!(exports.validation_checks.iter().all(|check| check.passed));
+    }
+
+    #[test]
+    fn video_to_audio_command_returns_sync_contract() {
+        let video = video_to_audio_overview();
+
+        assert_eq!(video.schema_version, 1);
+        assert_eq!(video.target_ranges.len(), 3);
+        assert_eq!(video.sync_preview.sync_points.len(), 5);
+        assert!(video.submission.can_submit);
+        assert_eq!(
+            video.saved_output.asset.kind,
+            soundworks_core::AudioAssetKind::Sfx
+        );
     }
 
     #[test]

@@ -12,6 +12,7 @@ import {
   fallbackSongStudio,
   fallbackSfxStudio,
   fallbackTtsStudio,
+  fallbackVideoToAudio,
   fallbackVoiceLab,
 } from "./appData";
 import type {
@@ -27,6 +28,7 @@ import type {
   SongStudioOverview,
   SfxStudioOverview,
   TtsStudioOverview,
+  VideoToAudioOverview,
   VoiceLabOverview,
 } from "./types";
 
@@ -135,5 +137,13 @@ export async function loadRightsSafetyOverview(): Promise<RightsSafetyOverview> 
     return await invoke<RightsSafetyOverview>("get_rights_safety_overview");
   } catch {
     return fallbackRightsSafety;
+  }
+}
+
+export async function loadVideoToAudioOverview(): Promise<VideoToAudioOverview> {
+  try {
+    return await invoke<VideoToAudioOverview>("get_video_to_audio_overview");
+  } catch {
+    return fallbackVideoToAudio;
   }
 }

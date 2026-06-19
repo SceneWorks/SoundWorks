@@ -943,6 +943,100 @@ CREATE TABLE composition_editor_render_plans (
 );
 ",
     },
+    SchemaMigration {
+        version: 17,
+        name: "video_to_audio_workflow",
+        sql: "
+CREATE TABLE video_to_audio_sources (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  video_asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  filename TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  frame_rate TEXT NOT NULL,
+  resolution TEXT NOT NULL,
+  has_source_audio INTEGER NOT NULL,
+  image_reference_ids_json TEXT NOT NULL,
+  reference_audio_asset_ids_json TEXT NOT NULL,
+  ownership_attestation TEXT NOT NULL
+);
+CREATE TABLE video_to_audio_target_ranges (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES video_to_audio_sources(id),
+  label TEXT NOT NULL,
+  start_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL,
+  object_label TEXT,
+  region_json TEXT,
+  requested_action TEXT NOT NULL
+);
+CREATE TABLE video_to_audio_detected_events (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES video_to_audio_sources(id),
+  label TEXT NOT NULL,
+  at_ms INTEGER NOT NULL,
+  confidence REAL NOT NULL,
+  object_label TEXT,
+  region_json TEXT,
+  requested_sound TEXT NOT NULL
+);
+CREATE TABLE video_to_audio_provider_scorecards (
+  candidate_id TEXT PRIMARY KEY REFERENCES model_evaluation_candidates(id),
+  readiness TEXT NOT NULL,
+  recommended INTEGER NOT NULL,
+  supports_json TEXT NOT NULL,
+  blockers_json TEXT NOT NULL,
+  notes TEXT NOT NULL
+);
+CREATE TABLE video_to_audio_submissions (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES video_to_audio_sources(id),
+  provider_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  recipe_id TEXT NOT NULL REFERENCES generation_recipes(id),
+  job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+  can_submit INTEGER NOT NULL,
+  blocking_reasons_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL
+);
+CREATE TABLE video_to_audio_sync_previews (
+  id TEXT PRIMARY KEY,
+  submission_id TEXT NOT NULL REFERENCES video_to_audio_submissions(id),
+  duration_ms INTEGER NOT NULL,
+  sample_rate_hz INTEGER NOT NULL,
+  channel_layout TEXT NOT NULL,
+  waveform_preview_path TEXT NOT NULL,
+  sync_points_json TEXT NOT NULL,
+  segments_json TEXT NOT NULL,
+  warnings_json TEXT NOT NULL
+);
+CREATE TABLE video_to_audio_saved_outputs (
+  submission_id TEXT PRIMARY KEY REFERENCES video_to_audio_submissions(id),
+  asset_id TEXT NOT NULL REFERENCES audio_assets(id),
+  version_id TEXT NOT NULL REFERENCES audio_asset_versions(id),
+  waveform_preview_ready INTEGER NOT NULL,
+  synchronized_to_video INTEGER NOT NULL
+);
+CREATE TABLE video_to_audio_export_packages (
+  id TEXT PRIMARY KEY,
+  submission_id TEXT NOT NULL REFERENCES video_to_audio_submissions(id),
+  mixdown_path TEXT NOT NULL,
+  sidecar_path TEXT NOT NULL,
+  destination_targets_json TEXT NOT NULL,
+  required_fields_json TEXT NOT NULL,
+  includes_sync_points INTEGER NOT NULL,
+  includes_source_media_refs INTEGER NOT NULL,
+  includes_detected_events INTEGER NOT NULL,
+  includes_rights INTEGER NOT NULL
+);
+CREATE TABLE video_to_audio_safety_gates (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  enforcement TEXT NOT NULL
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

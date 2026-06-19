@@ -16,6 +16,7 @@ pub mod sfx;
 pub mod songs;
 pub mod storage;
 pub mod tts;
+pub mod video_to_audio;
 pub mod voice_lab;
 
 pub use asset_library::*;
@@ -34,6 +35,7 @@ pub use sfx::*;
 pub use songs::*;
 pub use storage::*;
 pub use tts::*;
+pub use video_to_audio::*;
 pub use voice_lab::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,6 +58,7 @@ pub struct AppOverview {
     pub song_studio: SongStudioSummary,
     pub review_workspace: ReviewWorkspaceSummary,
     pub rights_safety: RightsSafetySummary,
+    pub video_to_audio: VideoToAudioSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -259,6 +262,23 @@ pub struct RightsSafetySummary {
     pub watermark_policy: WatermarkPolicy,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoToAudioSummary {
+    pub schema_version: u32,
+    pub source_duration_ms: u64,
+    pub target_range_count: usize,
+    pub detected_event_count: usize,
+    pub sync_point_count: usize,
+    pub provider_count: usize,
+    pub scorecard_count: usize,
+    pub can_submit: bool,
+    pub selected_provider_id: String,
+    pub selected_model_id: String,
+    pub saved_asset_kind: AudioAssetKind,
+    pub export_target_count: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommandDirection {
@@ -325,7 +345,7 @@ impl AppOverview {
                     "Multitrack Editor",
                     "/composition",
                 ),
-                StudioSurface::planned(
+                StudioSurface::scaffolded(
                     "video-to-audio",
                     "Video to Audio",
                     "/studios/video-to-audio",
@@ -437,6 +457,13 @@ impl AppOverview {
                         "Load rights, consent, model-license, disclosure, watermark, and export provenance policy gates."
                             .to_string(),
                 },
+                CommandBoundary {
+                    name: "get_video_to_audio_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load multimodal video/image/audio-conditioned Foley workflow state, provider readiness, sync preview, provenance, safety gates, and export package metadata."
+                            .to_string(),
+                },
             ],
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             asset_library: AssetLibrarySummary::from_overview(
@@ -469,6 +496,28 @@ impl AppOverview {
                 &ReviewWorkspaceOverview::reference().expect("reference Review workspace is valid"),
             ),
             rights_safety: RightsSafetySummary::from_overview(&RightsSafetyOverview::reference()),
+            video_to_audio: VideoToAudioSummary::from_overview(
+                &VideoToAudioOverview::reference().expect("reference Video to Audio is valid"),
+            ),
+        }
+    }
+}
+
+impl VideoToAudioSummary {
+    pub fn from_overview(overview: &VideoToAudioOverview) -> Self {
+        Self {
+            schema_version: overview.schema_version,
+            source_duration_ms: overview.source.duration_ms,
+            target_range_count: overview.target_ranges.len(),
+            detected_event_count: overview.detected_events.len(),
+            sync_point_count: overview.sync_preview.sync_points.len(),
+            provider_count: overview.provider_options.len(),
+            scorecard_count: overview.provider_scorecards.len(),
+            can_submit: overview.submission.can_submit,
+            selected_provider_id: overview.selected_provider.provider_id.clone(),
+            selected_model_id: overview.selected_provider.model_id.clone(),
+            saved_asset_kind: overview.saved_output.asset.kind,
+            export_target_count: overview.export_package.destination_targets.len(),
         }
     }
 }
@@ -749,15 +798,6 @@ impl ProviderCatalogOverview {
 }
 
 impl StudioSurface {
-    fn planned(id: &str, name: &str, route: &str) -> Self {
-        Self {
-            id: id.to_string(),
-            name: name.to_string(),
-            route: route.to_string(),
-            status: ScaffoldStatus::Planned,
-        }
-    }
-
     fn scaffolded(id: &str, name: &str, route: &str) -> Self {
         Self {
             id: id.to_string(),
@@ -859,10 +899,20 @@ mod tests {
             payload["commands"][13]["name"],
             "get_review_workspace_overview"
         );
+        assert_eq!(
+            payload["commands"][14]["name"],
+            "get_rights_safety_overview"
+        );
+        assert_eq!(
+            payload["commands"][15]["name"],
+            "get_video_to_audio_overview"
+        );
         assert_eq!(payload["voiceLab"]["modeCount"], 3);
         assert_eq!(payload["sfxStudio"]["variantCount"], 3);
         assert_eq!(payload["songStudio"]["variantCount"], 2);
         assert_eq!(payload["reviewWorkspace"]["editActionCount"], 8);
+        assert_eq!(payload["videoToAudio"]["targetRangeCount"], 3);
+        assert_eq!(payload["videoToAudio"]["syncPointCount"], 5);
     }
 
     #[test]
@@ -978,6 +1028,15 @@ mod tests {
             "sfx_studio_saved_outputs",
             "sfx_studio_provider_scorecards",
             "sfx_studio_post_processing_actions",
+            "video_to_audio_sources",
+            "video_to_audio_target_ranges",
+            "video_to_audio_detected_events",
+            "video_to_audio_provider_scorecards",
+            "video_to_audio_submissions",
+            "video_to_audio_sync_previews",
+            "video_to_audio_saved_outputs",
+            "video_to_audio_export_packages",
+            "video_to_audio_safety_gates",
             "samples_studio_prompts",
             "samples_studio_variants",
             "samples_studio_submissions",
@@ -1142,6 +1201,23 @@ mod tests {
             vec![AudioAssetKind::Ambience, AudioAssetKind::Sfx]
         );
         assert!(overview.sfx_studio.can_submit);
+    }
+
+    #[test]
+    fn app_overview_summarizes_video_to_audio() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.studios[8].status, ScaffoldStatus::Scaffolded);
+        assert_eq!(overview.video_to_audio.target_range_count, 3);
+        assert_eq!(overview.video_to_audio.detected_event_count, 5);
+        assert_eq!(overview.video_to_audio.sync_point_count, 5);
+        assert_eq!(overview.video_to_audio.provider_count, 1);
+        assert_eq!(overview.video_to_audio.scorecard_count, 4);
+        assert_eq!(
+            overview.video_to_audio.saved_asset_kind,
+            AudioAssetKind::Sfx
+        );
+        assert!(overview.video_to_audio.can_submit);
     }
 
     #[test]

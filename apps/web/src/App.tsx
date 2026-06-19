@@ -54,6 +54,7 @@ import {
   cancelRuntimeJob,
   createSoundWorksProject,
   enqueueRuntimeJob,
+  exportLibraryItem,
   importRuntimeArtifactToLibrary,
   loadLibraryPlayback,
   loadExportWorkflowOverview,
@@ -61,6 +62,7 @@ import {
   mutateLibraryItem,
   openSoundWorksProject,
   retryRuntimeJob,
+  saveReviewEdit,
   loadModelManagerOverview,
   loadMvpValidationOverview,
   loadRightsSafetyOverview,
@@ -192,6 +194,12 @@ export function App() {
     useState<AssetLibraryOverview>(fallbackAssetLibrary);
   const [libraryActionStatus, setLibraryActionStatus] = useState(
     "Project and library actions are ready.",
+  );
+  const [reviewActionStatus, setReviewActionStatus] = useState(
+    "Review actions require a saved runtime audio asset.",
+  );
+  const [exportActionStatus, setExportActionStatus] = useState(
+    "Export writes are ready for persisted runtime audio.",
   );
   const [libraryPlayback, setLibraryPlayback] =
     useState<LibraryPlayback | null>(null);
@@ -430,6 +438,63 @@ export function App() {
       .catch((error) => {
         setLibraryPlayback(null);
         setLibraryActionStatus(`Preview unavailable: ${String(error)}`);
+      });
+  }
+
+  function saveSelectedReviewEdit() {
+    const selection = reviewWorkspace.transport.selection;
+    const itemId = assetLibrary.selectedItem.item.id;
+    saveReviewEdit({
+      itemId,
+      startMs: selection?.startMs ?? 0,
+      endMs:
+        selection?.endMs ??
+        assetLibrary.selectedItem.item.durationMs ??
+        reviewWorkspace.transport.durationMs,
+      fadeInMs: 60,
+      fadeOutMs: 120,
+      normalizeLoudnessLufs: -16,
+    })
+      .then((result) => {
+        applyProjectLibraryResult(result.library);
+        setReviewActionStatus(
+          `Saved ${result.versionId} from real audio at ${result.editedPath}.`,
+        );
+        previewLibraryItem(result.library.selectedItem.item.id);
+        loadReviewWorkspaceOverview().then(setReviewWorkspace);
+      })
+      .catch((error) => {
+        setReviewActionStatus(`Save version unavailable: ${String(error)}`);
+      });
+  }
+
+  function exportSelectedLibraryItem() {
+    const itemId = assetLibrary.selectedItem.item.id;
+    exportLibraryItem({
+      itemId,
+      presetId: exportWorkflow.selectedExport.presetId,
+      formats: exportWorkflow.selectedExport.formats,
+      sceneWorksProjectId:
+        exportWorkflow.sceneWorksHandoff.intendedProjectId ?? null,
+      sceneWorksVideoAssetId:
+        exportWorkflow.sceneWorksHandoff.intendedVideoAssetId ?? null,
+      replaceExistingAudio:
+        exportWorkflow.sceneWorksHandoff.replaceExistingAudio,
+    })
+      .then((result) => {
+        const audioCount = result.artifacts.filter(
+          (artifact) => artifact.kind === "audio-file",
+        ).length;
+        const warningText = result.warnings.length
+          ? ` ${result.warnings.join(" ")}`
+          : "";
+        setExportActionStatus(
+          `Export wrote ${audioCount} audio file plus sidecars to ${result.outputRoot}.${warningText}`,
+        );
+        loadExportWorkflowOverview().then(setExportWorkflow);
+      })
+      .catch((error) => {
+        setExportActionStatus(`Export unavailable: ${String(error)}`);
       });
   }
 
@@ -1159,6 +1224,7 @@ export function App() {
                 <button
                   className="primary-action export-action"
                   disabled={!exportWorkflow.selectedExport.canExport}
+                  onClick={exportSelectedLibraryItem}
                   title="Export selected composition"
                   type="button"
                 >
@@ -1170,6 +1236,7 @@ export function App() {
                   </span>
                 </button>
               </div>
+              <p className="action-status">{exportActionStatus}</p>
 
               <div className="export-metrics" aria-label="Export status">
                 <div>
@@ -3390,6 +3457,7 @@ export function App() {
                 <button
                   className="primary-action review-action"
                   disabled={!reviewWorkspace.editSubmission.canSave}
+                  onClick={saveSelectedReviewEdit}
                   type="button"
                   title="Save edited audio version"
                 >
@@ -3401,6 +3469,7 @@ export function App() {
                   </span>
                 </button>
               </div>
+              <p className="action-status">{reviewActionStatus}</p>
 
               <div
                 className="samples-metrics"
@@ -3439,6 +3508,9 @@ export function App() {
                     <div className="review-transport-topline">
                       <button
                         className="icon-control"
+                        onClick={() =>
+                          previewLibraryItem(assetLibrary.selectedItem.item.id)
+                        }
                         type="button"
                         title="Play or pause preview"
                       >

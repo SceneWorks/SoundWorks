@@ -689,6 +689,56 @@ export type LibraryPlayback = {
   reason?: string | null;
 };
 
+export type SaveReviewEditRequest = {
+  itemId: string;
+  startMs?: number | null;
+  endMs?: number | null;
+  fadeInMs?: number | null;
+  fadeOutMs?: number | null;
+  normalizeLoudnessLufs?: number | null;
+};
+
+export type ReviewEditResult = {
+  library: ProjectLibraryActionResult;
+  sourcePath: string;
+  editedPath: string;
+  provenanceSidecarPath: string;
+  versionId: string;
+  durationMs: number;
+  loudnessLufs?: number | null;
+  truePeakDbfs?: number | null;
+};
+
+export type ExportLibraryItemRequest = {
+  itemId: string;
+  presetId: string;
+  formats: AudioFileFormat[];
+  sceneWorksProjectId?: string | null;
+  sceneWorksVideoAssetId?: string | null;
+  replaceExistingAudio: boolean;
+};
+
+export type ExportLibraryItemResult = {
+  itemId: string;
+  presetId: string;
+  outputRoot: string;
+  artifacts: Array<{
+    path: string;
+    format?: AudioFileFormat | null;
+    kind: string;
+    bytes: number;
+  }>;
+  sidecarPath: string;
+  sceneWorksManifestPath: string;
+  canAttachDirectly: boolean;
+  warnings: string[];
+  validationChecks: Array<{
+    id: string;
+    passed: boolean;
+    summary: string;
+  }>;
+};
+
 export type WorkspaceOverview = {
   schemaVersion: number;
   workspace: {

@@ -70,6 +70,7 @@ export type RuntimeModelState = {
   workflows: CapabilityWorkflow[];
   reasons: string[];
   cache: {
+    cachePath?: string | null;
     status: string;
     expectedSizeMb?: number | null;
     diskUsageMb?: number | null;
@@ -131,6 +132,7 @@ export type RuntimeJobRequest = {
   workflow: CapabilityWorkflow;
   prompt: string;
   sourceSurface: string;
+  parameters?: Record<string, unknown>;
 };
 
 export type RuntimeValidationCheck = {

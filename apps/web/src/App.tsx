@@ -436,6 +436,7 @@ export function App() {
   function runRuntimeJob(
     workflow: RuntimeJobRequest["workflow"],
     prompt: string,
+    parameters: Record<string, unknown> = {},
   ) {
     const model = runtimeModelFor(runtime, workflow);
     const request: RuntimeJobRequest = {
@@ -445,9 +446,28 @@ export function App() {
       workflow,
       prompt,
       sourceSurface: workflowLabel(workflow),
+      parameters: {
+        cachePath: model?.cache.cachePath ?? null,
+        modelVersion: null,
+        ...parameters,
+      },
     };
     enqueueRuntimeJob(request).then((job) => {
       setRuntimeOperation(job);
+      if (workflow === "tts" && job.status === "succeeded") {
+        importRuntimeArtifactToLibrary({
+          jobId: job.id,
+          projectId: workspace.activeProject.project.id,
+          name: `${workflowLabel(job.workflow)} generated voice clip`,
+          tags: ["tts", "voice-clip", "generated-speech"],
+        })
+          .then(applyProjectLibraryResult)
+          .catch((error) => {
+            setLibraryActionStatus(
+              `TTS generated but save unavailable: ${String(error)}`,
+            );
+          });
+      }
       refreshRuntime();
     });
   }
@@ -1968,6 +1988,27 @@ export function App() {
                       ttsStudio.script.segments
                         .map((segment) => segment.text)
                         .join(" "),
+                      {
+                        language: ttsStudio.script.language,
+                        speakerLabels: Array.from(
+                          new Set(
+                            ttsStudio.script.segments.map(
+                              (segment) => segment.speakerLabel,
+                            ),
+                          ),
+                        ),
+                        voiceProfileIds: ttsStudio.speakers.map(
+                          (speaker) => speaker.voiceProfileId,
+                        ),
+                        voice: "af_heart",
+                        speed: ttsStudio.controls.speed,
+                        seed: null,
+                        voiceConsentRecorded: ttsStudio.speakers.every(
+                          (speaker) =>
+                            speaker.consentStatus ===
+                            "explicit-consent-recorded",
+                        ),
+                      },
                     )
                   }
                   type="button"

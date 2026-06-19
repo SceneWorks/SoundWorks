@@ -12,6 +12,7 @@ use crate::manifests::CapabilityWorkflow;
 use crate::runtime::{RuntimeArtifactKind, RuntimeJobStore};
 use crate::workspace::WorkspaceOverview;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -261,6 +262,11 @@ impl ProjectLibraryStore {
                     "runtime job has no audio preview artifact",
                 )
             })?;
+        let output_manifest = job
+            .artifacts
+            .iter()
+            .find(|artifact| artifact.kind == RuntimeArtifactKind::OutputManifest)
+            .and_then(|artifact| read_json::<Value>(&artifact.path).ok());
         let source_path = PathBuf::from(&artifact.path);
         if !source_path.is_file() {
             return Err(io::Error::new(
@@ -352,10 +358,24 @@ impl ProjectLibraryStore {
                 content_hash: None,
             },
             technical: TechnicalAudioMetadata {
-                sample_rate_hz: 48_000,
+                sample_rate_hz: output_manifest
+                    .as_ref()
+                    .and_then(|manifest| manifest.get("sampleRateHz"))
+                    .and_then(Value::as_u64)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .unwrap_or(48_000),
                 bit_depth: Some(16),
-                channels: 1,
-                duration_ms: 1_000,
+                channels: output_manifest
+                    .as_ref()
+                    .and_then(|manifest| manifest.get("channels"))
+                    .and_then(Value::as_u64)
+                    .and_then(|value| u16::try_from(value).ok())
+                    .unwrap_or(1),
+                duration_ms: output_manifest
+                    .as_ref()
+                    .and_then(|manifest| manifest.get("durationMs"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1_000),
                 loudness_lufs: None,
                 true_peak_dbfs: None,
                 has_clipping: false,
@@ -396,6 +416,9 @@ impl ProjectLibraryStore {
                 "jobId": job.id,
                 "providerId": job.provider_id,
                 "modelId": job.model_id,
+                "runtimeRecipePath": job.recipe_path,
+                "runtimeModelMetadataPath": job.model_metadata_path,
+                "runtimeOutputManifest": output_manifest,
                 "sourceArtifact": artifact.path,
                 "copiedTo": media_path,
                 "recipe": item.recipe,

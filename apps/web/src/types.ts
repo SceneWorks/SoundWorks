@@ -28,6 +28,7 @@ export type AppOverview = {
   providerCatalog: ProviderCatalogOverview;
   assetLibrary: AssetLibrarySummary;
   exportWorkflow: ExportWorkflowSummary;
+  compositionEditor: CompositionEditorSummary;
   mvpValidation: MvpValidationSummary;
   modelEvaluation: ModelEvaluationOverview;
   ttsStudio: TtsStudioSummary;
@@ -296,6 +297,162 @@ export type ExportWorkflowOverview = {
     markerCount: number;
     sectionCount: number;
   };
+  validationChecks: Array<{
+    id: string;
+    passed: boolean;
+    summary: string;
+  }>;
+};
+
+export type CompositionEditorSummary = {
+  schemaVersion: number;
+  trackCount: number;
+  clipCount: number;
+  assetBinCount: number;
+  enabledToolCount: number;
+  markerCount: number;
+  sectionCount: number;
+  selectedClipId: string;
+  canRenderMixdown: boolean;
+  editableAssetKinds: string[];
+  recommendedComponentId: string;
+  componentCandidateCount: number;
+};
+
+export type CompositionEditorOverview = {
+  schemaVersion: number;
+  projectId: string;
+  composition: {
+    id: string;
+    name: string;
+    tempoBpm?: number | null;
+    musicalKey?: string | null;
+    markers: Array<{ id: string; atMs: number; label: string }>;
+    sections: Array<{
+      id: string;
+      range: { startMs: number; endMs: number };
+      label: string;
+    }>;
+    exportHistory: Array<{
+      id: string;
+      jobId: string;
+      outputAssetId: string;
+      presetId: string;
+    }>;
+  };
+  timeline: {
+    durationMs: number;
+    zoomPercent: number;
+    snapGridMs: number;
+    selectedTool: string;
+    selectedClipId: string;
+    playbackCursorMs: number;
+    loopEnabled: boolean;
+    loopRange: { startMs: number; endMs: number };
+    gridLabels: string[];
+    markersEditable: boolean;
+    sectionsEditable: boolean;
+  };
+  assetBin: Array<{
+    assetId: string;
+    versionId: string;
+    name: string;
+    kind: LibraryItemType;
+    scope: LibraryScope;
+    durationMs: number;
+    tags: string[];
+    sourceWorkflow: string;
+    auditionReady: boolean;
+    draggableToTimeline: boolean;
+    provenanceId: string;
+  }>;
+  sourceFlows: Array<{
+    workflow: string;
+    label: string;
+    assetKind: LibraryItemType;
+    status: "ready" | "planned" | "blocked";
+    targetTrackRole: string;
+  }>;
+  tracks: Array<{
+    trackId: string;
+    name: string;
+    role: string;
+    clipCount: number;
+    gainDb: number;
+    pan: number;
+    muted: boolean;
+    soloed: boolean;
+    automationTargets: string[];
+    editable: boolean;
+    clips: Array<{
+      clipId: string;
+      assetId: string;
+      versionId: string;
+      assetName: string;
+      assetKind: LibraryItemType;
+      sourceScope: LibraryScope;
+      timelineStartMs: number;
+      sourceRange: { startMs: number; endMs: number };
+      fadeInMs: number;
+      fadeOutMs: number;
+      gainDb: number;
+      pan: number;
+      lane: number;
+      canTrim: boolean;
+      canSplit: boolean;
+      canDuplicate: boolean;
+      canDelete: boolean;
+    }>;
+  }>;
+  mixer: {
+    masterGainDb: number;
+    targetLufs: number;
+    truePeakCeilingDbfs: number;
+    renderReady: boolean;
+    loudnessCheck: string;
+    warnings: string[];
+    trackStates: Array<{
+      trackId: string;
+      label: string;
+      gainDb: number;
+      pan: number;
+      muted: boolean;
+      soloed: boolean;
+      effectChain: string[];
+      sendTargets: string[];
+    }>;
+  };
+  tools: Array<{
+    id: string;
+    label: string;
+    enabled: boolean;
+    appliesTo: string[];
+  }>;
+  exportPlan: {
+    canRenderMixdown: boolean;
+    presetIds: string[];
+    mixdownPath: string;
+    stemPaths: string[];
+    provenanceSidecarPath: string;
+    requiredProvenanceFields: string[];
+    sceneWorksReady: boolean;
+    sceneWorksWarning: string;
+  };
+  componentDecisions: Array<{
+    id: string;
+    name: string;
+    sourceUrl: string;
+    license: string;
+    fit:
+      | "strong-prototype-candidate"
+      | "renderer-primitive"
+      | "timing-primitive"
+      | "needs-spike";
+    strengths: string[];
+    risks: string[];
+    prototypeEvidence: string;
+    decision: string;
+  }>;
   validationChecks: Array<{
     id: string;
     passed: boolean;

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   fallbackOverview,
   fallbackAssetLibrary,
+  fallbackCompositionEditor,
   fallbackExportWorkflow,
   fallbackMvpValidation,
   fallbackRightsSafety,
@@ -16,6 +17,7 @@ import {
 import type {
   AppOverview,
   AssetLibraryOverview,
+  CompositionEditorOverview,
   ExportWorkflowOverview,
   MvpValidationOverview,
   RightsSafetyOverview,
@@ -57,6 +59,16 @@ export async function loadExportWorkflowOverview(): Promise<ExportWorkflowOvervi
     return await invoke<ExportWorkflowOverview>("get_export_workflow_overview");
   } catch {
     return fallbackExportWorkflow;
+  }
+}
+
+export async function loadCompositionEditorOverview(): Promise<CompositionEditorOverview> {
+  try {
+    return await invoke<CompositionEditorOverview>(
+      "get_composition_editor_overview",
+    );
+  } catch {
+    return fallbackCompositionEditor;
   }
 }
 

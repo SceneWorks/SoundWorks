@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod asset_library;
+pub mod composition_editor;
 pub mod domain;
 pub mod evaluation;
 pub mod export_workflow;
@@ -18,6 +19,7 @@ pub mod tts;
 pub mod voice_lab;
 
 pub use asset_library::*;
+pub use composition_editor::*;
 pub use domain::*;
 pub use evaluation::*;
 pub use export_workflow::*;
@@ -44,6 +46,7 @@ pub struct AppOverview {
     pub provider_catalog: ProviderCatalogOverview,
     pub asset_library: AssetLibrarySummary,
     pub export_workflow: ExportWorkflowSummary,
+    pub composition_editor: CompositionEditorSummary,
     pub mvp_validation: MvpValidationSummary,
     pub model_evaluation: ModelEvaluationOverview,
     pub tts_studio: TtsStudioSummary,
@@ -128,6 +131,23 @@ pub struct ExportWorkflowSummary {
     pub can_export_selected: bool,
     pub writes_daw_bundle: bool,
     pub writes_scene_works_package: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompositionEditorSummary {
+    pub schema_version: u32,
+    pub track_count: usize,
+    pub clip_count: usize,
+    pub asset_bin_count: usize,
+    pub enabled_tool_count: usize,
+    pub marker_count: usize,
+    pub section_count: usize,
+    pub selected_clip_id: String,
+    pub can_render_mixdown: bool,
+    pub editable_asset_kinds: Vec<AudioAssetKind>,
+    pub recommended_component_id: String,
+    pub component_candidate_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -300,6 +320,11 @@ impl AppOverview {
                 StudioSurface::scaffolded("songs", "Song Studio", "/studios/songs"),
                 StudioSurface::scaffolded("review", "Waveform Review", "/review"),
                 StudioSurface::scaffolded("rights-safety", "Rights + Safety", "/rights"),
+                StudioSurface::scaffolded(
+                    "composition-editor",
+                    "Multitrack Editor",
+                    "/composition",
+                ),
                 StudioSurface::planned(
                     "video-to-audio",
                     "Video to Audio",
@@ -333,6 +358,13 @@ impl AppOverview {
                     direction: CommandDirection::UiToBackend,
                     purpose:
                         "Load export presets, formats, stem bundles, DAW handoff, SceneWorks handoff, and metadata sidecar readiness."
+                            .to_string(),
+                },
+                CommandBoundary {
+                    name: "get_composition_editor_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load multitrack timeline state, asset placement readiness, clip edit tools, mixer state, render plan, and editor component decision evidence."
                             .to_string(),
                 },
                 CommandBoundary {
@@ -412,6 +444,9 @@ impl AppOverview {
             ),
             export_workflow: ExportWorkflowSummary::from_overview(
                 &ExportWorkflowOverview::reference(),
+            ),
+            composition_editor: CompositionEditorSummary::from_overview(
+                &CompositionEditorOverview::reference(),
             ),
             mvp_validation: MvpValidationSummary::from_overview(&MvpValidationOverview::reference()),
             model_evaluation: ModelEvaluationCatalog::reference().overview(),
@@ -655,6 +690,40 @@ impl ExportWorkflowSummary {
     }
 }
 
+impl CompositionEditorSummary {
+    pub fn from_overview(overview: &CompositionEditorOverview) -> Self {
+        let mut editable_asset_kinds = overview
+            .tracks
+            .iter()
+            .flat_map(|track| track.clips.iter().map(|clip| clip.asset_kind))
+            .collect::<Vec<_>>();
+        editable_asset_kinds.sort_by_key(|kind| format!("{kind:?}"));
+        editable_asset_kinds.dedup();
+
+        let recommended_component_id = overview
+            .component_decisions
+            .iter()
+            .find(|decision| decision.fit == ComponentFit::StrongPrototypeCandidate)
+            .map(|decision| decision.id.clone())
+            .unwrap_or_else(|| "needs-spike".to_string());
+
+        Self {
+            schema_version: overview.schema_version,
+            track_count: overview.tracks.len(),
+            clip_count: overview.tracks.iter().map(|track| track.clip_count).sum(),
+            asset_bin_count: overview.asset_bin.len(),
+            enabled_tool_count: overview.tools.iter().filter(|tool| tool.enabled).count(),
+            marker_count: overview.composition.markers.len(),
+            section_count: overview.composition.sections.len(),
+            selected_clip_id: overview.timeline.selected_clip_id.clone(),
+            can_render_mixdown: overview.export_plan.can_render_mixdown,
+            editable_asset_kinds,
+            recommended_component_id,
+            component_candidate_count: overview.component_decisions.len(),
+        }
+    }
+}
+
 impl ProviderCatalogOverview {
     pub fn from_catalog(catalog: &ProviderCatalog) -> Self {
         Self {
@@ -725,6 +794,7 @@ mod tests {
                 "songs",
                 "review",
                 "rights-safety",
+                "composition-editor",
                 "video-to-audio"
             ]
         );
@@ -755,29 +825,38 @@ mod tests {
             payload["commands"][3]["name"],
             "get_export_workflow_overview"
         );
-        assert_eq!(payload["commands"][4]["name"], "get_runtime_overview");
         assert_eq!(
-            payload["commands"][5]["name"],
+            payload["commands"][4]["name"],
+            "get_composition_editor_overview"
+        );
+        assert_eq!(payload["commands"][5]["name"], "get_runtime_overview");
+        assert_eq!(
+            payload["commands"][6]["name"],
             "get_model_evaluation_catalog"
         );
         assert_eq!(
-            payload["commands"][6]["name"],
+            payload["commands"][7]["name"],
             "get_mvp_validation_overview"
         );
         assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
         assert_eq!(payload["assetLibrary"]["supportedTypeCount"], 13);
         assert_eq!(payload["exportWorkflow"]["presetCount"], 7);
+        assert_eq!(payload["compositionEditor"]["trackCount"], 4);
+        assert_eq!(
+            payload["compositionEditor"]["recommendedComponentId"],
+            "waveform-playlist"
+        );
         assert_eq!(payload["mvpValidation"]["demoWorkflowCount"], 12);
         assert_eq!(payload["mvpValidation"]["blockingItemCount"], 4);
         assert_eq!(payload["mvpValidation"]["readyForMvp"], false);
         assert_eq!(payload["modelEvaluation"]["candidateCount"], 28);
         assert_eq!(payload["ttsStudio"]["segmentCount"], 3);
-        assert_eq!(payload["commands"][7]["name"], "get_tts_studio_overview");
-        assert_eq!(payload["commands"][8]["name"], "get_voice_lab_overview");
-        assert_eq!(payload["commands"][9]["name"], "get_sfx_studio_overview");
-        assert_eq!(payload["commands"][11]["name"], "get_song_studio_overview");
+        assert_eq!(payload["commands"][8]["name"], "get_tts_studio_overview");
+        assert_eq!(payload["commands"][9]["name"], "get_voice_lab_overview");
+        assert_eq!(payload["commands"][10]["name"], "get_sfx_studio_overview");
+        assert_eq!(payload["commands"][12]["name"], "get_song_studio_overview");
         assert_eq!(
-            payload["commands"][12]["name"],
+            payload["commands"][13]["name"],
             "get_review_workspace_overview"
         );
         assert_eq!(payload["voiceLab"]["modeCount"], 3);
@@ -935,6 +1014,12 @@ mod tests {
             "export_sidecars",
             "export_daw_handoffs",
             "export_sceneworks_handoffs",
+            "composition_editor_sessions",
+            "composition_editor_tracks",
+            "composition_editor_clips",
+            "composition_editor_mixer_state",
+            "composition_editor_component_decisions",
+            "composition_editor_render_plans",
             "mvp_validation_demo_workflows",
             "mvp_validation_regression_fixtures",
             "mvp_validation_checks",
@@ -1106,5 +1191,29 @@ mod tests {
             "version-loop-001-b-review-edit"
         );
         assert!(overview.review_workspace.can_save_edit);
+    }
+
+    #[test]
+    fn app_overview_summarizes_composition_editor() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.studios[7].status, ScaffoldStatus::Scaffolded);
+        assert_eq!(overview.composition_editor.track_count, 4);
+        assert_eq!(overview.composition_editor.clip_count, 7);
+        assert_eq!(overview.composition_editor.asset_bin_count, 5);
+        assert_eq!(overview.composition_editor.enabled_tool_count, 9);
+        assert_eq!(
+            overview.composition_editor.recommended_component_id,
+            "waveform-playlist"
+        );
+        assert!(overview.composition_editor.can_render_mixdown);
+        assert!(overview
+            .composition_editor
+            .editable_asset_kinds
+            .contains(&AudioAssetKind::VoiceClip));
+        assert!(overview
+            .composition_editor
+            .editable_asset_kinds
+            .contains(&AudioAssetKind::Stem));
     }
 }

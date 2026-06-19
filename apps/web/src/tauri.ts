@@ -5,6 +5,7 @@ import {
   fallbackCompositionEditor,
   fallbackExportWorkflow,
   fallbackMvpValidation,
+  fallbackModelManager,
   fallbackRightsSafety,
   fallbackReviewWorkspace,
   fallbackRuntime,
@@ -25,6 +26,8 @@ import type {
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
+  ModelManagerOperation,
+  ModelManagerOverview,
   SamplesStudioOverview,
   SongStudioOverview,
   SfxStudioOverview,
@@ -47,6 +50,70 @@ export async function loadRuntimeOverview(): Promise<RuntimeOverview> {
     return await invoke<RuntimeOverview>("get_runtime_overview");
   } catch {
     return fallbackRuntime;
+  }
+}
+
+export async function loadModelManagerOverview(): Promise<ModelManagerOverview> {
+  try {
+    return await invoke<ModelManagerOverview>("get_model_manager_overview");
+  } catch {
+    return fallbackModelManager;
+  }
+}
+
+export async function installModelCandidate(
+  candidateId: string,
+): Promise<ModelManagerOperation> {
+  try {
+    return await invoke<ModelManagerOperation>("install_model_candidate", {
+      candidateId,
+    });
+  } catch {
+    return (
+      fallbackModelManager.operations.find(
+        (operation) =>
+          operation.candidateId === candidateId &&
+          operation.action === "install",
+      ) ?? {
+        id: `install-${candidateId}`,
+        candidateId,
+        action: "install",
+        status: "failed",
+        progressPercent: 100,
+        summary: "Install command is unavailable in web fallback mode.",
+        recovery:
+          "Open the Tauri desktop runtime or inspect the SoundWorks model cache manually.",
+        logTail: [],
+      }
+    );
+  }
+}
+
+export async function revalidateModelCandidate(
+  candidateId: string,
+): Promise<ModelManagerOperation> {
+  try {
+    return await invoke<ModelManagerOperation>("revalidate_model_candidate", {
+      candidateId,
+    });
+  } catch {
+    const candidate = fallbackModelManager.candidates.find(
+      (candidate) => candidate.candidateId === candidateId,
+    );
+    return {
+      id: `revalidate-${candidateId}`,
+      candidateId,
+      action: "revalidate",
+      status: candidate?.cache.verified ? "succeeded" : "failed",
+      progressPercent: 100,
+      summary: candidate?.cache.verified
+        ? `${candidate.name} cache evidence is verified.`
+        : `${candidate?.name ?? candidateId} is not installed.`,
+      recovery: candidate?.cache.verified
+        ? null
+        : "Missing required cache files must be downloaded and revalidated.",
+      logTail: candidate ? [candidate.cache.evidence] : [],
+    };
   }
 }
 

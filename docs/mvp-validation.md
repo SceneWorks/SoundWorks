@@ -37,6 +37,8 @@ The required automated categories are job contracts, recipe persistence, metadat
 
 The MVP gate requires real evidence for verified model cache/package files, persisted generation jobs, generated audio files, playback/edit behavior over real media, and exported audio files plus sidecars. Until those artifacts exist, static manifests, fixture paths, and reference snapshots must remain labeled as fixture/demo evidence and cannot satisfy the release gate.
 
+Model cache/package evidence is owned by `docs/model-manager.md`. A model can only contribute runtime evidence after its model-manager candidate state is `installed` from verified expected files, not merely because the evaluation catalog says it is promising or installable.
+
 ## Manual QA Scorecards
 
 Manual scorecards are required for TTS, dialogue or voice clone, voice conversion, SFX, ambience loops, sample packs, loop packs, complete songs, and video Foley. Each scorecard must attach reviewer notes and generated audio artifacts before the MVP gate can pass.

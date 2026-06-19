@@ -32,6 +32,7 @@ export type AppOverview = {
   compositionEditor: CompositionEditorSummary;
   mvpValidation: MvpValidationSummary;
   modelEvaluation: ModelEvaluationOverview;
+  modelManager: ModelManagerSummary;
   ttsStudio: TtsStudioSummary;
   voiceLab: VoiceLabSummary;
   sfxStudio: SfxStudioSummary;
@@ -787,6 +788,121 @@ export type ModelEvaluationOverview = {
   statusCounts: Record<string, number>;
   productEligibilityCounts: Record<string, number>;
   recommendedCandidateIds: string[];
+};
+
+export type ModelManagerSummary = {
+  candidateCount: number;
+  verifiedInstalledCount: number;
+  installableCount: number;
+  blockedCount: number;
+  missingCacheCount: number;
+  failedOperationCount: number;
+};
+
+export type EvaluationLane =
+  | "tts"
+  | "voice-clone"
+  | "voice-conversion"
+  | "sfx"
+  | "ambience"
+  | "instrument-sample"
+  | "loop"
+  | "song"
+  | "stem-separation"
+  | "video-to-audio";
+
+export type CandidateInstallState =
+  | "installed"
+  | "missing-cache"
+  | "needs-runtime-port"
+  | "research-only"
+  | "blocked";
+
+export type ModelManagerActionKind =
+  | "revalidate"
+  | "install"
+  | "repair-cache"
+  | "open-source"
+  | "accept-license";
+
+export type ModelManagerOperationStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "blocked";
+
+export type ModelManagerOperation = {
+  id: string;
+  candidateId: string;
+  action: ModelManagerActionKind;
+  status: ModelManagerOperationStatus;
+  progressPercent: number;
+  summary: string;
+  recovery?: string | null;
+  logTail: string[];
+};
+
+export type ModelManagerOverview = {
+  schemaVersion: number;
+  cacheRoot: string;
+  summary: ModelManagerSummary;
+  laneReadiness: Array<{
+    lane: EvaluationLane;
+    recommendedCandidateId: string;
+    state: "verified" | "missing-cache" | "blocked";
+    summary: string;
+    blocker?: string | null;
+  }>;
+  candidates: Array<{
+    candidateId: string;
+    name: string;
+    provider: string;
+    lanes: EvaluationLane[];
+    sourceLabel: string;
+    sourceUrl: string;
+    licenseLabel: string;
+    evaluationStatus: string;
+    productEligibility: string;
+    evidenceLevel: string;
+    runtimePath: string;
+    requiresPythonRuntime: boolean;
+    installState: CandidateInstallState;
+    blockers: string[];
+    downloadPlan: {
+      mechanism: string;
+      sourceUrl: string;
+      cacheSubdir: string;
+      expectedFiles: Array<{
+        path: string;
+        required: boolean;
+        sha256?: string | null;
+        sizeMb?: number | null;
+      }>;
+      expectedSizeMb?: number | null;
+      requiresLicenseAcceptance: boolean;
+      supportsAutomatedDownload: boolean;
+      commandHint: string;
+      notes: string[];
+    };
+    cache: {
+      cachePath: string;
+      verified: boolean;
+      expectedFileCount: number;
+      presentFileCount: number;
+      missingRequiredFiles: string[];
+      diskUsageMb?: number | null;
+      evidence: string;
+    };
+    actions: ModelManagerActionKind[];
+  }>;
+  operations: ModelManagerOperation[];
+  validationChecks: Array<{
+    id: string;
+    passed: boolean;
+    summary: string;
+    recovery?: string | null;
+  }>;
 };
 
 export type ValidationStatus =

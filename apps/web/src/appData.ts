@@ -3,6 +3,7 @@ import type {
   AssetLibraryOverview,
   CompositionEditorOverview,
   ExportWorkflowOverview,
+  ModelManagerOverview,
   MvpValidationOverview,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
@@ -15,6 +16,258 @@ import type {
   VoiceLabOverview,
   WorkspaceOverview,
 } from "./types";
+
+const fallbackModelManagerSummary = {
+  candidateCount: 28,
+  verifiedInstalledCount: 0,
+  installableCount: 7,
+  blockedCount: 19,
+  missingCacheCount: 2,
+  failedOperationCount: 1,
+};
+
+const modelManagerCandidates = [
+  ["stable-audio-3", "Stable Audio 3", "Stability AI", "song"],
+  ["ace-step-1-5", "ACE-Step 1.5", "ACE-Step", "song"],
+  ["levo-2", "LeVo 2 / SongGeneration 2", "Tencent AI Lab", "song"],
+  ["yue", "YuE", "M-A-P", "song"],
+  ["diffrhythm-2", "DiffRhythm 2", "ASLP Lab / Xiaomi Research", "song"],
+  ["khala", "Khala", "Khala Music AI", "song"],
+  ["heartmula", "HeartMuLa", "HeartMuLa", "loop"],
+  ["muse-song", "Muse", "Muse authors", "song"],
+  ["kokoro-82m", "Kokoro 82M", "hexgrad", "tts"],
+  ["vibevoice", "VibeVoice", "Microsoft", "tts"],
+  ["xtts-v2", "XTTS-v2", "Coqui", "voice-clone"],
+  ["chattts", "ChatTTS", "2Noise", "tts"],
+  ["fish-speech", "Fish Speech", "Fish Audio", "voice-clone"],
+  ["chatterbox", "Chatterbox", "Resemble AI", "voice-clone"],
+  ["chatterbox-turbo", "Chatterbox Turbo", "Resemble AI", "tts"],
+  ["gpt-sovits", "GPT-SoVITS", "RVC-Boss", "voice-clone"],
+  ["f5-tts", "F5-TTS", "SWivid", "voice-clone"],
+  ["cosyvoice-2", "CosyVoice 2", "FunAudioLLM / Alibaba", "tts"],
+  ["openvoice-v2", "OpenVoice V2", "MyShell AI", "voice-conversion"],
+  ["rvc", "RVC", "RVC Project", "voice-conversion"],
+  ["stable-audio-open-1", "Stable Audio Open 1.0", "Stability AI", "sfx"],
+  ["audiocraft-audiogen", "AudioCraft / AudioGen", "Meta", "sfx"],
+  ["audioldm", "AudioLDM", "AudioLDM authors", "sfx"],
+  ["audioldm-2", "AudioLDM 2", "AudioLDM authors", "sfx"],
+  ["audiox", "AudioX", "AudioX authors", "video-to-audio"],
+  ["mmaudio", "MMAudio", "MMAudio authors", "video-to-audio"],
+  ["thinksound", "ThinkSound", "FunAudioLLM", "video-to-audio"],
+  ["moss-soundeffect", "MOSS-SoundEffect", "OpenMOSS", "sfx"],
+] as const;
+
+export const fallbackModelManager: ModelManagerOverview = {
+  schemaVersion: 1,
+  cacheRoot: "~/Library/Application Support/SoundWorks/models",
+  summary: fallbackModelManagerSummary,
+  laneReadiness: [
+    {
+      lane: "tts",
+      recommendedCandidateId: "kokoro-82m",
+      state: "missing-cache",
+      summary:
+        "Kokoro 82M is selected for TTS, but cache verification is incomplete.",
+      blocker: "onnx/model.onnx",
+    },
+    {
+      lane: "voice-clone",
+      recommendedCandidateId: "chatterbox",
+      state: "missing-cache",
+      summary:
+        "Chatterbox needs a product-safe provider package before voice clone enablement.",
+      blocker:
+        "Need no-Python product path and watermark/provenance validation",
+    },
+    {
+      lane: "voice-conversion",
+      recommendedCandidateId: "rvc",
+      state: "missing-cache",
+      summary: "RVC remains a consent-gated external-executable candidate.",
+      blocker: "README.md",
+    },
+    {
+      lane: "sfx",
+      recommendedCandidateId: "moss-soundeffect",
+      state: "missing-cache",
+      summary:
+        "MOSS-SoundEffect is selected for SFX, but cache verification is incomplete.",
+      blocker: "model.safetensors",
+    },
+    {
+      lane: "song",
+      recommendedCandidateId: "ace-step-1-5",
+      state: "missing-cache",
+      summary:
+        "ACE-Step 1.5 needs packaged runtime proof before song generation enablement.",
+      blocker: "checkpoints",
+    },
+    {
+      lane: "video-to-audio",
+      recommendedCandidateId: "mmaudio",
+      state: "blocked",
+      summary:
+        "MMAudio remains blocked for product use until license and runtime path are resolved.",
+      blocker: "Candidate currently requires a Python runtime.",
+    },
+  ],
+  candidates: modelManagerCandidates.map(
+    ([candidateId, name, provider, lane]) => {
+      const installState =
+        candidateId === "kokoro-82m" || candidateId === "moss-soundeffect"
+          ? "missing-cache"
+          : candidateId === "xtts-v2" ||
+              candidateId === "chattts" ||
+              candidateId === "f5-tts" ||
+              candidateId === "audioldm"
+            ? "blocked"
+            : candidateId === "mmaudio" ||
+                candidateId === "audiox" ||
+                candidateId === "thinksound" ||
+                candidateId === "levo-2" ||
+                candidateId === "yue" ||
+                candidateId === "diffrhythm-2" ||
+                candidateId === "khala" ||
+                candidateId === "heartmula" ||
+                candidateId === "muse-song"
+              ? "research-only"
+              : "needs-runtime-port";
+
+      return {
+        candidateId,
+        name,
+        provider,
+        lanes: [lane],
+        sourceLabel: "Primary source",
+        sourceUrl: "https://huggingface.co",
+        licenseLabel:
+          installState === "blocked"
+            ? "License/runtime blocker"
+            : "Source-backed license review",
+        evaluationStatus:
+          installState === "blocked" ? "blocked" : "promising-spike",
+        productEligibility:
+          installState === "missing-cache"
+            ? "product-candidate"
+            : installState === "research-only"
+              ? "research-only"
+              : installState === "blocked"
+                ? "blocked"
+                : "needs-runtime-port",
+        evidenceLevel:
+          installState === "missing-cache"
+            ? "install-documented"
+            : "source-metadata",
+        runtimePath:
+          installState === "research-only"
+            ? "python-poc-only"
+            : "external-executable",
+        requiresPythonRuntime: installState === "research-only",
+        installState,
+        blockers:
+          installState === "missing-cache"
+            ? []
+            : ["Product-safe runtime and cache evidence are not verified."],
+        downloadPlan: {
+          mechanism:
+            installState === "blocked"
+              ? "blocked"
+              : installState === "research-only"
+                ? "research-poc"
+                : "hugging-face-snapshot",
+          sourceUrl: "https://huggingface.co",
+          cacheSubdir: candidateId,
+          expectedFiles:
+            candidateId === "kokoro-82m"
+              ? [
+                  { path: "config.json", required: true },
+                  { path: "onnx/model.onnx", required: true },
+                  { path: "voices/af_heart.bin", required: true },
+                ]
+              : candidateId === "moss-soundeffect"
+                ? [
+                    { path: "config.json", required: true },
+                    { path: "model.safetensors", required: true },
+                    { path: "tokenizer.json", required: true },
+                  ]
+                : [{ path: "README.md", required: true }],
+          expectedSizeMb:
+            candidateId === "moss-soundeffect"
+              ? 8000
+              : candidateId === "kokoro-82m"
+                ? 400
+                : null,
+          requiresLicenseAcceptance: installState !== "missing-cache",
+          supportsAutomatedDownload: installState === "missing-cache",
+          commandHint: `Download provider files into ${candidateId}, then revalidate.`,
+          notes: [
+            "No candidate is installed until expected files exist on disk.",
+          ],
+        },
+        cache: {
+          cachePath: `~/Library/Application Support/SoundWorks/models/${candidateId}`,
+          verified: false,
+          expectedFileCount:
+            candidateId === "kokoro-82m" || candidateId === "moss-soundeffect"
+              ? 3
+              : 1,
+          presentFileCount: 0,
+          missingRequiredFiles:
+            candidateId === "kokoro-82m"
+              ? ["config.json", "onnx/model.onnx", "voices/af_heart.bin"]
+              : candidateId === "moss-soundeffect"
+                ? ["config.json", "model.safetensors", "tokenizer.json"]
+                : ["README.md"],
+          diskUsageMb: null,
+          evidence: `missing cache directory ~/Library/Application Support/SoundWorks/models/${candidateId}`,
+        },
+        actions:
+          installState === "missing-cache"
+            ? ["revalidate", "open-source", "install", "repair-cache"]
+            : ["revalidate", "open-source"],
+      };
+    },
+  ),
+  operations: [
+    {
+      id: "install-kokoro-82m",
+      candidateId: "kokoro-82m",
+      action: "install",
+      status: "failed",
+      progressPercent: 100,
+      summary: "Kokoro install failed cache verification.",
+      recovery:
+        "The downloader did not leave the required ONNX model and voice files in the SoundWorks cache; retry download or repair the cache path.",
+      logTail: [
+        "Download provider files into kokoro-82m, then revalidate.",
+        "missing cache directory ~/Library/Application Support/SoundWorks/models/kokoro-82m",
+      ],
+    },
+  ],
+  validationChecks: [
+    {
+      id: "model-manager.candidate-coverage",
+      passed: true,
+      summary: "Model manager covers 28 epic candidate(s).",
+    },
+    {
+      id: "model-manager.no-metadata-installs",
+      passed: true,
+      summary:
+        "Installed state is derived from verified cache files, not model metadata alone.",
+    },
+    {
+      id: "model-manager.missing-cache-visible",
+      passed: true,
+      summary: "Missing-cache state is visible for install/revalidate QA.",
+    },
+    {
+      id: "model-manager.failed-download-visible",
+      passed: true,
+      summary: "Failed download recovery is visible.",
+    },
+  ],
+};
 
 export const fallbackOverview: AppOverview = {
   productName: "SoundWorks",
@@ -382,6 +635,7 @@ export const fallbackOverview: AppOverview = {
       "mmaudio",
     ],
   },
+  modelManager: fallbackModelManagerSummary,
   ttsStudio: {
     schemaVersion: 1,
     segmentCount: 3,

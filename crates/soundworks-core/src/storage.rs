@@ -1139,6 +1139,47 @@ CREATE TABLE workspace_validation_checks (
 );
 ",
     },
+    SchemaMigration {
+        version: 19,
+        name: "model_manager_revalidation",
+        sql: "
+CREATE TABLE model_manager_candidates (
+  candidate_id TEXT PRIMARY KEY REFERENCES model_evaluation_candidates(id),
+  install_state TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  license_label TEXT NOT NULL,
+  runtime_path TEXT NOT NULL,
+  requires_python_runtime INTEGER NOT NULL,
+  blockers_json TEXT NOT NULL,
+  download_plan_json TEXT NOT NULL,
+  cache_json TEXT NOT NULL,
+  actions_json TEXT NOT NULL
+);
+CREATE TABLE model_manager_lane_readiness (
+  lane TEXT PRIMARY KEY,
+  recommended_candidate_id TEXT NOT NULL REFERENCES model_evaluation_candidates(id),
+  state TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  blocker TEXT
+);
+CREATE TABLE model_manager_operations (
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL REFERENCES model_evaluation_candidates(id),
+  action TEXT NOT NULL,
+  status TEXT NOT NULL,
+  progress_percent INTEGER NOT NULL,
+  summary TEXT NOT NULL,
+  recovery TEXT,
+  log_tail_json TEXT NOT NULL
+);
+CREATE TABLE model_manager_validation_checks (
+  id TEXT PRIMARY KEY,
+  passed INTEGER NOT NULL,
+  summary TEXT NOT NULL,
+  recovery TEXT
+);
+",
+    },
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

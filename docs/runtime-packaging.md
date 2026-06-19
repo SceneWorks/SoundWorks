@@ -4,6 +4,8 @@
 
 Confidence: medium-high. The status, install, cache, progress, cancellation, packaging, and validation surfaces are now typed and tested. `docs/model-evaluation.md` tracks source-backed candidates and the platform-specific execution evidence still required before product enablement.
 
+`sc-6467` adds the model-manager recovery layer in `docs/model-manager.md`. Runtime jobs still consume verified model state, but model download, cache inspection, failed install recovery, and per-candidate revalidation now live in that model-manager surface.
+
 ## Standing Product Rule
 
 Shipped SoundWorks desktop builds must not depend on Python at runtime.
@@ -59,10 +61,11 @@ Model installation must report package id, expected disk size, actual disk use w
 
 Current checks:
 
-- `RuntimeOverview::reference()` reports installed packaged reference models, device inventory, cache state, progress, cancellation, and packaging policy.
+- `RuntimeOverview::reference()` reports device inventory, cache state, progress, cancellation, and packaging policy without treating manifest-only models as installed.
 - `shipped_runtime_policy_rejects_python_dependency` fails Python/Torch product dependencies.
 - Runtime state distinguishes installed, available, and unavailable models.
 - Job admission blocks unavailable models before execution.
+- `ModelManagerOverview::reference()` covers all 28 epic candidates and refuses installed state unless expected cache files verify on disk.
 - Cancellable jobs can transition to cancelled snapshots.
 
 The full project check path runs these through `npm run check`, which includes `cargo test --workspace`.

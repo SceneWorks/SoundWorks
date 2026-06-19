@@ -2612,6 +2612,12 @@ h1 {
   gap: 16px;
 }
 
+.model-manager-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(280px, 1fr);
+  gap: 16px;
+}
+
 .runtime-stack {
   display: grid;
   align-content: start;
@@ -2672,17 +2678,78 @@ h1 {
 }
 
 .runtime-dot.installed,
-.runtime-dot.running {
+.runtime-dot.running,
+.runtime-dot.verified {
   background: #2f8a67;
 }
 
-.runtime-dot.available {
+.runtime-dot.available,
+.runtime-dot.missing-cache,
+.runtime-dot.needs-runtime-port {
   background: #327fbd;
 }
 
 .runtime-dot.unavailable,
-.runtime-dot.failed {
+.runtime-dot.failed,
+.runtime-dot.blocked,
+.runtime-dot.research-only {
   background: #b24e45;
+}
+
+.model-cache-list li {
+  align-items: start;
+}
+
+.model-manager-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #cfc7b6;
+  border-radius: 6px;
+  background: #fffdf8;
+  color: #243b35;
+  cursor: pointer;
+}
+
+.icon-button.small {
+  width: 28px;
+  height: 28px;
+}
+
+.icon-button:disabled {
+  color: #a9a39a;
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.operation-banner {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #e1d2c3;
+  border-radius: 8px;
+  background: #fff8ee;
+  color: #4c352d;
+}
+
+.operation-banner.succeeded {
+  border-color: #b8d8c9;
+  background: #f0faf5;
+  color: #274f3e;
+}
+
+.operation-banner strong,
+.operation-banner span {
+  overflow-wrap: anywhere;
 }
 
 .validation-list {
@@ -2749,6 +2816,7 @@ h1 {
   .workspace-bottom-grid,
   .workspace-parity-strip,
   .runtime-columns,
+  .model-manager-grid,
   .runtime-policy,
   .evaluation-summary,
   .review-layout,

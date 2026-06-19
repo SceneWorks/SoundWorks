@@ -39,6 +39,18 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("moss-soundeffect")).toBeInTheDocument();
     expect(
+      screen.getByRole("heading", { name: "Model Manager" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("missing cache")).toBeInTheDocument();
+    expect(
+      screen.getByText("Kokoro install failed cache verification."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/onnx\/model.onnx/i).length).toBeGreaterThan(0);
+    expect(screen.getByTitle("Install Kokoro 82M")).toBeEnabled();
+    expect(
+      screen.getByText("Model manager covers 28 epic candidate(s)."),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("heading", { name: "Launch read" }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Producer").length).toBeGreaterThan(0);

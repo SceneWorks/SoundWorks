@@ -14,6 +14,7 @@ import {
   fallbackTtsStudio,
   fallbackVideoToAudio,
   fallbackVoiceLab,
+  fallbackWorkspace,
 } from "./appData";
 import type {
   AppOverview,
@@ -30,6 +31,7 @@ import type {
   TtsStudioOverview,
   VideoToAudioOverview,
   VoiceLabOverview,
+  WorkspaceOverview,
 } from "./types";
 
 export async function loadAppOverview(): Promise<AppOverview> {
@@ -45,6 +47,14 @@ export async function loadRuntimeOverview(): Promise<RuntimeOverview> {
     return await invoke<RuntimeOverview>("get_runtime_overview");
   } catch {
     return fallbackRuntime;
+  }
+}
+
+export async function loadWorkspaceOverview(): Promise<WorkspaceOverview> {
+  try {
+    return await invoke<WorkspaceOverview>("get_workspace_overview");
+  } catch {
+    return fallbackWorkspace;
   }
 }
 

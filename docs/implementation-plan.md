@@ -94,13 +94,13 @@ Success criteria:
 ## Phase 3: Review, Library, And Composition
 
 - `sc-6156` - Waveform review, lightweight editing, and version comparison: generated asset preview coverage, waveform/spectrogram cache state, play/pause/seek/scrub/zoom/loop transport controls, trim/fade/normalize/silence-removal/loop-crossfade/format/metadata edit actions, non-destructive edited-version saves, A/B comparison, and inspectable recipe provenance.
-- `sc-6198` - Project/workspace model with global asset library.
+- `sc-6198` - Project/workspace model with global asset library: active/recent project state, create/open affordances, project/global library scopes, source picker policy, global asset link/copy/promote actions, composition links, provenance sidecars, and SceneWorks-style scope conventions.
 - `sc-6160` - Audio asset library, tagging, collections, and search.
 - `sc-6190` - Multitrack composition editor and mixer.
 
 Success criteria:
 
-- Users can organize generated/source audio, compare versions, make lightweight edits, arrange clips, mix tracks, and reuse assets across projects.
+- Users can organize generated/source audio, compare versions, make lightweight edits, arrange clips, mix tracks, and reuse assets across projects without losing provenance.
 
 ## Phase 4: Export, Integration, And Governance
 

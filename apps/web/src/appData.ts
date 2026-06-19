@@ -13,6 +13,7 @@ import type {
   TtsStudioOverview,
   VideoToAudioOverview,
   VoiceLabOverview,
+  WorkspaceOverview,
 } from "./types";
 
 export const fallbackOverview: AppOverview = {
@@ -117,6 +118,12 @@ export const fallbackOverview: AppOverview = {
       direction: "ui-to-backend",
       purpose:
         "Load provider/model manifests, capability defaults, and matching inputs.",
+    },
+    {
+      name: "get_workspace_overview",
+      direction: "ui-to-backend",
+      purpose:
+        "Load active project workspace, global library, source picker, reuse actions, and SceneWorks-style scope conventions.",
     },
     {
       name: "get_asset_library_overview",
@@ -270,6 +277,20 @@ export const fallbackOverview: AppOverview = {
         defaultModelId: "reference-utility-suite",
       },
     ],
+  },
+  workspace: {
+    schemaVersion: 1,
+    projectCount: 2,
+    projectAssetCount: 10,
+    globalAssetCount: 3,
+    linkedGlobalAssetCount: 1,
+    transferActionCount: 3,
+    sourcePickerTargetCount: 5,
+    parityNoteCount: 3,
+    activeProjectId: "project-demo",
+    globalLibraryId: "global-library",
+    canCreateProject: true,
+    canOpenProject: true,
   },
   assetLibrary: {
     schemaVersion: 1,
@@ -458,6 +479,309 @@ export const fallbackOverview: AppOverview = {
     savedAssetKind: "sfx",
     exportTargetCount: 2,
   },
+};
+
+export const fallbackWorkspace: WorkspaceOverview = {
+  schemaVersion: 1,
+  workspace: {
+    id: "workspace-local",
+    globalLibraryId: "global-library",
+    recentProjectIds: [
+      "project-demo",
+      "project-podcast-open",
+      "project-game-ui-pack",
+    ],
+  },
+  activeProject: {
+    project: {
+      id: "project-demo",
+      name: "Demo SoundWorks Project",
+      storageRoot: "soundworks-library/projects/project-demo",
+      assetIds: ["asset-voice-001", "asset-loop-001", "asset-song-001"],
+      compositionIds: ["composition-demo"],
+      recipeIds: ["recipe-tts-001", "recipe-loop-001"],
+      jobIds: ["job-asset-voice-001"],
+    },
+    openedAt: "2026-06-19T01:04:08Z",
+    assetCount: 10,
+    compositionCount: 1,
+    localRecipeCount: 2,
+    linkedGlobalAssetCount: 1,
+    canOpen: true,
+    canCreateFromTemplate: true,
+    status: "active",
+  },
+  recentProjects: [
+    {
+      project: {
+        id: "project-demo",
+        name: "Demo SoundWorks Project",
+        storageRoot: "soundworks-library/projects/project-demo",
+        assetIds: ["asset-voice-001", "asset-loop-001", "asset-song-001"],
+        compositionIds: ["composition-demo"],
+        recipeIds: ["recipe-tts-001", "recipe-loop-001"],
+        jobIds: ["job-asset-voice-001"],
+      },
+      openedAt: "2026-06-19T01:04:08Z",
+      assetCount: 10,
+      compositionCount: 1,
+      localRecipeCount: 2,
+      linkedGlobalAssetCount: 1,
+      canOpen: true,
+      canCreateFromTemplate: true,
+      status: "active",
+    },
+    {
+      project: {
+        id: "project-podcast-open",
+        name: "Podcast Open Package",
+        storageRoot: "soundworks-library/projects/project-podcast-open",
+        assetIds: ["asset-voice-host", "asset-sfx-sting"],
+        compositionIds: ["composition-podcast-open"],
+        recipeIds: ["recipe-voice-host"],
+        jobIds: ["job-podcast-open-render"],
+      },
+      openedAt: "2026-06-18T19:30:00Z",
+      assetCount: 2,
+      compositionCount: 1,
+      localRecipeCount: 1,
+      linkedGlobalAssetCount: 1,
+      canOpen: true,
+      canCreateFromTemplate: false,
+      status: "recent",
+    },
+  ],
+  globalLibrary: {
+    id: "global-library",
+    label: "Global audio library",
+    assetCount: 3,
+    reusableVoiceCount: 1,
+    reusablePresetCount: 1,
+    reusableCollectionCount: 1,
+    storageRoot: "soundworks-library/global",
+    canBrowse: true,
+  },
+  scopeControls: [
+    {
+      id: "scope-project-library",
+      label: "Project library",
+      scope: { kind: "project", projectId: "project-demo" },
+      active: true,
+      itemCount: 10,
+      emptyState: "Create or import audio into this project.",
+    },
+    {
+      id: "scope-global-library",
+      label: "Global library",
+      scope: { kind: "globalLibrary" },
+      active: false,
+      itemCount: 3,
+      emptyState: "Promote reusable voices, loops, references, and presets here.",
+    },
+  ],
+  projectAssets: [
+    {
+      itemId: "asset-loop-001",
+      name: "Dusty trip-hop drums",
+      itemType: "loop",
+      scope: { kind: "project", projectId: "project-demo" },
+      ownership: "project-local",
+      projectId: "project-demo",
+      sourceWorkflow: "loop",
+      provenanceId: "provenance-asset-loop-001",
+      sourcePickerEligible: true,
+      timelinePlaceable: true,
+      compositionUsageCount: 1,
+    },
+    {
+      itemId: "asset-stem-drums-001",
+      name: "City Lights drum stem",
+      itemType: "stem",
+      scope: { kind: "project", projectId: "project-demo" },
+      ownership: "copied-from-global",
+      projectId: "project-demo",
+      sourceWorkflow: null,
+      provenanceId: "provenance-asset-stem-drums-001",
+      sourcePickerEligible: true,
+      timelinePlaceable: true,
+      compositionUsageCount: 1,
+    },
+  ],
+  globalAssets: [
+    {
+      itemId: "asset-reference-neon-bass",
+      name: "Neon bass reference",
+      itemType: "reference-audio",
+      scope: { kind: "globalLibrary" },
+      ownership: "global",
+      projectId: null,
+      sourceWorkflow: null,
+      provenanceId: "provenance-asset-reference-neon-bass",
+      sourcePickerEligible: true,
+      timelinePlaceable: true,
+      compositionUsageCount: 2,
+    },
+    {
+      itemId: "voice-profile-narrator",
+      name: "Narrator profile",
+      itemType: "voice-profile",
+      scope: { kind: "globalLibrary" },
+      ownership: "linked-global",
+      projectId: null,
+      sourceWorkflow: "tts",
+      provenanceId: "provenance-voice-profile-narrator",
+      sourcePickerEligible: true,
+      timelinePlaceable: false,
+      compositionUsageCount: 0,
+    },
+    {
+      itemId: "preset-noir-narration",
+      name: "Noir narration recipe",
+      itemType: "prompt-recipe-preset",
+      scope: { kind: "globalLibrary" },
+      ownership: "global",
+      projectId: null,
+      sourceWorkflow: "tts",
+      provenanceId: "provenance-preset-noir-narration",
+      sourcePickerEligible: true,
+      timelinePlaceable: false,
+      compositionUsageCount: 0,
+    },
+  ],
+  sourcePicker: {
+    id: "source-picker-project-plus-global",
+    activeProjectId: "project-demo",
+    defaultScope: { kind: "project", projectId: "project-demo" },
+    allowsGlobalSources: true,
+    importModes: ["link", "copy", "promote-project-asset"],
+    targetSurfaces: [
+      "TTS Studio",
+      "Voice Lab",
+      "Samples + Loops",
+      "Multitrack Editor",
+      "Waveform Review",
+    ],
+    provenanceRequirements: [
+      "source scope and original asset ID",
+      "source version ID",
+      "recipe or import sidecar",
+      "link/copy/promote event ID",
+    ],
+  },
+  transferActions: [
+    {
+      id: "promote-loop-to-global",
+      label: "Promote loop to global",
+      mode: "promote-project-asset",
+      sourceItemId: "asset-loop-001",
+      targetProjectId: null,
+      targetScope: { kind: "globalLibrary" },
+      preservesProvenance: true,
+      createsNewAssetId: false,
+      createsReuseEvent: true,
+      enabled: true,
+      summary:
+        "Project loop becomes reusable globally while retaining recipe, version, and source project provenance.",
+    },
+    {
+      id: "link-global-reference-into-project",
+      label: "Link global reference",
+      mode: "link",
+      sourceItemId: "asset-reference-neon-bass",
+      targetProjectId: "project-demo",
+      targetScope: { kind: "project", projectId: "project-demo" },
+      preservesProvenance: true,
+      createsNewAssetId: false,
+      createsReuseEvent: true,
+      enabled: true,
+      summary:
+        "Global reference stays globally owned and is linked into the active project composition.",
+    },
+    {
+      id: "copy-global-voice-preset",
+      label: "Copy global preset",
+      mode: "copy",
+      sourceItemId: "preset-noir-narration",
+      targetProjectId: "project-demo",
+      targetScope: { kind: "project", projectId: "project-demo" },
+      preservesProvenance: true,
+      createsNewAssetId: true,
+      createsReuseEvent: true,
+      enabled: true,
+      summary:
+        "Reusable prompt preset can be copied into a project for local edits without mutating the global original.",
+    },
+  ],
+  compositionLinks: [
+    {
+      id: "composition-link-global-bass-reference",
+      compositionId: "composition-demo",
+      projectId: "project-demo",
+      assetId: "asset-reference-neon-bass",
+      versionId: "version-reference-neon-bass-a",
+      sourceScope: { kind: "globalLibrary" },
+      projectUsage: "linked-into-composition",
+      preservesOriginalAssetId: true,
+      provenanceSidecarPath:
+        "soundworks-library/projects/project-demo/compositions/composition-demo/provenance/global-asset-links.json",
+      warning: null,
+    },
+  ],
+  parityNotes: [
+    {
+      id: "project-first-entry",
+      area: "Workspace entry",
+      convention: "Open into a project workspace with recent projects visible.",
+      soundworksApplication:
+        "SoundWorks starts with an active audio project and exposes create/open actions.",
+    },
+    {
+      id: "library-scope-language",
+      area: "Library scope",
+      convention: "Keep project assets and reusable global assets visibly separate.",
+      soundworksApplication:
+        "Project Library and Global Library filters are first-class controls.",
+    },
+    {
+      id: "provenance-detail",
+      area: "Asset detail",
+      convention: "Asset cards preserve recipe, version, source, and export provenance.",
+      soundworksApplication:
+        "Links, copies, and promotions create reuse events and keep provenance sidecars inspectable.",
+    },
+  ],
+  validationChecks: [
+    {
+      id: "project-entry-actions",
+      passed: true,
+      summary:
+        "Workspace exposes create and open project affordances from the app boundary.",
+    },
+    {
+      id: "scope-browsing",
+      passed: true,
+      summary:
+        "Project-scoped assets and global reusable assets are browsable as separate scopes.",
+    },
+    {
+      id: "global-use-preserves-provenance",
+      passed: true,
+      summary:
+        "Global assets can be linked or copied into a project while preserving original identity and provenance.",
+    },
+    {
+      id: "promotion-preserves-provenance",
+      passed: true,
+      summary:
+        "Project assets can be promoted to the global library with recipe, version, and source project provenance intact.",
+    },
+    {
+      id: "sceneworks-parity-documented",
+      passed: true,
+      summary:
+        "SceneWorks-style project, library, source picker, and asset-detail conventions are documented without hidden coupling.",
+    },
+  ],
 };
 
 export const fallbackMvpValidation: MvpValidationOverview = {

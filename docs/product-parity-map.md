@@ -38,7 +38,7 @@ Confidence: medium. The map uses live Shortcut story coverage plus current high-
 | `sc-6183` | Multimodal SFX and video-to-audio | Visual/video references, sync, semantic matching |
 | `sc-6156` | Waveform review, editing, version comparison | Preview cache, edit-save versions, A/B comparison, provenance |
 | `sc-6190` | Multitrack composition editor and mixer | Composition timeline, mixer, stems |
-| `sc-6198` | Project/workspace model with global asset library | Project store and global library |
+| `sc-6198` | Project/workspace model with global asset library | Active project workspace, project/global scopes, source picker, link/copy/promote reuse |
 | `sc-6160` | Audio asset library, tagging, collections, search | Library UI and metadata |
 | `sc-6161` | Export presets, stems, sidecars, DAW handoff | Export subsystem |
 | `sc-6202` | Export compositions to SceneWorks video audio tracks | SceneWorks integration |

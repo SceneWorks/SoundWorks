@@ -18,6 +18,7 @@ pub mod storage;
 pub mod tts;
 pub mod video_to_audio;
 pub mod voice_lab;
+pub mod workspace;
 
 pub use asset_library::*;
 pub use composition_editor::*;
@@ -37,6 +38,7 @@ pub use storage::*;
 pub use tts::*;
 pub use video_to_audio::*;
 pub use voice_lab::*;
+pub use workspace::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +47,7 @@ pub struct AppOverview {
     pub architecture: ArchitectureOverview,
     pub studios: Vec<StudioSurface>,
     pub commands: Vec<CommandBoundary>,
+    pub workspace: WorkspaceSummary,
     pub provider_catalog: ProviderCatalogOverview,
     pub asset_library: AssetLibrarySummary,
     pub export_workflow: ExportWorkflowSummary,
@@ -118,6 +121,23 @@ pub struct AssetLibrarySummary {
     pub archived_count: usize,
     pub selected_item_id: String,
     pub selected_item_type: LibraryItemType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSummary {
+    pub schema_version: u32,
+    pub project_count: usize,
+    pub project_asset_count: usize,
+    pub global_asset_count: usize,
+    pub linked_global_asset_count: usize,
+    pub transfer_action_count: usize,
+    pub source_picker_target_count: usize,
+    pub parity_note_count: usize,
+    pub active_project_id: String,
+    pub global_library_id: String,
+    pub can_create_project: bool,
+    pub can_open_project: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -367,6 +387,13 @@ impl AppOverview {
                             .to_string(),
                 },
                 CommandBoundary {
+                    name: "get_workspace_overview".to_string(),
+                    direction: CommandDirection::UiToBackend,
+                    purpose:
+                        "Load active project workspace, global library, source picker, reuse actions, and SceneWorks-style scope conventions."
+                            .to_string(),
+                },
+                CommandBoundary {
                     name: "get_asset_library_overview".to_string(),
                     direction: CommandDirection::UiToBackend,
                     purpose:
@@ -465,6 +492,9 @@ impl AppOverview {
                             .to_string(),
                 },
             ],
+            workspace: WorkspaceSummary::from_overview(
+                &WorkspaceOverview::reference().expect("reference workspace is valid"),
+            ),
             provider_catalog: ProviderCatalogOverview::from_catalog(&ProviderCatalog::reference()),
             asset_library: AssetLibrarySummary::from_overview(
                 &AssetLibraryOverview::reference().expect("reference Asset Library is valid"),
@@ -499,6 +529,25 @@ impl AppOverview {
             video_to_audio: VideoToAudioSummary::from_overview(
                 &VideoToAudioOverview::reference().expect("reference Video to Audio is valid"),
             ),
+        }
+    }
+}
+
+impl WorkspaceSummary {
+    pub fn from_overview(overview: &WorkspaceOverview) -> Self {
+        Self {
+            schema_version: overview.schema_version,
+            project_count: overview.recent_projects.len(),
+            project_asset_count: overview.project_assets.len(),
+            global_asset_count: overview.global_assets.len(),
+            linked_global_asset_count: overview.active_project.linked_global_asset_count,
+            transfer_action_count: overview.transfer_actions.len(),
+            source_picker_target_count: overview.source_picker.target_surfaces.len(),
+            parity_note_count: overview.parity_notes.len(),
+            active_project_id: overview.active_project.project.id.clone(),
+            global_library_id: overview.workspace.global_library_id.clone(),
+            can_create_project: overview.active_project.can_create_from_template,
+            can_open_project: overview.active_project.can_open,
         }
     }
 }
@@ -860,24 +909,27 @@ mod tests {
 
         assert_eq!(payload["productName"], "SoundWorks");
         assert_eq!(payload["commands"][0]["name"], "get_app_overview");
-        assert_eq!(payload["commands"][2]["name"], "get_asset_library_overview");
+        assert_eq!(payload["commands"][2]["name"], "get_workspace_overview");
+        assert_eq!(payload["commands"][3]["name"], "get_asset_library_overview");
         assert_eq!(
-            payload["commands"][3]["name"],
+            payload["commands"][4]["name"],
             "get_export_workflow_overview"
         );
         assert_eq!(
-            payload["commands"][4]["name"],
+            payload["commands"][5]["name"],
             "get_composition_editor_overview"
         );
-        assert_eq!(payload["commands"][5]["name"], "get_runtime_overview");
+        assert_eq!(payload["commands"][6]["name"], "get_runtime_overview");
         assert_eq!(
-            payload["commands"][6]["name"],
+            payload["commands"][7]["name"],
             "get_model_evaluation_catalog"
         );
         assert_eq!(
-            payload["commands"][7]["name"],
+            payload["commands"][8]["name"],
             "get_mvp_validation_overview"
         );
+        assert_eq!(payload["workspace"]["projectAssetCount"], 10);
+        assert_eq!(payload["workspace"]["globalAssetCount"], 3);
         assert_eq!(payload["providerCatalog"]["capabilityCount"], 12);
         assert_eq!(payload["assetLibrary"]["supportedTypeCount"], 13);
         assert_eq!(payload["exportWorkflow"]["presetCount"], 7);
@@ -891,20 +943,20 @@ mod tests {
         assert_eq!(payload["mvpValidation"]["readyForMvp"], false);
         assert_eq!(payload["modelEvaluation"]["candidateCount"], 28);
         assert_eq!(payload["ttsStudio"]["segmentCount"], 3);
-        assert_eq!(payload["commands"][8]["name"], "get_tts_studio_overview");
-        assert_eq!(payload["commands"][9]["name"], "get_voice_lab_overview");
-        assert_eq!(payload["commands"][10]["name"], "get_sfx_studio_overview");
-        assert_eq!(payload["commands"][12]["name"], "get_song_studio_overview");
+        assert_eq!(payload["commands"][9]["name"], "get_tts_studio_overview");
+        assert_eq!(payload["commands"][10]["name"], "get_voice_lab_overview");
+        assert_eq!(payload["commands"][11]["name"], "get_sfx_studio_overview");
+        assert_eq!(payload["commands"][13]["name"], "get_song_studio_overview");
         assert_eq!(
-            payload["commands"][13]["name"],
+            payload["commands"][14]["name"],
             "get_review_workspace_overview"
         );
         assert_eq!(
-            payload["commands"][14]["name"],
+            payload["commands"][15]["name"],
             "get_rights_safety_overview"
         );
         assert_eq!(
-            payload["commands"][15]["name"],
+            payload["commands"][16]["name"],
             "get_video_to_audio_overview"
         );
         assert_eq!(payload["voiceLab"]["modeCount"], 3);
@@ -1037,6 +1089,15 @@ mod tests {
             "video_to_audio_saved_outputs",
             "video_to_audio_export_packages",
             "video_to_audio_safety_gates",
+            "workspace_records",
+            "workspace_project_cards",
+            "workspace_global_libraries",
+            "workspace_scope_controls",
+            "workspace_source_picker_policies",
+            "workspace_transfer_actions",
+            "workspace_composition_asset_links",
+            "workspace_parity_notes",
+            "workspace_validation_checks",
             "samples_studio_prompts",
             "samples_studio_variants",
             "samples_studio_submissions",
@@ -1218,6 +1279,23 @@ mod tests {
             AudioAssetKind::Sfx
         );
         assert!(overview.video_to_audio.can_submit);
+    }
+
+    #[test]
+    fn app_overview_summarizes_project_workspace() {
+        let overview = AppOverview::baseline();
+
+        assert_eq!(overview.workspace.schema_version, 1);
+        assert_eq!(overview.workspace.active_project_id, "project-demo");
+        assert_eq!(overview.workspace.global_library_id, "global-library");
+        assert_eq!(overview.workspace.project_count, 2);
+        assert_eq!(overview.workspace.project_asset_count, 10);
+        assert_eq!(overview.workspace.global_asset_count, 3);
+        assert_eq!(overview.workspace.linked_global_asset_count, 1);
+        assert_eq!(overview.workspace.transfer_action_count, 3);
+        assert_eq!(overview.workspace.source_picker_target_count, 5);
+        assert!(overview.workspace.can_create_project);
+        assert!(overview.workspace.can_open_project);
     }
 
     #[test]

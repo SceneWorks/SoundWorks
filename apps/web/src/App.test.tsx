@@ -152,9 +152,27 @@ describe("App", () => {
       screen.getByRole("heading", { name: "SoundWorks launch rights policy" }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("heading", { name: "Demo SoundWorks Project" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Create SoundWorks project")).toBeEnabled();
+    expect(screen.getByTitle("Open SoundWorks project")).toBeEnabled();
+    expect(screen.getByText("Project library")).toBeInTheDocument();
+    expect(screen.getByText("Link global reference")).toBeInTheDocument();
+    expect(screen.getByText("Copy global preset")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Global assets can be linked or copied into a project/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "soundworks-library/projects/project-demo/compositions/composition-demo/provenance/global-asset-links.json",
+      ),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("heading", { name: "Project and global audio assets" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Global audio library")).toBeInTheDocument();
+    expect(screen.getAllByText("Global audio library").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getByText("Prompt/Recipe preset")).toBeInTheDocument();
     expect(screen.getByText("Version history")).toBeInTheDocument();
     expect(screen.getByText("Recipe provenance")).toBeInTheDocument();

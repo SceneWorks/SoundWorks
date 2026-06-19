@@ -54,7 +54,7 @@ The core crate should own stable types and validation:
 - Rights, consent, provenance, and safety metadata.
 - Export presets, render requests, stems, and metadata sidecars.
 
-Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, `fixtures.rs`, `manifests.rs`, `runtime.rs`, `evaluation.rs`, `tts.rs`, `voice_lab.rs`, `sfx.rs`, `samples.rs`, and `songs.rs` define these first-pass contracts, provider capability matching, runtime packaging policy, model scorecards, workflow contracts, and fixture coverage for TTS, SFX, instrument sample, loop, and song outputs.
+Current implementation: `crates/soundworks-core/src/domain.rs`, `storage.rs`, `fixtures.rs`, `workspace.rs`, `manifests.rs`, `runtime.rs`, `evaluation.rs`, `tts.rs`, `voice_lab.rs`, `sfx.rs`, `video_to_audio.rs`, `samples.rs`, `songs.rs`, `composition_editor.rs`, and `review.rs` define these first-pass contracts, project/global workspace behavior, provider capability matching, runtime packaging policy, model scorecards, workflow contracts, and fixture coverage for generated audio outputs.
 
 ### Persistence
 
@@ -64,6 +64,7 @@ Recommended split:
 
 - Project database: project-local assets, compositions, recipes, jobs, and exports.
 - Global library database: reusable assets, collections, tags, installed voices, provider/model registry, and user-level settings.
+- Workspace records: active/recent project state, source picker policy, global asset link/copy/promote events, and composition links back to reusable global assets.
 - Asset files: original sources, generated outputs, edits/renders, previews, and exports.
 - Sidecars: portable metadata for exports and selected generated outputs.
 

@@ -10,8 +10,11 @@ import {
   Download,
   FileAudio,
   FileVideo,
+  FolderOpen,
+  FolderPlus,
   Gauge,
   HardDrive,
+  Link2,
   Library,
   Mic2,
   Music2,
@@ -41,6 +44,7 @@ import {
   fallbackTtsStudio,
   fallbackVideoToAudio,
   fallbackVoiceLab,
+  fallbackWorkspace,
 } from "./appData";
 import {
   loadAppOverview,
@@ -57,6 +61,7 @@ import {
   loadTtsStudioOverview,
   loadVideoToAudioOverview,
   loadVoiceLabOverview,
+  loadWorkspaceOverview,
 } from "./tauri";
 import type {
   AppOverview,
@@ -73,6 +78,7 @@ import type {
   TtsStudioOverview,
   VideoToAudioOverview,
   VoiceLabOverview,
+  WorkspaceOverview,
 } from "./types";
 
 const navItems = [
@@ -131,6 +137,8 @@ function scopeLabel(scope: { kind: string; projectId?: string }) {
 export function App() {
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
   const [runtime, setRuntime] = useState<RuntimeOverview>(fallbackRuntime);
+  const [workspace, setWorkspace] =
+    useState<WorkspaceOverview>(fallbackWorkspace);
   const [assetLibrary, setAssetLibrary] =
     useState<AssetLibraryOverview>(fallbackAssetLibrary);
   const [exportWorkflow, setExportWorkflow] = useState<ExportWorkflowOverview>(
@@ -170,6 +178,12 @@ export function App() {
     loadRuntimeOverview().then((nextRuntime) => {
       if (active) {
         setRuntime(nextRuntime);
+      }
+    });
+
+    loadWorkspaceOverview().then((nextWorkspace) => {
+      if (active) {
+        setWorkspace(nextWorkspace);
       }
     });
 
@@ -337,6 +351,201 @@ export function App() {
             <span>active layers</span>
           </div>
         </header>
+
+        <section
+          className="project-workspace-panel"
+          aria-label="Project workspace"
+        >
+          <div className="project-workspace-header">
+            <div>
+              <p className="eyebrow">Project workspace</p>
+              <h2>{workspace.activeProject.project.name}</h2>
+            </div>
+            <div className="workspace-actions">
+              <button
+                className="primary-action workspace-action"
+                disabled={!overview.workspace.canCreateProject}
+                title="Create SoundWorks project"
+                type="button"
+              >
+                <FolderPlus aria-hidden="true" size={18} />
+                <span>Create</span>
+              </button>
+              <button
+                className="secondary-icon-action"
+                disabled={!overview.workspace.canOpenProject}
+                title="Open SoundWorks project"
+                type="button"
+              >
+                <FolderOpen aria-hidden="true" size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="workspace-metrics" aria-label="Workspace status">
+            <div>
+              <FolderOpen aria-hidden="true" size={18} />
+              <strong>{overview.workspace.projectCount}</strong>
+              <span>projects</span>
+            </div>
+            <div>
+              <Library aria-hidden="true" size={18} />
+              <strong>{overview.workspace.projectAssetCount}</strong>
+              <span>project assets</span>
+            </div>
+            <div>
+              <Link2 aria-hidden="true" size={18} />
+              <strong>{overview.workspace.linkedGlobalAssetCount}</strong>
+              <span>global links</span>
+            </div>
+            <div>
+              <Boxes aria-hidden="true" size={18} />
+              <strong>{overview.workspace.globalAssetCount}</strong>
+              <span>global assets</span>
+            </div>
+          </div>
+
+          <div className="workspace-layout">
+            <section className="workspace-projects" aria-label="Recent projects">
+              {workspace.recentProjects.map((project) => (
+                <article
+                  className={
+                    project.status === "active"
+                      ? "workspace-project active"
+                      : "workspace-project"
+                  }
+                  key={project.project.id}
+                >
+                  <div className="workspace-project-title">
+                    <strong>{project.project.name}</strong>
+                    <span>{statusLabel(project.status)}</span>
+                  </div>
+                  <small>{project.project.storageRoot}</small>
+                  <div className="asset-tag-row">
+                    <span>{project.assetCount} assets</span>
+                    <span>{project.compositionCount} composition</span>
+                    <span>{project.linkedGlobalAssetCount} global link</span>
+                  </div>
+                </article>
+              ))}
+            </section>
+
+            <section
+              className="workspace-global-card"
+              aria-label="Global asset library"
+            >
+              <div className="subpanel-heading">
+                <h3>{workspace.globalLibrary.label}</h3>
+                <span>{workspace.globalLibrary.assetCount}</span>
+              </div>
+              <p>{workspace.globalLibrary.storageRoot}</p>
+              <div className="asset-tag-row detail-tags">
+                <span>{workspace.globalLibrary.reusableVoiceCount} voice</span>
+                <span>{workspace.globalLibrary.reusablePresetCount} preset</span>
+                <span>
+                  {workspace.globalLibrary.reusableCollectionCount} collection
+                </span>
+              </div>
+              <div className="workspace-scope-grid">
+                {workspace.scopeControls.map((scope) => (
+                  <button
+                    className={
+                      scope.active
+                        ? "workspace-scope-button active"
+                        : "workspace-scope-button"
+                    }
+                    key={scope.id}
+                    title={scope.emptyState}
+                    type="button"
+                  >
+                    <span>{scope.label}</span>
+                    <strong>{scope.itemCount}</strong>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <div className="workspace-bottom-grid">
+            <section className="tts-subpanel" aria-label="Source picker policy">
+              <div className="subpanel-heading">
+                <h3>Source picker</h3>
+                <span>{workspace.sourcePicker.targetSurfaces.length}</span>
+              </div>
+              <div className="asset-tag-row detail-tags">
+                {workspace.sourcePicker.targetSurfaces.map((target) => (
+                  <span key={target}>{target}</span>
+                ))}
+              </div>
+              <ol className="voice-checks">
+                {workspace.sourcePicker.provenanceRequirements.map(
+                  (requirement) => (
+                    <li className="passed" key={requirement}>
+                      <ShieldCheck aria-hidden="true" size={16} />
+                      <span>{requirement}</span>
+                    </li>
+                  ),
+                )}
+              </ol>
+              <div className="workspace-link-list">
+                {workspace.compositionLinks.map((link) => (
+                  <article key={link.id}>
+                    <strong>{link.assetId}</strong>
+                    <small>
+                      {statusLabel(link.projectUsage)} / {link.versionId}
+                    </small>
+                    <p>{link.provenanceSidecarPath}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Global reuse actions">
+              <div className="subpanel-heading">
+                <h3>Reuse actions</h3>
+                <span>{workspace.transferActions.length}</span>
+              </div>
+              <div className="workspace-action-list">
+                {workspace.transferActions.map((action) => (
+                  <article key={action.id}>
+                    <strong>{action.label}</strong>
+                    <small>
+                      {statusLabel(action.mode)} / {action.sourceItemId}
+                    </small>
+                    <p>{action.summary}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="tts-subpanel" aria-label="Workspace validation">
+              <div className="subpanel-heading">
+                <h3>Validation</h3>
+                <span>{workspace.validationChecks.length}</span>
+              </div>
+              <ol className="voice-checks">
+                {workspace.validationChecks.map((check) => (
+                  <li
+                    className={check.passed ? "passed" : "failed"}
+                    key={check.id}
+                  >
+                    <CircleCheck aria-hidden="true" size={16} />
+                    <span>{check.summary}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+
+          <div className="workspace-parity-strip" aria-label="SceneWorks parity">
+            {workspace.parityNotes.map((note) => (
+              <article key={note.id}>
+                <strong>{note.area}</strong>
+                <span>{note.soundworksApplication}</span>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <section className="studio-grid" aria-label="Studios">
           {overview.studios.map((studio, index) => {

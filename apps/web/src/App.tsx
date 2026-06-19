@@ -1414,6 +1414,14 @@ export function App() {
               <span>manual scorecards</span>
             </div>
             <div>
+              <HardDrive aria-hidden="true" size={18} />
+              <strong>
+                {mvpValidation.releaseGate.satisfiedRuntimeEvidenceCount}/
+                {mvpValidation.releaseGate.requiredRuntimeEvidenceCount}
+              </strong>
+              <span>runtime evidence</span>
+            </div>
+            <div>
               <CircleAlert aria-hidden="true" size={18} />
               <strong>{overview.mvpValidation.blockingItemCount}</strong>
               <span>blocking items</span>
@@ -1513,6 +1521,34 @@ export function App() {
                       <span>
                         <strong>{statusLabel(check.category)}</strong>{" "}
                         {check.summary}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
+              <section className="tts-subpanel" aria-label="Runtime evidence">
+                <div className="subpanel-heading">
+                  <h3>Runtime evidence</h3>
+                  <span>
+                    {mvpValidation.releaseGate.satisfiedRuntimeEvidenceCount}/
+                    {mvpValidation.releaseGate.requiredRuntimeEvidenceCount}
+                  </span>
+                </div>
+                <ol className="voice-checks">
+                  {mvpValidation.runtimeEvidence.map((evidence) => (
+                    <li className={evidence.status} key={evidence.id}>
+                      <CircleAlert aria-hidden="true" size={16} />
+                      <span>
+                        <strong>{workflowLabel(evidence.workflow)}</strong>{" "}
+                        {evidence.requirement}
+                        <em>
+                          {evidence.fixtureOnly
+                            ? "Fixture-only: "
+                            : "Evidence: "}
+                          {evidence.evidence}
+                        </em>
+                        <em>{evidence.blocker}</em>
                       </span>
                     </li>
                   ))}
@@ -3341,7 +3377,7 @@ export function App() {
               <div>
                 <PackageCheck aria-hidden="true" size={18} />
                 <strong>{runtime.statusCounts.installed}</strong>
-                <span>installed</span>
+                <span>verified installs</span>
               </div>
               <div>
                 <HardDrive aria-hidden="true" size={18} />
@@ -3389,6 +3425,8 @@ export function App() {
                           {statusLabel(model.installStatus)} /{" "}
                           {formatMb(model.cache.diskUsageMb)}
                         </small>
+                        <em>{model.cache.evidence}</em>
+                        {model.reasons[0] ? <em>{model.reasons[0]}</em> : null}
                       </div>
                     </li>
                   ))}
@@ -3398,6 +3436,18 @@ export function App() {
               <div className="runtime-stack">
                 <h3>Jobs</h3>
                 <ol className="runtime-list">
+                  {runtime.jobs.length === 0 ? (
+                    <li>
+                      <span className="runtime-dot unavailable" />
+                      <div>
+                        <strong>No runtime jobs</strong>
+                        <small>
+                          Fixture/demo actions are blocked until provider
+                          execution is wired.
+                        </small>
+                      </div>
+                    </li>
+                  ) : null}
                   {runtime.jobs.map((job) => (
                     <li key={job.id}>
                       <span className={`runtime-dot ${job.status}`} />
@@ -3420,9 +3470,12 @@ export function App() {
 
             <ol className="validation-list" aria-label="Runtime checks">
               {runtime.validationChecks.map((check) => (
-                <li key={check.id}>
+                <li className={check.status} key={check.id}>
                   <CircleCheck aria-hidden="true" size={16} />
-                  <span>{check.summary}</span>
+                  <span>
+                    {check.summary}
+                    {check.recovery ? <em>{check.recovery}</em> : null}
+                  </span>
                 </li>
               ))}
             </ol>

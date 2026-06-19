@@ -1123,7 +1123,12 @@ mod tests {
                 && option
                     .supported_controls
                     .contains(&SfxControlKind::Loopable)));
-        assert!(overview.submission.can_submit);
+        assert!(!overview.submission.can_submit);
+        assert!(overview
+            .submission
+            .blocking_reasons
+            .iter()
+            .any(|reason| reason.contains("No runnable SFX or ambience provider is registered")));
     }
 
     #[test]

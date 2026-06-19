@@ -72,6 +72,8 @@ export type RuntimeModelState = {
     status: string;
     expectedSizeMb?: number | null;
     diskUsageMb?: number | null;
+    verified: boolean;
+    evidence: string;
     warmup: string;
   };
   compatibility: {
@@ -802,6 +804,7 @@ export type ValidationCategory =
   | "export-sidecars"
   | "safety-gates"
   | "audio-quality"
+  | "runtime-evidence"
   | "stress"
   | "documentation";
 
@@ -809,6 +812,9 @@ export type MvpValidationSummary = {
   schemaVersion: number;
   readyForMvp: boolean;
   blockingItemCount: number;
+  runtimeEvidenceCount: number;
+  satisfiedRuntimeEvidenceCount: number;
+  fixtureOnlyEvidenceCount: number;
   demoWorkflowCount: number;
   regressionFixtureCount: number;
   automatedCheckCount: number;
@@ -825,6 +831,9 @@ export type MvpValidationOverview = {
     readyForMvp: boolean;
     requiredWorkflowCount: number;
     coveredWorkflowCount: number;
+    requiredRuntimeEvidenceCount: number;
+    satisfiedRuntimeEvidenceCount: number;
+    fixtureOnlyEvidenceCount: number;
     requiredAutomatedCheckCount: number;
     passedAutomatedCheckCount: number;
     requiredManualScorecardCount: number;
@@ -833,6 +842,16 @@ export type MvpValidationOverview = {
     passedStressCaseCount: number;
     blockingItems: string[];
   };
+  runtimeEvidence: Array<{
+    id: string;
+    workflow: CapabilityWorkflow;
+    requiredForMvp: boolean;
+    status: ValidationStatus;
+    fixtureOnly: boolean;
+    requirement: string;
+    evidence: string;
+    blocker: string;
+  }>;
   demoWorkflows: Array<{
     id: string;
     workflow: CapabilityWorkflow;

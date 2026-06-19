@@ -939,7 +939,7 @@ mod tests {
             "waveform-playlist"
         );
         assert_eq!(payload["mvpValidation"]["demoWorkflowCount"], 12);
-        assert_eq!(payload["mvpValidation"]["blockingItemCount"], 4);
+        assert_eq!(payload["mvpValidation"]["blockingItemCount"], 6);
         assert_eq!(payload["mvpValidation"]["readyForMvp"], false);
         assert_eq!(payload["modelEvaluation"]["candidateCount"], 28);
         assert_eq!(payload["ttsStudio"]["segmentCount"], 3);
@@ -1229,7 +1229,7 @@ mod tests {
             overview.tts_studio.saved_asset_kind,
             AudioAssetKind::VoiceClip
         );
-        assert!(overview.tts_studio.can_submit);
+        assert!(!overview.tts_studio.can_submit);
     }
 
     #[test]
@@ -1261,7 +1261,7 @@ mod tests {
             overview.sfx_studio.saved_asset_kinds,
             vec![AudioAssetKind::Ambience, AudioAssetKind::Sfx]
         );
-        assert!(overview.sfx_studio.can_submit);
+        assert!(!overview.sfx_studio.can_submit);
     }
 
     #[test]
@@ -1311,7 +1311,7 @@ mod tests {
             overview.samples_studio.saved_asset_kinds,
             vec![AudioAssetKind::InstrumentSample, AudioAssetKind::Loop]
         );
-        assert!(overview.samples_studio.can_submit);
+        assert!(!overview.samples_studio.can_submit);
     }
 
     #[test]
@@ -1328,7 +1328,7 @@ mod tests {
             overview.song_studio.saved_asset_kinds,
             vec![AudioAssetKind::MusicClip, AudioAssetKind::Song]
         );
-        assert!(overview.song_studio.can_submit);
+        assert!(!overview.song_studio.can_submit);
     }
 
     #[test]

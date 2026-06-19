@@ -1165,7 +1165,12 @@ mod tests {
                 && option.supported_controls.contains(&SongControlKind::Lyrics)
                 && option.supported_controls.contains(&SongControlKind::Stems)
         }));
-        assert!(overview.submission.can_submit);
+        assert!(!overview.submission.can_submit);
+        assert!(overview
+            .submission
+            .blocking_reasons
+            .iter()
+            .any(|reason| reason.contains("No runnable complete-song provider is registered")));
     }
 
     #[test]
@@ -1179,13 +1184,8 @@ mod tests {
         assert_eq!(song.structure.sections.len(), 4);
         assert!(song.requested_stems.contains(&StemKind::Vocals));
         assert_eq!(overview.submission.recipe.output_asset_ids.len(), 2);
-        assert_eq!(
-            overview.submission.job.output_version_ids,
-            vec![
-                "version-song-variant-city-lights-main-a",
-                "version-song-variant-city-lights-instrumental-a"
-            ]
-        );
+        assert!(overview.submission.job.output_version_ids.is_empty());
+        assert!(overview.submission.job.error.is_some());
     }
 
     #[test]

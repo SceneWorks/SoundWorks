@@ -9,6 +9,7 @@ pub const MVP_VALIDATION_SCHEMA_VERSION: u32 = 1;
 pub struct MvpValidationOverview {
     pub schema_version: u32,
     pub release_gate: MvpReleaseGate,
+    pub runtime_evidence: Vec<RuntimeEvidenceRequirement>,
     pub demo_workflows: Vec<DemoWorkflow>,
     pub regression_fixtures: Vec<RegressionFixture>,
     pub automated_checks: Vec<ValidationCheck>,
@@ -26,6 +27,7 @@ impl MvpValidationOverview {
         let manual_scorecards = manual_scorecards();
         let stress_cases = stress_cases();
         let known_limitations = known_limitations();
+        let runtime_evidence = runtime_evidence();
         let requirement_coverage = requirement_coverage();
         let release_gate = MvpReleaseGate::from_sections(
             &demo_workflows,
@@ -34,11 +36,13 @@ impl MvpValidationOverview {
             &manual_scorecards,
             &stress_cases,
             &known_limitations,
+            &runtime_evidence,
         );
 
         Self {
             schema_version: MVP_VALIDATION_SCHEMA_VERSION,
             release_gate,
+            runtime_evidence,
             demo_workflows,
             regression_fixtures,
             automated_checks,
@@ -71,6 +75,9 @@ pub struct MvpValidationSummary {
     pub schema_version: u32,
     pub ready_for_mvp: bool,
     pub blocking_item_count: usize,
+    pub runtime_evidence_count: usize,
+    pub satisfied_runtime_evidence_count: usize,
+    pub fixture_only_evidence_count: usize,
     pub demo_workflow_count: usize,
     pub regression_fixture_count: usize,
     pub automated_check_count: usize,
@@ -87,6 +94,17 @@ impl MvpValidationSummary {
             schema_version: overview.schema_version,
             ready_for_mvp: overview.release_gate.ready_for_mvp,
             blocking_item_count: overview.release_gate.blocking_items.len(),
+            runtime_evidence_count: overview.runtime_evidence.len(),
+            satisfied_runtime_evidence_count: overview
+                .runtime_evidence
+                .iter()
+                .filter(|evidence| evidence.status == MvpValidationStatus::Passed)
+                .count(),
+            fixture_only_evidence_count: overview
+                .runtime_evidence
+                .iter()
+                .filter(|evidence| evidence.fixture_only)
+                .count(),
             demo_workflow_count: overview.demo_workflows.len(),
             regression_fixture_count: overview.regression_fixtures.len(),
             automated_check_count: overview.automated_checks.len(),
@@ -105,6 +123,9 @@ pub struct MvpReleaseGate {
     pub ready_for_mvp: bool,
     pub required_workflow_count: usize,
     pub covered_workflow_count: usize,
+    pub required_runtime_evidence_count: usize,
+    pub satisfied_runtime_evidence_count: usize,
+    pub fixture_only_evidence_count: usize,
     pub required_automated_check_count: usize,
     pub passed_automated_check_count: usize,
     pub required_manual_scorecard_count: usize,
@@ -122,6 +143,7 @@ impl MvpReleaseGate {
         manual_scorecards: &[ManualQaScorecard],
         stress_cases: &[StressCase],
         known_limitations: &[KnownLimitation],
+        runtime_evidence: &[RuntimeEvidenceRequirement],
     ) -> Self {
         let required_workflows = CapabilityWorkflow::all();
         let demo_workflow_set: BTreeSet<CapabilityWorkflow> = demo_workflows
@@ -168,6 +190,20 @@ impl MvpReleaseGate {
                 stress_case.required_for_mvp && stress_case.status == MvpValidationStatus::Passed
             })
             .count();
+        let required_runtime_evidence_count = runtime_evidence
+            .iter()
+            .filter(|evidence| evidence.required_for_mvp)
+            .count();
+        let satisfied_runtime_evidence_count = runtime_evidence
+            .iter()
+            .filter(|evidence| {
+                evidence.required_for_mvp && evidence.status == MvpValidationStatus::Passed
+            })
+            .count();
+        let fixture_only_evidence_count = runtime_evidence
+            .iter()
+            .filter(|evidence| evidence.required_for_mvp && evidence.fixture_only)
+            .count();
 
         let mut blocking_items = Vec::new();
         if covered_workflows.len() != required_workflows.len() {
@@ -188,6 +224,18 @@ impl MvpReleaseGate {
             blocking_items
                 .push("Required stress cases are not all passed on release hardware.".to_string());
         }
+        if satisfied_runtime_evidence_count != required_runtime_evidence_count {
+            blocking_items.push(
+                "Runtime evidence is missing; fixture/demo data cannot satisfy generated audio, playback, edit, or export criteria."
+                    .to_string(),
+            );
+        }
+        if fixture_only_evidence_count > 0 {
+            blocking_items.push(
+                "Fixture-only evidence is still present in MVP-critical runtime criteria."
+                    .to_string(),
+            );
+        }
         if known_limitations
             .iter()
             .any(|limitation| limitation.blocks_mvp)
@@ -199,6 +247,9 @@ impl MvpReleaseGate {
             ready_for_mvp: blocking_items.is_empty(),
             required_workflow_count: required_workflows.len(),
             covered_workflow_count: covered_workflows.len(),
+            required_runtime_evidence_count,
+            satisfied_runtime_evidence_count,
+            fixture_only_evidence_count,
             required_automated_check_count,
             passed_automated_check_count,
             required_manual_scorecard_count,
@@ -243,6 +294,19 @@ pub struct ValidationCheck {
     pub evidence: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeEvidenceRequirement {
+    pub id: String,
+    pub workflow: CapabilityWorkflow,
+    pub required_for_mvp: bool,
+    pub status: MvpValidationStatus,
+    pub fixture_only: bool,
+    pub requirement: String,
+    pub evidence: String,
+    pub blocker: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ValidationCategory {
@@ -254,6 +318,7 @@ pub enum ValidationCategory {
     ExportSidecars,
     SafetyGates,
     AudioQuality,
+    RuntimeEvidence,
     Stress,
     Documentation,
 }
@@ -540,15 +605,56 @@ fn regression_fixtures() -> Vec<RegressionFixture> {
 
 fn automated_checks() -> Vec<ValidationCheck> {
     vec![
-        check("check-job-contracts", ValidationCategory::JobContracts, MvpValidationStatus::Passed, true, "Generation jobs serialize status, progress, outputs, cancellation, and actionable errors.", "Runtime, TTS, SFX, samples, song, voice, and edit overview tests cover job snapshots."),
+        check("check-job-contracts", ValidationCategory::JobContracts, MvpValidationStatus::Pending, true, "Generation job contracts serialize status, progress, outputs, cancellation, and actionable errors, but product-runtime execution is not proven.", "Current tests cover fixture snapshots only. SC-6468 must attach real queued job records before this can pass."),
         check("check-recipe-persistence", ValidationCategory::RecipePersistence, MvpValidationStatus::Passed, true, "Recipes preserve provider/model, seed, references, post-processing, outputs, and replayability.", "Fixture and review tests assert serializable inspectable recipes and edit chains."),
-        check("check-metadata-extraction", ValidationCategory::MetadataExtraction, MvpValidationStatus::Passed, true, "Audio metadata contracts include duration, sample rate, channels, loudness, true peak, BPM, key, and loop points where relevant.", "SFX, samples, songs, review, library, and export reference data expose the required fields."),
+        check("check-metadata-extraction", ValidationCategory::MetadataExtraction, MvpValidationStatus::Pending, true, "Audio metadata contracts include duration, sample rate, channels, loudness, true peak, BPM, key, and loop points, but generated-file extraction is not proven.", "SFX, samples, songs, review, library, and export reference data expose fields. Real generated audio must replace fixture values."),
         check("check-provider-manifests", ValidationCategory::ProviderManifest, MvpValidationStatus::Passed, true, "Provider manifests distinguish workflows, inputs, outputs, limits, hardware, license, and runnable defaults.", "Provider catalog covers all capability workflows with capability-driven matching."),
-        check("check-asset-lifecycle", ValidationCategory::AssetLifecycle, MvpValidationStatus::Passed, true, "Assets can move through project/global library, tags, collections, saved outputs, version history, and reuse targets.", "Asset library fixtures cover scopes, tags, collections, lifecycle actions, and provenance links."),
-        check("check-export-sidecars", ValidationCategory::ExportSidecars, MvpValidationStatus::Passed, true, "Exports include preset, target, formats, sidecars, DAW bundle, and SceneWorks handoff metadata.", "Export workflow sidecars include recipe, model, source media, rights, disclosure, and edit-chain fields."),
+        check("check-asset-lifecycle", ValidationCategory::AssetLifecycle, MvpValidationStatus::Pending, true, "Asset lifecycle contracts cover project/global library, tags, collections, saved outputs, version history, and reuse targets, but persisted runtime assets are not proven.", "Asset library fixtures cover scopes, tags, collections, lifecycle actions, and provenance links. SC-6469 must prove persisted assets."),
+        check("check-export-sidecars", ValidationCategory::ExportSidecars, MvpValidationStatus::Pending, true, "Export sidecar contracts include preset, target, formats, DAW bundle, SceneWorks handoff, and metadata, but file-writing evidence is not attached.", "Export workflow sidecars include recipe, model, source media, rights, disclosure, and edit-chain fields. SC-6473 must prove real files."),
         check("check-safety-gates", ValidationCategory::SafetyGates, MvpValidationStatus::Passed, true, "Voice consent, commercial model eligibility, content policy, watermark, and disclosure gates are first-class.", "Rights and Voice Lab overviews include blocked consent, model-use, and commercial export decisions."),
+        check("check-runtime-evidence", ValidationCategory::RuntimeEvidence, MvpValidationStatus::Pending, true, "Runtime installed counts, queued jobs, generated audio, playback, edits, and export claims require real artifact evidence.", "SC-6466 blocks fixture-only completion. Follow-on recovery stories must attach cache, job, media, playback, edit, and export artifacts."),
         check("check-release-docs", ValidationCategory::Documentation, MvpValidationStatus::Passed, true, "Validation matrix maps back to epic requirements and states what remains unverified.", "docs/mvp-validation.md is the human-readable release matrix."),
         check("check-release-run-artifacts", ValidationCategory::Stress, MvpValidationStatus::Pending, true, "Release run artifacts must capture current Mac and Windows validation evidence before MVP signoff.", "This story defines the evidence contract; release artifacts remain pending until real provider runs exist."),
+    ]
+}
+
+fn runtime_evidence() -> Vec<RuntimeEvidenceRequirement> {
+    vec![
+        evidence(
+            "evidence-model-cache",
+            CapabilityWorkflow::Tts,
+            "Installed model counts must come from verified cache/package files, not static provider manifests.",
+            "Reference manifests currently describe packaged models, but no cache/package verification is attached.",
+            "SC-6467 must implement model download/cache verification before any model can be counted as installed.",
+        ),
+        evidence(
+            "evidence-generation-jobs",
+            CapabilityWorkflow::Tts,
+            "Generation controls must enqueue persisted runtime jobs with progress, errors, logs, and artifacts.",
+            "Current UI and Rust snapshots are contract/demo data only.",
+            "SC-6468 must replace snapshots with runtime job execution.",
+        ),
+        evidence(
+            "evidence-generated-audio",
+            CapabilityWorkflow::Sfx,
+            "TTS, SFX, samples, loops, and song criteria require generated audio files from selected providers.",
+            "Fixture media paths are representative and do not prove generated bytes exist.",
+            "SC-6470, SC-6471, and SC-6472 must attach generated audio artifacts or source-backed blockers.",
+        ),
+        evidence(
+            "evidence-playback-edit",
+            CapabilityWorkflow::Edit,
+            "Playback, trim, fade, normalize, loop inspection, and version comparison must run against real audio files.",
+            "Review/edit fixtures describe the workflow but do not prove audible playback or file edits.",
+            "SC-6473 must validate real playback and non-destructive edited versions.",
+        ),
+        evidence(
+            "evidence-export-files",
+            CapabilityWorkflow::CompositionRender,
+            "Export criteria require actual WAV/FLAC/MP3/OGG files plus provenance sidecars on disk.",
+            "Export contract data exists, but no runtime file-writing evidence is attached.",
+            "SC-6473 must write and validate real export files before this gate can pass.",
+        ),
     ]
 }
 
@@ -774,6 +880,25 @@ fn check(
     }
 }
 
+fn evidence(
+    id: &str,
+    workflow: CapabilityWorkflow,
+    requirement: &str,
+    current_evidence: &str,
+    blocker: &str,
+) -> RuntimeEvidenceRequirement {
+    RuntimeEvidenceRequirement {
+        id: id.to_string(),
+        workflow,
+        required_for_mvp: true,
+        status: MvpValidationStatus::Pending,
+        fixture_only: true,
+        requirement: requirement.to_string(),
+        evidence: current_evidence.to_string(),
+        blocker: blocker.to_string(),
+    }
+}
+
 fn scorecard(
     id: &str,
     workflow: CapabilityWorkflow,
@@ -900,6 +1025,7 @@ mod tests {
             ValidationCategory::AssetLifecycle,
             ValidationCategory::ExportSidecars,
             ValidationCategory::SafetyGates,
+            ValidationCategory::RuntimeEvidence,
         ] {
             assert!(categories.contains(&required), "missing {required:?}");
         }
@@ -933,13 +1059,39 @@ mod tests {
         let matrix = MvpValidationOverview::reference();
 
         assert!(!matrix.release_gate.ready_for_mvp);
+        assert_eq!(matrix.release_gate.required_runtime_evidence_count, 5);
+        assert_eq!(matrix.release_gate.satisfied_runtime_evidence_count, 0);
+        assert_eq!(matrix.release_gate.fixture_only_evidence_count, 5);
         assert!(matrix
             .release_gate
             .blocking_items
             .iter()
             .any(|item| { item.contains("manual audio-quality scorecards") }));
+        assert!(matrix
+            .release_gate
+            .blocking_items
+            .iter()
+            .any(|item| { item.contains("fixture/demo data cannot satisfy") }));
         assert!(matrix.known_limitations.iter().any(|limitation| {
             limitation.blocks_mvp && limitation.id == "limit-no-real-provider-audio"
+        }));
+    }
+
+    #[test]
+    fn fixture_only_evidence_cannot_satisfy_runtime_mvp_criteria() {
+        let matrix = MvpValidationOverview::reference();
+
+        assert!(matrix
+            .runtime_evidence
+            .iter()
+            .all(|evidence| evidence.required_for_mvp
+                && evidence.fixture_only
+                && evidence.status != MvpValidationStatus::Passed));
+        assert!(matrix.runtime_evidence.iter().any(|evidence| {
+            evidence.id == "evidence-model-cache"
+                && evidence
+                    .requirement
+                    .contains("verified cache/package files")
         }));
     }
 

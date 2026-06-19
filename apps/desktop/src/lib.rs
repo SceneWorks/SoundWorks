@@ -289,11 +289,14 @@ mod tests {
         let runtime = runtime_overview();
 
         assert_eq!(runtime.schema_version, 1);
-        assert_eq!(runtime.status_counts.installed, 3);
+        assert_eq!(runtime.status_counts.installed, 0);
+        assert_eq!(runtime.status_counts.unavailable, 3);
+        assert!(runtime.jobs.is_empty());
         assert!(runtime
-            .jobs
+            .validation_checks
             .iter()
-            .any(|job| job.id == "job-runtime-reference-generate"));
+            .any(|check| check.id == "runtime.cache_evidence"
+                && check.status == soundworks_core::ValidationStatus::Failed));
     }
 
     #[test]
@@ -321,6 +324,8 @@ mod tests {
             .blocking_items
             .iter()
             .any(|item| item.contains("stress cases")));
+        assert_eq!(overview.release_gate.satisfied_runtime_evidence_count, 0);
+        assert_eq!(overview.release_gate.fixture_only_evidence_count, 5);
     }
 
     #[test]
@@ -328,7 +333,7 @@ mod tests {
         let overview = tts_studio_overview();
 
         assert_eq!(overview.schema_version, 1);
-        assert!(overview.submission.can_submit);
+        assert!(!overview.submission.can_submit);
         assert_eq!(overview.script.segments.len(), 3);
         assert_eq!(overview.saved_output.asset.id, "asset-tts-studio-reference");
     }
@@ -352,7 +357,7 @@ mod tests {
 
         assert_eq!(overview.schema_version, 1);
         assert_eq!(overview.variants.len(), 3);
-        assert!(overview.submission.can_submit);
+        assert!(!overview.submission.can_submit);
         assert_eq!(overview.saved_outputs.len(), 2);
     }
 
@@ -362,7 +367,7 @@ mod tests {
 
         assert_eq!(overview.schema_version, 1);
         assert_eq!(overview.variants.len(), 4);
-        assert!(overview.submission.can_submit);
+        assert!(!overview.submission.can_submit);
         assert_eq!(overview.saved_outputs.len(), 3);
         assert_eq!(overview.pack.collection_id, "collection-neon-bass-pack");
     }
@@ -373,7 +378,7 @@ mod tests {
 
         assert_eq!(overview.schema_version, 1);
         assert_eq!(overview.arrangement.section_count, 4);
-        assert!(overview.submission.can_submit);
+        assert!(!overview.submission.can_submit);
         assert_eq!(overview.saved_outputs.len(), 2);
         assert_eq!(overview.export_targets.len(), 3);
     }

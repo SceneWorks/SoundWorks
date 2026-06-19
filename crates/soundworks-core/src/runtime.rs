@@ -225,6 +225,39 @@ impl RuntimePackagingPolicy {
             ));
         }
 
+        let manifest_only_models: Vec<String> = catalog
+            .providers
+            .iter()
+            .flat_map(|provider| {
+                provider.models.iter().filter_map(move |model| {
+                    if matches!(
+                        model.install.status,
+                        ModelInstallStatus::Installed | ModelInstallStatus::Packaged
+                    ) {
+                        Some(format!("{}:{}", provider.id, model.id))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
+        if manifest_only_models.is_empty() {
+            checks.push(RuntimeValidationCheck::passed(
+                "runtime.cache_evidence",
+                "Installed model state is derived from verified cache/package evidence.",
+            ));
+        } else {
+            checks.push(RuntimeValidationCheck::failed(
+                "runtime.cache_evidence",
+                format!(
+                    "Manifest-only packaged/install states cannot count as verified runtime installs: {}.",
+                    manifest_only_models.join(", ")
+                ),
+                "Inspect the on-disk model cache/package and attach file evidence before marking models installed.",
+            ));
+        }
+
         checks
     }
 }
@@ -389,6 +422,7 @@ impl ModelRuntimeState {
         policy: &RuntimePackagingPolicy,
     ) -> Self {
         let compatibility = RuntimeCompatibility::from_model(model, inventory);
+        let cache = ModelCacheState::from_manifest(model);
         let mut reasons = vec![];
 
         if !policy.product_runtime_allows_python && model_requires_python(model) {
@@ -404,6 +438,17 @@ impl ModelRuntimeState {
 
         if !compatibility.supported {
             reasons.extend(compatibility.reasons.clone());
+        }
+
+        if matches!(
+            model.install.status,
+            ModelInstallStatus::Installed | ModelInstallStatus::Packaged
+        ) && !cache.verified
+        {
+            reasons.push(
+                "Manifest declares a packaged or installed model, but no verified cache/package evidence is attached."
+                    .to_string(),
+            );
         }
 
         let availability =
@@ -439,7 +484,7 @@ impl ModelRuntimeState {
                 .collect(),
             availability,
             install_status: model.install.status,
-            cache: ModelCacheState::from_manifest(model),
+            cache,
             compatibility,
             health,
             reasons,
@@ -470,6 +515,8 @@ pub struct ModelCacheState {
     pub status: CacheStatus,
     pub expected_size_mb: Option<u32>,
     pub disk_usage_mb: Option<u32>,
+    pub verified: bool,
+    pub evidence: String,
     pub license: LicenseAcceptanceState,
     pub warmup: WarmupStatus,
 }
@@ -477,20 +524,33 @@ pub struct ModelCacheState {
 impl ModelCacheState {
     fn from_manifest(model: &ModelManifest) -> Self {
         let status = match model.install.status {
-            ModelInstallStatus::Installed | ModelInstallStatus::Packaged => CacheStatus::Ready,
+            ModelInstallStatus::Installed | ModelInstallStatus::Packaged => CacheStatus::Missing,
             ModelInstallStatus::Installable | ModelInstallStatus::Unavailable => {
                 CacheStatus::Missing
             }
             ModelInstallStatus::External => CacheStatus::External,
         };
+        let verified = false;
 
         Self {
             package_id: model.install.package_id.clone(),
             status,
             expected_size_mb: model.install.installed_size_mb,
-            disk_usage_mb: match status {
-                CacheStatus::Ready => model.install.installed_size_mb,
-                CacheStatus::Missing | CacheStatus::External => None,
+            disk_usage_mb: None,
+            verified,
+            evidence: match model.install.status {
+                ModelInstallStatus::Installed | ModelInstallStatus::Packaged => {
+                    "manifest-only; on-disk cache/package has not been verified".to_string()
+                }
+                ModelInstallStatus::Installable => {
+                    "installable manifest; no local cache expected yet".to_string()
+                }
+                ModelInstallStatus::External => {
+                    "external provider state; managed outside the local model cache".to_string()
+                }
+                ModelInstallStatus::Unavailable => {
+                    "unavailable manifest; no local cache exists".to_string()
+                }
             },
             license: match status {
                 CacheStatus::Ready | CacheStatus::External => LicenseAcceptanceState::Accepted,
@@ -722,32 +782,36 @@ fn reference_jobs(model_states: &[ModelRuntimeState]) -> Vec<RuntimeJobSnapshot>
 
 #[cfg(test)]
 mod tests {
-    use super::{DeviceInventory, RuntimeAvailability, RuntimeOverview, RuntimePackagingPolicy};
-    use crate::domain::{JobKind, JobStatus, ModelRuntime};
+    use super::{
+        DeviceInventory, RuntimeAvailability, RuntimeOverview, RuntimePackagingPolicy,
+        ValidationStatus,
+    };
+    use crate::domain::{JobKind, ModelRuntime};
     use crate::manifests::{ModelInstallStatus, ProviderCatalog};
 
     #[test]
-    fn reference_runtime_reports_installed_models_progress_and_cache_state() {
+    fn reference_runtime_blocks_manifest_only_models_and_jobs() {
         let runtime = RuntimeOverview::reference();
 
         assert_eq!(runtime.schema_version, 1);
-        assert_eq!(runtime.status_counts.installed, 3);
+        assert_eq!(runtime.status_counts.installed, 0);
         assert_eq!(runtime.status_counts.available, 0);
-        assert_eq!(runtime.status_counts.unavailable, 0);
+        assert_eq!(runtime.status_counts.unavailable, 3);
         assert!(runtime
             .validation_checks
             .iter()
             .any(|check| check.id == "runtime.no_python" && check.recovery.is_none()));
-        assert!(runtime.jobs.iter().any(|job| {
-            job.status == JobStatus::Running
-                && job
-                    .progress
-                    .as_ref()
-                    .is_some_and(|progress| progress.percent > 0.0)
+        assert!(runtime.validation_checks.iter().any(|check| {
+            check.id == "runtime.cache_evidence"
+                && check.status == ValidationStatus::Failed
+                && check.summary.contains("Manifest-only")
         }));
+        assert!(runtime.jobs.is_empty());
         assert!(runtime.model_states.iter().all(|state| {
-            state.cache.disk_usage_mb == state.cache.expected_size_mb
-                && state.compatibility.supported
+            state.cache.disk_usage_mb.is_none()
+                && !state.cache.verified
+                && state.cache.evidence.contains("manifest-only")
+                && state.availability == RuntimeAvailability::Unavailable
         }));
     }
 
@@ -796,7 +860,7 @@ mod tests {
             RuntimeAvailability::Unavailable
         );
         assert_eq!(runtime.status_counts.available, 1);
-        assert_eq!(runtime.status_counts.unavailable, 1);
+        assert_eq!(runtime.status_counts.unavailable, 2);
     }
 
     #[test]
@@ -820,19 +884,11 @@ mod tests {
     }
 
     #[test]
-    fn runtime_can_cancel_cancellable_job_snapshot() {
+    fn runtime_does_not_fabricate_reference_jobs_without_verified_cache() {
         let runtime = RuntimeOverview::reference();
 
-        let cancelled = runtime
+        assert!(runtime
             .cancel_job("job-runtime-reference-generate")
-            .expect("cancelled job");
-
-        assert_eq!(cancelled.status, JobStatus::Cancelled);
-        assert!(cancelled
-            .progress
-            .expect("cancel progress")
-            .message
-            .expect("cancel message")
-            .contains("acknowledged"));
+            .is_none());
     }
 }

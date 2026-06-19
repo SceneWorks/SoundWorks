@@ -20,7 +20,19 @@ describe("App", () => {
     expect(screen.getByText("Python runtime: blocked")).toBeInTheDocument();
     expect(screen.getByText("Reference Speech Suite")).toBeInTheDocument();
     expect(
-      screen.getByText(/Reinstall the provider package/i),
+      screen.getAllByText(
+        "manifest-only; on-disk cache/package has not been verified",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("No runtime jobs")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Manifest-only packaged\/install states cannot count/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Fixture\/demo actions are blocked/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Inspect the on-disk model cache\/package/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Evaluation Scorecard" }),
@@ -34,7 +46,7 @@ describe("App", () => {
       screen.getByText("Voice profile consent is required before generation."),
     ).toBeInTheDocument();
     expect(screen.getByText("TTS Studio narration draft")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Queue/i })).toBeEnabled();
+    expect(screen.getByTitle("Queue TTS generation")).toBeDisabled();
     expect(
       screen.getByRole("heading", { name: "Consented voice workflows" }),
     ).toBeInTheDocument();
@@ -56,7 +68,7 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: "Foley Impact" }),
     ).toBeInTheDocument();
-    expect(screen.getByTitle("Queue SFX generation")).toBeEnabled();
+    expect(screen.getByTitle("Queue SFX generation")).toBeDisabled();
     expect(screen.getAllByText("Tight hatch impact").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Engine room bed").length).toBeGreaterThan(0);
     expect(screen.getAllByText("MOSS-SoundEffect").length).toBeGreaterThan(0);
@@ -104,7 +116,9 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: "Neon bass starter pack" }),
     ).toBeInTheDocument();
-    expect(screen.getByTitle("Queue sample and loop generation")).toBeEnabled();
+    expect(
+      screen.getByTitle("Queue sample and loop generation"),
+    ).toBeDisabled();
     expect(screen.getAllByText("Bass pluck A1").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText("Four-bar chase bassline").length,
@@ -118,7 +132,7 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { name: "City Lights Resolve" }),
     ).toBeInTheDocument();
-    expect(screen.getByTitle("Queue song generation")).toBeEnabled();
+    expect(screen.getByTitle("Queue song generation")).toBeDisabled();
     expect(screen.getByText("Verse 1")).toBeInTheDocument();
     expect(screen.getAllByText("City Lights full mix").length).toBeGreaterThan(
       0,
@@ -262,6 +276,8 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByTitle("MVP release gate")).toBeDisabled();
     expect(screen.getByText("12/12")).toBeInTheDocument();
+    expect(screen.getAllByText("0/5").length).toBeGreaterThan(0);
+    expect(screen.getByText("Runtime evidence")).toBeInTheDocument();
     expect(screen.getByText("Narrate short script")).toBeInTheDocument();
     expect(
       screen.getByText("Generate complete song from lyrics and structure"),
@@ -279,6 +295,21 @@ describe("App", () => {
     expect(
       screen.getByText(
         "Required manual audio-quality scorecards are not all passed.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Runtime evidence is missing; fixture/demo data cannot satisfy generated audio, playback, edit, or export criteria.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Installed model counts must come from verified cache/package files, not static provider manifests.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "SC-6467 must implement model download/cache verification before any model can be counted as installed.",
       ),
     ).toBeInTheDocument();
   });

@@ -116,4 +116,28 @@ describe("App", () => {
       await screen.findByText("Python runtime: blocked"),
     ).toBeInTheDocument();
   });
+
+  it("wires Voice/Video/Song generation and demotes genuinely inert controls", async () => {
+    render(<App />);
+
+    // Previously-dead Generate/Convert buttons are now real buttons, gated on
+    // an installed runtime model (none in preview, so they read Blocked).
+    fireEvent.click(navButton("Voice Lab"));
+    const convert = await screen.findByTitle("Queue voice conversion");
+    expect(convert.tagName).toBe("BUTTON");
+    expect(convert).toBeDisabled();
+
+    fireEvent.click(navButton("Video Audio"));
+    expect(
+      await screen.findByTitle("Queue video-to-audio generation"),
+    ).toBeDisabled();
+
+    fireEvent.click(navButton("Song Studio"));
+    expect(await screen.findByTitle("Queue song generation")).toBeDisabled();
+
+    // Genuinely inert affordances are no longer rendered as buttons.
+    fireEvent.click(navButton("Multitrack"));
+    await screen.findByRole("heading", { name: "Demo timeline" });
+    expect(screen.queryByRole("button", { name: /Render/i })).toBeNull();
+  });
 });

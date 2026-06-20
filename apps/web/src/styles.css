@@ -426,11 +426,22 @@ h1 {
   cursor: pointer;
 }
 
-.primary-action:disabled {
+.primary-action:disabled,
+.primary-action.is-blocked {
   color: #756c61;
   background: #e1d8c9;
   border-color: #d4cab9;
   cursor: not-allowed;
+}
+
+/*
+ * Non-interactive affordance: a status/preview element that uses control
+ * styling but is not a button. pointer-events:none suppresses hover/click so
+ * it cannot read as actionable (F-015).
+ */
+.is-inert {
+  cursor: default;
+  pointer-events: none;
 }
 
 .primary-action:not(:disabled):hover,

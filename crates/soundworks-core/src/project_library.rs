@@ -829,6 +829,11 @@ impl ProjectLibraryStore {
         let record = self
             .read_asset_record(&request.item_id)?
             .ok_or_else(|| persisted_item_required(&request.item_id))?;
+        // F-003: enforce the displayed rights/safety policy at export, not just at
+        // generation. Refuse to export material whose stored rights are not cleared.
+        if let Some(reason) = export_block_reason(&record) {
+            return Err(io::Error::new(io::ErrorKind::PermissionDenied, reason));
+        }
         let version = record.item.current_version.as_ref().ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidInput, "item has no audio version")
         })?;
@@ -1321,6 +1326,39 @@ fn read_json<T: DeserializeOwned>(path: impl AsRef<Path>) -> io::Result<T> {
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
 }
 
+/// F-003 export gate: refuse to export material whose persisted rights are not
+/// cleared — voice consent under review or prohibited, or commercial use
+/// disallowed. Runtime-generated assets carry ProviderStockVoice/NotVoiceMaterial
+/// consent and RequiresReview commercial use (a warn state, not a hard block), so
+/// the working export path is unaffected. Returns the blocking reason, or None when
+/// export may proceed.
+fn export_block_reason(record: &PersistedAssetRecord) -> Option<String> {
+    let asset = record.item.asset.as_ref()?;
+    let rights = &asset.rights;
+    match rights.voice_consent {
+        VoiceConsentStatus::RequiresReview => {
+            return Some(
+                "Export blocked: voice consent for this asset is still under review. Record explicit speaker consent before exporting voice material."
+                    .to_string(),
+            );
+        }
+        VoiceConsentStatus::Prohibited => {
+            return Some(
+                "Export blocked: this asset references a prohibited (public-figure or unauthorized) voice and cannot be exported."
+                    .to_string(),
+            );
+        }
+        _ => {}
+    }
+    if rights.commercial_use == CommercialUseStatus::Disallowed {
+        return Some(
+            "Export blocked: commercial use of this asset is disallowed by its stored rights."
+                .to_string(),
+        );
+    }
+    None
+}
+
 fn persisted_item_required(item_id: &str) -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidInput,
@@ -1575,6 +1613,69 @@ mod tests {
             .open_project(&project_id)
             .expect("project reopened");
         assert_eq!(reopened.workspace.active_project.project.id, project_id);
+    }
+
+    #[test]
+    fn export_blocks_assets_with_unreviewed_voice_consent() {
+        // F-003 export gate: a clean runtime asset (ProviderStockVoice /
+        // NotVoiceMaterial, RequiresReview commercial) exports fine; flipping the
+        // persisted voice consent to RequiresReview blocks export.
+        let store = ProjectLibraryStore::new(temp_root("export-gate"));
+        let runtime_root = temp_root("export-gate-runtime");
+        let runtime_store = RuntimeJobStore::new(&runtime_root);
+        let job_id = seed_runtime_job(&runtime_root);
+        let imported = store
+            .import_runtime_artifact_from_store(
+                ImportRuntimeArtifactRequest {
+                    job_id,
+                    project_id: None,
+                    name: None,
+                    scope: None,
+                    tags: vec![],
+                },
+                &runtime_store,
+            )
+            .expect("runtime artifact imported");
+        let item_id = imported.asset_library.selected_item.item.id.clone();
+
+        let export_request = |item_id: String| ExportLibraryItemRequest {
+            item_id,
+            preset_id: "wav".to_string(),
+            formats: vec![AudioFileFormat::Wav],
+            scene_works_project_id: None,
+            scene_works_video_asset_id: None,
+            replace_existing_audio: false,
+        };
+
+        store
+            .export_library_item(export_request(item_id.clone()))
+            .expect("a cleared asset exports");
+
+        // Flip the persisted rights to requires-review and confirm export is blocked.
+        let record_path = store
+            .root()
+            .join("assets")
+            .join(&item_id)
+            .join("asset-record.json");
+        let mut record: serde_json::Value =
+            serde_json::from_slice(&fs::read(&record_path).expect("read record"))
+                .expect("parse record");
+        record["item"]["asset"]["rights"]["voiceConsent"] = serde_json::json!("requires-review");
+        fs::write(
+            &record_path,
+            serde_json::to_vec_pretty(&record).expect("serialize record"),
+        )
+        .expect("write record");
+
+        let blocked = store.export_library_item(export_request(item_id));
+        assert!(
+            blocked.is_err(),
+            "export of unreviewed voice material must be blocked"
+        );
+        assert_eq!(
+            blocked.unwrap_err().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
     }
 
     #[test]

@@ -363,6 +363,19 @@ fn candidate_ids_for(scorecards: &[VoiceProviderScorecard], lane: EvaluationLane
         .collect()
 }
 
+/// Resolve a voice profile's stored consent status by id (F-003). Generation
+/// admission consults this instead of trusting a caller-supplied boolean. Today it
+/// reads the voice-lab profile catalog; when user-created profiles are persisted
+/// (UX-08 / the storage `voice_profiles` table) this is the single place to switch
+/// the source. Returns `None` for an unknown profile id, which callers treat as
+/// "no recorded consent" (blocked).
+pub fn profile_consent(profile_id: &str) -> Option<VoiceConsentStatus> {
+    reference_profiles()
+        .into_iter()
+        .find(|entry| entry.profile.id == profile_id)
+        .map(|entry| entry.profile.consent)
+}
+
 fn reference_profiles() -> Vec<VoiceLabProfile> {
     vec![
         VoiceLabProfile {

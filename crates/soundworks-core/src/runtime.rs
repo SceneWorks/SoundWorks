@@ -90,15 +90,17 @@ impl RuntimeOverview {
             .filter(|candidate| candidate.install_state == CandidateInstallState::Installed)
             .map(|candidate| ModelRuntimeState::from_candidate(candidate, inventory))
             .collect();
-        if !model_states.iter().any(|state| {
-            state.provider_id == "soundworks-native" && state.model_id == "native-procedural-sfx"
-        }) {
-            model_states.push(ModelRuntimeState::native_procedural_sfx(inventory));
-        }
-        if !model_states.iter().any(|state| {
-            state.provider_id == "soundworks-native" && state.model_id == "native-procedural-music"
-        }) {
-            model_states.push(ModelRuntimeState::native_procedural_music(inventory));
+        // F-024: inject the always-available native models from the single
+        // registry instead of repeating their ids inline.
+        for native in NativeModel::injected() {
+            let already_present = model_states.iter().any(|state| {
+                state.provider_id == "soundworks-native" && state.model_id == native.model_id()
+            });
+            if !already_present {
+                if let Some(state) = native.injected_state(inventory) {
+                    model_states.push(state);
+                }
+            }
         }
         let mut jobs = store.read_jobs().unwrap_or_default();
         jobs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
@@ -463,6 +465,7 @@ pub struct ModelRuntimeState {
     pub model_id: String,
     pub model_name: String,
     pub runtime: ModelRuntime,
+    pub execution_strategy: ExecutionStrategy,
     pub workflows: Vec<CapabilityWorkflow>,
     pub availability: RuntimeAvailability,
     pub install_status: ModelInstallStatus,
@@ -535,6 +538,7 @@ impl ModelRuntimeState {
             model_id: model.id.clone(),
             model_name: model.name.clone(),
             runtime: model.runtime,
+            execution_strategy: ExecutionStrategy::for_model(&model.id, model.runtime),
             workflows: model
                 .capabilities
                 .iter()
@@ -589,6 +593,7 @@ impl ModelRuntimeState {
             model_id: candidate.candidate_id.clone(),
             model_name: candidate.name.clone(),
             runtime,
+            execution_strategy: ExecutionStrategy::for_model(&candidate.candidate_id, runtime),
             workflows,
             availability,
             install_status: ModelInstallStatus::Installed,
@@ -628,9 +633,10 @@ impl ModelRuntimeState {
             .map(|device| device.accelerator);
         Self {
             provider_id: "soundworks-native".to_string(),
-            model_id: "native-procedural-sfx".to_string(),
+            model_id: NativeModel::ProceduralSfx.model_id().to_string(),
             model_name: "SoundWorks native procedural SFX".to_string(),
             runtime: ModelRuntime::Local,
+            execution_strategy: ExecutionStrategy::NativeRust,
             workflows: vec![CapabilityWorkflow::Sfx, CapabilityWorkflow::Ambience],
             availability: RuntimeAvailability::Installed,
             install_status: ModelInstallStatus::Installed,
@@ -672,9 +678,10 @@ impl ModelRuntimeState {
             .map(|device| device.accelerator);
         Self {
             provider_id: "soundworks-native".to_string(),
-            model_id: "native-procedural-music".to_string(),
+            model_id: NativeModel::ProceduralMusic.model_id().to_string(),
             model_name: "SoundWorks native procedural samples and loops".to_string(),
             runtime: ModelRuntime::Local,
+            execution_strategy: ExecutionStrategy::NativeRust,
             workflows: vec![
                 CapabilityWorkflow::InstrumentSample,
                 CapabilityWorkflow::Loop,
@@ -902,6 +909,119 @@ pub enum ProviderAdapterKind {
     ResearchOnly,
 }
 
+/// How the runtime will execute a model, stored on every `ModelRuntimeState`
+/// (F-007). Dispatch reads this as data rather than re-deriving the adapter by
+/// matching the model id in multiple places, so the runtime catalog itself
+/// declares how each model runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionStrategy {
+    /// A built-in native Rust adapter (Kokoro ONNX or procedural synthesis).
+    NativeRust,
+    /// A locally-installed executable/library adapter (declared but not yet
+    /// runnable in the shipped build).
+    LocalExecutable,
+    /// A managed external API adapter.
+    ManagedApi,
+    /// Research-only; never product-executable.
+    ResearchOnly,
+}
+
+impl ExecutionStrategy {
+    /// Resolve the strategy from the model id (via the native registry) and the
+    /// declared runtime kind. Native built-ins always win — they are executable
+    /// regardless of how their catalog runtime is labelled.
+    fn for_model(model_id: &str, runtime: ModelRuntime) -> Self {
+        if NativeModel::from_model_id(model_id).is_some() {
+            return ExecutionStrategy::NativeRust;
+        }
+        match runtime {
+            ModelRuntime::Local => ExecutionStrategy::LocalExecutable,
+            ModelRuntime::ExternalApi => ExecutionStrategy::ManagedApi,
+            ModelRuntime::ResearchOnly => ExecutionStrategy::ResearchOnly,
+        }
+    }
+
+    fn adapter_kind(self) -> ProviderAdapterKind {
+        match self {
+            ExecutionStrategy::NativeRust => ProviderAdapterKind::NativeRust,
+            ExecutionStrategy::LocalExecutable => ProviderAdapterKind::LocalExecutable,
+            ExecutionStrategy::ManagedApi => ProviderAdapterKind::ManagedApi,
+            ExecutionStrategy::ResearchOnly => ProviderAdapterKind::ResearchOnly,
+        }
+    }
+}
+
+/// The built-in models SoundWorks executes natively in-process (no Python, no
+/// external process). This enum is the single source of truth for native model
+/// identity and dispatch (F-024): adding or renaming a native model is one edit
+/// here, and both catalog injection and execution read it instead of repeating
+/// literal id strings across `from_model_manager`, `adapter_for_model`, and
+/// `run_adapter`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeModel {
+    KokoroTts,
+    ProceduralSfx,
+    ProceduralMusic,
+    Smoke,
+}
+
+impl NativeModel {
+    const ALL: [NativeModel; 4] = [
+        NativeModel::KokoroTts,
+        NativeModel::ProceduralSfx,
+        NativeModel::ProceduralMusic,
+        NativeModel::Smoke,
+    ];
+
+    pub const fn model_id(self) -> &'static str {
+        match self {
+            NativeModel::KokoroTts => "kokoro-82m",
+            NativeModel::ProceduralSfx => "native-procedural-sfx",
+            NativeModel::ProceduralMusic => "native-procedural-music",
+            NativeModel::Smoke => "native-smoke",
+        }
+    }
+
+    pub fn from_model_id(model_id: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|model| model.model_id() == model_id)
+    }
+
+    /// The always-available native models the runtime injects into the catalog
+    /// when a verified install for them is not already present.
+    const fn injected() -> [NativeModel; 2] {
+        [NativeModel::ProceduralSfx, NativeModel::ProceduralMusic]
+    }
+
+    fn injected_state(self, inventory: &DeviceInventory) -> Option<ModelRuntimeState> {
+        match self {
+            NativeModel::ProceduralSfx => Some(ModelRuntimeState::native_procedural_sfx(inventory)),
+            NativeModel::ProceduralMusic => {
+                Some(ModelRuntimeState::native_procedural_music(inventory))
+            }
+            NativeModel::KokoroTts | NativeModel::Smoke => None,
+        }
+    }
+
+    /// Execute this native model's adapter against a claimed job.
+    fn run(
+        self,
+        store: &RuntimeJobStore,
+        job: &mut RuntimeJobSnapshot,
+        request: &RuntimeJobRequest,
+        ctx: &ExecutionContext,
+    ) -> io::Result<()> {
+        match self {
+            NativeModel::KokoroTts => store.write_kokoro_tts_audio(job, request, ctx),
+            NativeModel::ProceduralSfx => store.write_native_sfx_audio(job, request, ctx),
+            NativeModel::ProceduralMusic => store.write_native_music_audio(job, request, ctx),
+            NativeModel::Smoke => store.write_smoke_audio(job, request),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CancellationState {
@@ -1026,7 +1146,7 @@ impl RuntimeEngine {
     }
 
     /// Load a Kokoro model, reusing a warm in-process instance keyed by the model
-    /// + voices directory (F-019). `KokoroTts` loads every voice in the directory
+    /// and voices directory (F-019). `KokoroTts` loads every voice in the directory
     /// at construction, so the cache key is the cache root, not the per-call voice.
     /// Returns `(tts, warm)` where `warm` reports a cache hit.
     fn kokoro(&self, model_path: &Path, voices_path: &Path) -> io::Result<(Arc<KokoroTts>, bool)> {
@@ -1348,16 +1468,14 @@ impl RuntimeJobStore {
         }
 
         match job.adapter {
-            ProviderAdapterKind::NativeRust if job.model_id == "kokoro-82m" => {
-                self.write_kokoro_tts_audio(&mut job, request, ctx)?
+            ProviderAdapterKind::NativeRust => {
+                // F-024: resolve the native model once from the registry. An
+                // unrecognised native id falls back to the smoke adapter rather
+                // than silently mis-routing through a literal match arm.
+                NativeModel::from_model_id(&job.model_id)
+                    .unwrap_or(NativeModel::Smoke)
+                    .run(self, &mut job, request, ctx)?
             }
-            ProviderAdapterKind::NativeRust if job.model_id == "native-procedural-sfx" => {
-                self.write_native_sfx_audio(&mut job, request, ctx)?
-            }
-            ProviderAdapterKind::NativeRust if job.model_id == "native-procedural-music" => {
-                self.write_native_music_audio(&mut job, request, ctx)?
-            }
-            ProviderAdapterKind::NativeRust => self.write_smoke_audio(&mut job, request)?,
             ProviderAdapterKind::LocalExecutable
             | ProviderAdapterKind::ManagedApi
             | ProviderAdapterKind::ResearchOnly => {
@@ -2118,29 +2236,15 @@ fn adapter_for_model(
     overview: &RuntimeOverview,
     request: &RuntimeJobRequest,
 ) -> ProviderAdapterKind {
+    // F-007: dispatch on the catalog's declared execution strategy, not on a
+    // re-derived match over literal model ids.
     overview
         .model_states
         .iter()
         .find(|state| {
             state.provider_id == request.provider_id && state.model_id == request.model_id
         })
-        .map(|state| match state.runtime {
-            ModelRuntime::Local if state.model_id == "kokoro-82m" => {
-                ProviderAdapterKind::NativeRust
-            }
-            ModelRuntime::Local if state.model_id == "native-procedural-sfx" => {
-                ProviderAdapterKind::NativeRust
-            }
-            ModelRuntime::Local if state.model_id == "native-procedural-music" => {
-                ProviderAdapterKind::NativeRust
-            }
-            ModelRuntime::Local if state.model_id == "native-smoke" => {
-                ProviderAdapterKind::NativeRust
-            }
-            ModelRuntime::Local => ProviderAdapterKind::LocalExecutable,
-            ModelRuntime::ExternalApi => ProviderAdapterKind::ManagedApi,
-            ModelRuntime::ResearchOnly => ProviderAdapterKind::ResearchOnly,
-        })
+        .map(|state| state.execution_strategy.adapter_kind())
         .unwrap_or(ProviderAdapterKind::ResearchOnly)
 }
 
@@ -2627,10 +2731,10 @@ fn write_pcm_f32_wav_channels(
 #[cfg(test)]
 mod tests {
     use super::{
-        CacheStatus, CancellationState, DeviceInventory, LicenseAcceptanceState, ModelCacheState,
-        ProviderAdapterKind, RuntimeArtifactKind, RuntimeAvailability, RuntimeCompatibility,
-        RuntimeEngine, RuntimeHealth, RuntimeJobRequest, RuntimeJobStore, RuntimeOverview,
-        RuntimePackagingPolicy, ValidationStatus, WarmupStatus,
+        CacheStatus, CancellationState, DeviceInventory, ExecutionStrategy, LicenseAcceptanceState,
+        ModelCacheState, NativeModel, ProviderAdapterKind, RuntimeArtifactKind,
+        RuntimeAvailability, RuntimeCompatibility, RuntimeEngine, RuntimeHealth, RuntimeJobRequest,
+        RuntimeJobStore, RuntimeOverview, RuntimePackagingPolicy, ValidationStatus, WarmupStatus,
     };
     use crate::domain::{JobKind, ModelRuntime};
     use crate::manifests::{CapabilityWorkflow, ModelInstallStatus, ProviderCatalog};
@@ -3504,6 +3608,64 @@ mod tests {
         RuntimeEngine::new().expect("runtime engine builds")
     }
 
+    #[test]
+    fn native_registry_is_single_source_of_truth() {
+        // F-024: every native model round-trips through the registry, and an
+        // unknown id resolves to None (so dispatch falls back to smoke, not a
+        // silent mis-route).
+        for native in [
+            NativeModel::KokoroTts,
+            NativeModel::ProceduralSfx,
+            NativeModel::ProceduralMusic,
+            NativeModel::Smoke,
+        ] {
+            assert_eq!(NativeModel::from_model_id(native.model_id()), Some(native));
+            // F-007: native built-ins are always the NativeRust strategy,
+            // regardless of how their catalog runtime is labelled.
+            assert_eq!(
+                ExecutionStrategy::for_model(native.model_id(), ModelRuntime::ResearchOnly),
+                ExecutionStrategy::NativeRust
+            );
+        }
+        assert_eq!(NativeModel::from_model_id("not-a-real-model"), None);
+        assert_eq!(
+            ExecutionStrategy::for_model("not-a-real-model", ModelRuntime::ExternalApi),
+            ExecutionStrategy::ManagedApi
+        );
+        assert_eq!(
+            ExecutionStrategy::for_model("not-a-real-model", ModelRuntime::ResearchOnly),
+            ExecutionStrategy::ResearchOnly
+        );
+    }
+
+    #[test]
+    fn adapter_dispatch_reads_execution_strategy_not_model_id() {
+        // F-007: adapter_for_model resolves from the catalog's declared strategy.
+        // Flipping the strategy (without touching the model id) changes dispatch.
+        let store = RuntimeJobStore::new(temp_runtime_root("adapter-strategy"));
+        let mut overview = installed_overview(&store);
+        let request = RuntimeJobRequest {
+            provider_id: "hexgrad".to_string(),
+            model_id: "native-smoke".to_string(),
+            kind: JobKind::GenerateAudio,
+            workflow: CapabilityWorkflow::Tts,
+            prompt: "dispatch".to_string(),
+            source_surface: "TTS Studio".to_string(),
+            parameters: BTreeMap::new(),
+        };
+
+        assert_eq!(
+            super::adapter_for_model(&overview, &request),
+            ProviderAdapterKind::NativeRust
+        );
+
+        overview.model_states[0].execution_strategy = ExecutionStrategy::ManagedApi;
+        assert_eq!(
+            super::adapter_for_model(&overview, &request),
+            ProviderAdapterKind::ManagedApi
+        );
+    }
+
     fn installed_overview(store: &RuntimeJobStore) -> RuntimeOverview {
         RuntimeOverview {
             schema_version: super::RUNTIME_SCHEMA_VERSION,
@@ -3519,6 +3681,7 @@ mod tests {
                 model_id: "native-smoke".to_string(),
                 model_name: "Native smoke adapter".to_string(),
                 runtime: ModelRuntime::Local,
+                execution_strategy: super::ExecutionStrategy::NativeRust,
                 workflows: vec![CapabilityWorkflow::Tts],
                 availability: RuntimeAvailability::Installed,
                 install_status: ModelInstallStatus::Installed,

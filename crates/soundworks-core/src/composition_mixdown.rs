@@ -76,8 +76,7 @@ fn fade_scalar(position_ms: f64, clip_len_ms: f64, fade_in_ms: f64, fade_out_ms:
 pub fn mix(request: &MixRequest) -> Vec<f32> {
     let channels = request.channels.max(1) as usize;
     let out_sr = request.sample_rate.max(1);
-    let out_frames =
-        ((request.duration_ms as u128 * out_sr as u128) / 1000) as usize;
+    let out_frames = ((request.duration_ms as u128 * out_sr as u128) / 1000) as usize;
     let mut out = vec![0.0f32; out_frames * channels];
     if out_frames == 0 {
         return out;
@@ -89,16 +88,16 @@ pub fn mix(request: &MixRequest) -> Vec<f32> {
         }
         let clip_len_ms = (clip.source_end_ms - clip.source_start_ms) as f64;
         let clip_out_frames = ((clip_len_ms * out_sr as f64) / 1000.0).round() as usize;
-        let start_frame = ((clip.timeline_start_ms as f64 * out_sr as f64) / 1000.0)
-            .round() as usize;
+        let start_frame =
+            ((clip.timeline_start_ms as f64 * out_sr as f64) / 1000.0).round() as usize;
         // Pan: simple linear-taper so center keeps both channels at unity and a
         // hard pan silences the opposite channel.
         let pan = clip.pan.clamp(-1.0, 1.0);
         let left_pan = if pan > 0.0 { 1.0 - pan } else { 1.0 };
         let right_pan = if pan < 0.0 { 1.0 + pan } else { 1.0 };
         let ratio = clip.source_sample_rate.max(1) as f64 / out_sr as f64;
-        let source_start_frame = (clip.source_start_ms as f64 * clip.source_sample_rate as f64)
-            / 1000.0;
+        let source_start_frame =
+            (clip.source_start_ms as f64 * clip.source_sample_rate as f64) / 1000.0;
 
         for i in 0..clip_out_frames {
             let out_frame = start_frame + i;

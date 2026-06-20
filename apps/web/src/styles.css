@@ -779,6 +779,50 @@ button.export-preset-card:focus-visible {
   font-size: 0.85rem;
 }
 
+/* UX-S5: Jobs live monitor — filter header, artifacts, error, log disclosure. */
+.runtime-jobs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.runtime-artifacts {
+  margin: 4px 0;
+  padding-left: 16px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.runtime-artifacts code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.runtime-job-error {
+  color: var(--danger);
+}
+
+.runtime-log {
+  margin: 4px 0;
+  font-size: 0.78rem;
+}
+
+.runtime-log summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+}
+
+.runtime-log pre {
+  margin: 6px 0 0;
+  padding: 8px;
+  background: var(--surface-hover);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
 .primary-action {
   display: inline-grid;
   grid-template-columns: 18px minmax(0, auto);

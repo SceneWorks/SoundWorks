@@ -538,6 +538,30 @@ export function App() {
     }
   }, [activeView]);
 
+  // UX-S5: while the Jobs view is open and any job is still in flight, poll the
+  // runtime overview so the queue monitor updates live (desktop only — web
+  // preview jobs are terminal fixtures). Re-subscribes when the job list changes
+  // and stops once every job reaches a terminal state.
+  useEffect(() => {
+    if (!isTauri() || activeView !== "jobs") {
+      return;
+    }
+    const anyActive = runtime.jobs.some(
+      (job) => !TERMINAL_JOB_STATUSES.has(job.status),
+    );
+    if (!anyActive) {
+      return;
+    }
+    const interval = setInterval(() => {
+      loadRuntimeOverview().then((next) => {
+        if (mountedRef.current) {
+          setRuntime(next);
+        }
+      });
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [activeView, runtime.jobs]);
+
   function runModelManagerAction(
     candidateId: string,
     action: "install" | "revalidate",

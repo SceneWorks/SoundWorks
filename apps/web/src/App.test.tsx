@@ -160,13 +160,23 @@ describe("App", () => {
       screen.getByRole("button", { name: "Open Model Manager" }),
     ).toBeInTheDocument();
 
+    // UX-S1b: Video + Song are honestly gated (no model in preview) and the
+    // generate button now carries the disabled-reason as its tooltip.
     fireEvent.click(navButton("Video Audio"));
-    expect(
-      await screen.findByTitle("Queue video-to-audio generation"),
-    ).toBeDisabled();
+    const videoGenerate = await screen.findByRole("button", { name: "Blocked" });
+    expect(videoGenerate).toBeDisabled();
+    expect(videoGenerate).toHaveAttribute(
+      "title",
+      "Install a video-to-audio model to generate.",
+    );
 
     fireEvent.click(navButton("Song Studio"));
-    expect(await screen.findByTitle("Queue song generation")).toBeDisabled();
+    const songGenerate = await screen.findByRole("button", { name: "Blocked" });
+    expect(songGenerate).toBeDisabled();
+    expect(songGenerate).toHaveAttribute(
+      "title",
+      "Install a song model to generate.",
+    );
 
     // Genuinely inert affordances are no longer rendered as buttons.
     fireEvent.click(navButton("Multitrack"));

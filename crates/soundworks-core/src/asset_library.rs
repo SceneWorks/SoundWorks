@@ -20,7 +20,9 @@ pub struct AssetLibraryOverview {
     pub filters: LibraryFilterModel,
     pub selected_filter: LibraryFilterQuery,
     pub items: Vec<LibraryItemCard>,
-    pub selected_item: LibraryItemDetail,
+    /// The currently-selected item's detail, or `None` when the library is empty
+    /// (F-009: production never fabricates a fixture selection for an empty library).
+    pub selected_item: Option<LibraryItemDetail>,
     pub collections: Vec<LibraryCollectionView>,
     pub lifecycle_actions: Vec<LibraryLifecycleAction>,
     pub drag_targets: Vec<LibraryDragTarget>,
@@ -90,7 +92,7 @@ impl AssetLibraryOverview {
             filters: LibraryFilterModel::from_items(&items),
             selected_filter: LibraryFilterQuery::reference(),
             items: items.clone(),
-            selected_item: LibraryItemDetail {
+            selected_item: Some(LibraryItemDetail {
                 item: selected_item.clone(),
                 version_history: version_history(&selected_item),
                 recipe: selected_item.recipe.clone(),
@@ -121,7 +123,7 @@ impl AssetLibraryOverview {
                     "Rejected and archived items remain findable only when lifecycle filters include them."
                         .to_string(),
                 ],
-            },
+            }),
             collections,
             lifecycle_actions: lifecycle_actions(),
             drag_targets: drag_targets(),
@@ -144,11 +146,42 @@ impl AssetLibraryOverview {
             let selected_item = selected_item_id
                 .and_then(|id| overview.items.iter().find(|item| item.id == id))
                 .or_else(|| overview.items.last())
-                .cloned()
-                .expect("reference library includes at least one item");
-            overview.selected_item = detail_for_item(&selected_item);
+                .cloned();
+            overview.selected_item = selected_item.as_ref().map(detail_for_item);
         }
         Ok(overview)
+    }
+
+    /// Production builder (F-009): the library is exactly the persisted records —
+    /// no fabricated demo catalog is merged on top. Structural scopes still
+    /// surface the default project and global library so the UI has a drop target
+    /// for generated assets, but item counts, filters, and the selection reflect
+    /// only real records. `selected_item` is `None` when nothing has been
+    /// generated yet, rather than falling back to a fixture.
+    pub fn from_persisted_items(
+        items: Vec<LibraryItemCard>,
+        selected_item_id: Option<&str>,
+    ) -> Self {
+        let collections: Vec<LibraryCollectionView> = vec![];
+        let scopes = scope_summaries(&items, &collections);
+        let filters = LibraryFilterModel::from_items(&items);
+        let checks = validation_checks(&items);
+        let selected_item = selected_item_id
+            .and_then(|id| items.iter().find(|item| item.id == id))
+            .or_else(|| items.first())
+            .map(detail_for_item);
+        Self {
+            schema_version: ASSET_LIBRARY_SCHEMA_VERSION,
+            scopes,
+            filters,
+            selected_filter: LibraryFilterQuery::reference(),
+            items,
+            selected_item,
+            collections,
+            lifecycle_actions: lifecycle_actions(),
+            drag_targets: drag_targets(),
+            validation_checks: checks,
+        }
     }
 }
 
@@ -1443,6 +1476,42 @@ mod tests {
     use super::{AssetLibraryOverview, LibraryItemType, ASSET_LIBRARY_SCHEMA_VERSION};
 
     #[test]
+    fn production_library_returns_only_persisted_records() {
+        // F-009: the production builder fabricates nothing. With no persisted
+        // records it has empty items, empty collections, and no selection — but
+        // still surfaces the default project + global scopes as drop targets.
+        let empty = AssetLibraryOverview::from_persisted_items(vec![], None);
+        assert_eq!(empty.schema_version, ASSET_LIBRARY_SCHEMA_VERSION);
+        assert!(empty.items.is_empty());
+        assert!(empty.selected_item.is_none());
+        assert!(empty.collections.is_empty());
+        assert!(empty.scopes.iter().any(|scope| scope.id == "project-demo"));
+        assert!(empty
+            .scopes
+            .iter()
+            .any(|scope| scope.id == "global-library"));
+
+        // With persisted records the library is exactly those records and selects
+        // one — never a fixture. (Reuse a real card shape as the persisted input.)
+        let card = AssetLibraryOverview::reference()
+            .expect("reference is valid")
+            .items[0]
+            .clone();
+        let id = card.id.clone();
+        let populated = AssetLibraryOverview::from_persisted_items(vec![card], None);
+        assert_eq!(populated.items.len(), 1);
+        assert_eq!(
+            populated
+                .selected_item
+                .as_ref()
+                .expect("selects the record")
+                .item
+                .id,
+            id
+        );
+    }
+
+    #[test]
     fn reference_library_covers_all_required_item_types_and_filters() {
         let overview = AssetLibraryOverview::reference().expect("reference library is valid");
         let facet_ids = overview
@@ -1478,17 +1547,20 @@ mod tests {
     #[test]
     fn selected_library_item_exposes_preview_lifecycle_recipe_and_provenance() {
         let overview = AssetLibraryOverview::reference().expect("reference library is valid");
+        let selected = overview
+            .selected_item
+            .as_ref()
+            .expect("reference library selects the loop asset");
 
-        assert_eq!(overview.selected_item.item.id, "asset-loop-001");
-        assert!(overview.selected_item.item.quick_audition.previewable);
+        assert_eq!(selected.item.id, "asset-loop-001");
+        assert!(selected.item.quick_audition.previewable);
         assert!(overview
             .lifecycle_actions
             .iter()
             .any(|action| action.id == "promote-to-global" && action.preserves_provenance));
-        assert!(overview.selected_item.recipe.is_some());
-        assert_eq!(overview.selected_item.version_history.len(), 2);
-        assert!(overview
-            .selected_item
+        assert!(selected.recipe.is_some());
+        assert_eq!(selected.version_history.len(), 2);
+        assert!(selected
             .provenance_links
             .iter()
             .all(|link| link.inspectable));

@@ -82,7 +82,7 @@ pub struct LibraryMutationRequest {
 pub struct ProjectLibraryActionResult {
     pub workspace: WorkspaceOverview,
     pub asset_library: AssetLibraryOverview,
-    pub selected_item: LibraryItemDetail,
+    pub selected_item: Option<LibraryItemDetail>,
     pub message: String,
 }
 
@@ -229,14 +229,23 @@ impl ProjectLibraryStore {
         &self,
         selected_item_id: Option<&str>,
     ) -> io::Result<AssetLibraryOverview> {
-        AssetLibraryOverview::reference_with_persisted_items(
-            self.read_asset_records()?
-                .into_iter()
-                .map(|record| record.item)
-                .collect(),
-            selected_item_id,
-        )
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))
+        let persisted: Vec<LibraryItemCard> = self
+            .read_asset_records()?
+            .into_iter()
+            .map(|record| record.item)
+            .collect();
+        // F-009: production returns only persisted records. The fabricated demo
+        // catalog is gated behind an opt-in flag so it is never merged on top of
+        // (and inflating) real library data in a shipped build.
+        if demo_library_enabled() {
+            AssetLibraryOverview::reference_with_persisted_items(persisted, selected_item_id)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))
+        } else {
+            Ok(AssetLibraryOverview::from_persisted_items(
+                persisted,
+                selected_item_id,
+            ))
+        }
     }
 
     pub fn create_project(
@@ -1202,6 +1211,18 @@ fn library_item_from_asset(
     }
 }
 
+/// F-009: opt-in flag that merges the fabricated demo asset catalog into the
+/// library. Off by default so shipped builds show only persisted records; set
+/// `SOUNDWORKS_DEMO_LIBRARY=1` (or `true`) for demos, screenshots, and walkthroughs.
+fn demo_library_enabled() -> bool {
+    std::env::var("SOUNDWORKS_DEMO_LIBRARY")
+        .map(|value| {
+            let value = value.trim();
+            value == "1" || value.eq_ignore_ascii_case("true")
+        })
+        .unwrap_or(false)
+}
+
 fn reference_project() -> Project {
     Project {
         id: "project-demo".to_string(),
@@ -1690,7 +1711,14 @@ mod tests {
                 &runtime_store,
             )
             .expect("runtime artifact imported");
-        let item_id = imported.asset_library.selected_item.item.id.clone();
+        let item_id = imported
+            .asset_library
+            .selected_item
+            .as_ref()
+            .unwrap()
+            .item
+            .id
+            .clone();
 
         let export_request = |item_id: String| ExportLibraryItemRequest {
             item_id,
@@ -1752,7 +1780,14 @@ mod tests {
                 &runtime_store,
             )
             .expect("runtime artifact imported");
-        let asset_id = imported.asset_library.selected_item.item.id.clone();
+        let asset_id = imported
+            .asset_library
+            .selected_item
+            .as_ref()
+            .unwrap()
+            .item
+            .id
+            .clone();
 
         let workspace = store.workspace_overview().expect("workspace overview");
         assert_eq!(workspace.active_project.project.id, "project-demo");
@@ -1875,11 +1910,17 @@ mod tests {
             .expect("runtime artifact imported");
 
         assert_eq!(
-            result.asset_library.selected_item.item.name,
+            result
+                .asset_library
+                .selected_item
+                .as_ref()
+                .unwrap()
+                .item
+                .name,
             "Persisted smoke clip"
         );
         let playback = store
-            .playback_for_item(&result.asset_library.selected_item.item.id)
+            .playback_for_item(&result.asset_library.selected_item.as_ref().unwrap().item.id)
             .expect("playback state loads");
         assert!(playback.playable);
         assert!(PathBuf::from(playback.path.expect("playback path")).is_file());
@@ -1903,7 +1944,14 @@ mod tests {
                 &runtime_store,
             )
             .expect("runtime artifact imported");
-        let item_id = imported.asset_library.selected_item.item.id.clone();
+        let item_id = imported
+            .asset_library
+            .selected_item
+            .as_ref()
+            .unwrap()
+            .item
+            .id
+            .clone();
 
         store
             .mutate_library_item(LibraryMutationRequest {
@@ -1923,6 +1971,8 @@ mod tests {
         assert!(promoted
             .asset_library
             .selected_item
+            .as_ref()
+            .unwrap()
             .item
             .tags
             .iter()
@@ -1930,6 +1980,8 @@ mod tests {
         assert!(promoted
             .asset_library
             .selected_item
+            .as_ref()
+            .unwrap()
             .item
             .project_id
             .is_none());
@@ -1953,7 +2005,14 @@ mod tests {
                 &runtime_store,
             )
             .expect("runtime artifact imported");
-        let item_id = imported.asset_library.selected_item.item.id.clone();
+        let item_id = imported
+            .asset_library
+            .selected_item
+            .as_ref()
+            .unwrap()
+            .item
+            .id
+            .clone();
 
         let edit = store
             .save_review_edit(SaveReviewEditRequest {
@@ -1966,7 +2025,10 @@ mod tests {
             })
             .expect("review edit saved");
 
-        assert_eq!(edit.library.selected_item.item.id, item_id);
+        assert_eq!(
+            edit.library.selected_item.as_ref().unwrap().item.id,
+            item_id
+        );
         assert!(PathBuf::from(&edit.source_path).is_file());
         assert!(PathBuf::from(&edit.edited_path).is_file());
         assert!(PathBuf::from(&edit.provenance_sidecar_path).is_file());
@@ -1978,6 +2040,8 @@ mod tests {
         assert_eq!(
             edit.library
                 .selected_item
+                .as_ref()
+                .unwrap()
                 .item
                 .current_version
                 .as_ref()
@@ -2008,7 +2072,14 @@ mod tests {
 
         let export = store
             .export_library_item(ExportLibraryItemRequest {
-                item_id: imported.asset_library.selected_item.item.id.clone(),
+                item_id: imported
+                    .asset_library
+                    .selected_item
+                    .as_ref()
+                    .unwrap()
+                    .item
+                    .id
+                    .clone(),
                 preset_id: "preset-sceneworks-video-track".to_string(),
                 formats: vec![AudioFileFormat::Wav, AudioFileFormat::Mp3],
                 scene_works_project_id: Some("scene-project".to_string()),

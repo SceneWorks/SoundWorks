@@ -88,7 +88,14 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.click(navButton("TTS Studio"));
-    expect(await screen.findByTitle("Queue TTS generation")).toBeDisabled();
+    // UX-05/S1a: the generate button is gated on an installed model and now
+    // carries the disabled-reason as its tooltip (no model in web preview).
+    const ttsGenerate = await screen.findByRole("button", { name: "Blocked" });
+    expect(ttsGenerate).toBeDisabled();
+    expect(ttsGenerate).toHaveAttribute(
+      "title",
+      "Install a TTS model to generate.",
+    );
     expect(
       screen.getByText("Voice profile consent is required before generation."),
     ).toBeInTheDocument();

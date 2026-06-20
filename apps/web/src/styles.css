@@ -593,6 +593,77 @@ h1 {
   font-size: 0.85rem;
 }
 
+/* UX-S1a: studio compose controls (editable generation draft) + the shared
+   generation progress/result panel. */
+.studio-compose {
+  display: grid;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.field > span {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.field-input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.field-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+textarea.field-input {
+  resize: vertical;
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.field-hint {
+  color: var(--text-faint);
+}
+
+.field-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  align-self: end;
+  min-height: 38px;
+}
+
+.generation-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.generation-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .primary-action {
   display: inline-grid;
   grid-template-columns: 18px minmax(0, auto);

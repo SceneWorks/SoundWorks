@@ -17,3 +17,4 @@ export type { WorkerProgressError } from "./WorkerProgressCard";
 export { ModelAvailabilityGate } from "./ModelAvailabilityGate";
 export { FeedbackLine } from "./FeedbackLine";
 export { PlaybackControl } from "./PlaybackControl";
+export { GenerationPanel } from "./GenerationPanel";

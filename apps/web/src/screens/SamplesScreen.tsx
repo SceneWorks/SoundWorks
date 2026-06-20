@@ -1,13 +1,15 @@
-// DR-02: Samples + Loops studio. Extracted from App.tsx and rebuilt on the
-// shared grammar (SurfaceHeader hero + HeroStat for the header/metrics,
-// MainSurface + SectionHeading for the sub-panels) in place of the bespoke
-// samples-header / samples-metrics / subpanel-heading classes, following the
-// TtsScreen template. All Generate wiring, gating, and data bindings are
-// preserved verbatim.
-import { CircleCheck, Disc3, SlidersHorizontal } from "lucide-react";
+// DR-02 + UX-06: Samples + Loops studio. UX-06 adds an editable generation draft
+// (prompt, bpm, key, bars/beats, velocity, loopable — all consumed by the native
+// procedural music adapter), a live progress panel driven by the UX-F1 job poll,
+// and inline playback of the saved loop. The variant grid, provider panels, and
+// canSubmit gating are preserved.
+import { useEffect, useRef, useState } from "react";
+import { CircleCheck, Disc3, Play, SlidersHorizontal } from "lucide-react";
 import {
+  GenerationPanel,
   HeroStat,
   MainSurface,
+  PlaybackControl,
   SectionHeading,
   SurfaceHeader,
 } from "../components";
@@ -19,8 +21,70 @@ export function SamplesScreen() {
     samplesStudio,
     samplesCandidateFocus,
     runRuntimeJob,
+    runtimeOperation,
+    cancelRuntimeOperation,
+    retryRuntimeOperation,
+    assetLibrary,
+    libraryPlayback,
+    previewLibraryItem,
     overview,
   } = useAppContext();
+
+  const editedRef = useRef(false);
+  const [prompt, setPrompt] = useState(samplesStudio.prompt.text);
+  const [bpm, setBpm] = useState(samplesStudio.controls.bpm);
+  const [musicalKey, setMusicalKey] = useState(samplesStudio.controls.musicalKey);
+  const [bars, setBars] = useState(samplesStudio.controls.bars);
+  const [beats, setBeats] = useState(samplesStudio.controls.beats);
+  const [loopable, setLoopable] = useState(samplesStudio.controls.loopable);
+  const [velocity, setVelocity] = useState(samplesStudio.controls.velocityEnergy);
+
+  useEffect(() => {
+    if (!editedRef.current) {
+      setPrompt(samplesStudio.prompt.text);
+      setBpm(samplesStudio.controls.bpm);
+      setMusicalKey(samplesStudio.controls.musicalKey);
+      setBars(samplesStudio.controls.bars);
+      setBeats(samplesStudio.controls.beats);
+      setLoopable(samplesStudio.controls.loopable);
+      setVelocity(samplesStudio.controls.velocityEnergy);
+    }
+  }, [
+    samplesStudio.prompt.text,
+    samplesStudio.controls.bpm,
+    samplesStudio.controls.musicalKey,
+    samplesStudio.controls.bars,
+    samplesStudio.controls.beats,
+    samplesStudio.controls.loopable,
+    samplesStudio.controls.velocityEnergy,
+  ]);
+
+  const trimmed = prompt.trim();
+  const canSubmit = samplesStudio.submission.canSubmit && trimmed.length > 0;
+  const blockReason = !samplesStudio.submission.canSubmit
+    ? "Submission is blocked — see the QA checks below."
+    : trimmed.length === 0
+      ? "Enter a prompt to generate."
+      : null;
+
+  function generate() {
+    runRuntimeJob(samplesStudio.selectedProvider.workflow, prompt, {
+      negativePrompt: samplesStudio.prompt.negativePrompt,
+      instrumentFamily: samplesStudio.prompt.instrumentFamily,
+      articulation: samplesStudio.prompt.articulation,
+      tags: samplesStudio.prompt.genreTags,
+      musicalKey,
+      scale: samplesStudio.controls.scale,
+      bpm,
+      bars,
+      beats,
+      loopable,
+      velocityEnergy: velocity,
+      dryWetAmbience: samplesStudio.controls.dryWetAmbience,
+    });
+  }
+
+  const selectedItemId = assetLibrary.selectedItem?.item.id;
 
   return (
     <section className="samples-studio-panel" aria-label="Samples and Loops">
@@ -30,34 +94,13 @@ export function SamplesScreen() {
         actions={
           <button
             className="primary-action samples-action"
-            disabled={!samplesStudio.submission.canSubmit}
-            onClick={() =>
-              runRuntimeJob(
-                samplesStudio.selectedProvider.workflow,
-                samplesStudio.prompt.text,
-                {
-                  negativePrompt: samplesStudio.prompt.negativePrompt,
-                  instrumentFamily: samplesStudio.prompt.instrumentFamily,
-                  articulation: samplesStudio.prompt.articulation,
-                  tags: samplesStudio.prompt.genreTags,
-                  musicalKey: samplesStudio.controls.musicalKey,
-                  scale: samplesStudio.controls.scale,
-                  bpm: samplesStudio.controls.bpm,
-                  bars: samplesStudio.controls.bars,
-                  beats: samplesStudio.controls.beats,
-                  loopable: samplesStudio.controls.loopable,
-                  velocityEnergy: samplesStudio.controls.velocityEnergy,
-                  dryWetAmbience: samplesStudio.controls.dryWetAmbience,
-                },
-              )
-            }
+            disabled={!canSubmit}
+            onClick={generate}
             type="button"
-            title="Queue sample and loop generation"
+            title={blockReason ?? "Queue sample and loop generation"}
           >
             <Disc3 aria-hidden="true" size={18} />
-            <span>
-              {samplesStudio.submission.canSubmit ? "Generate" : "Blocked"}
-            </span>
+            <span>{canSubmit ? "Generate" : "Blocked"}</span>
           </button>
         }
         stats={
@@ -70,10 +113,7 @@ export function SamplesScreen() {
               label="saved"
               value={overview.samplesStudio.savedOutputCount}
             />
-            <HeroStat
-              label={samplesStudio.controls.musicalKey}
-              value={samplesStudio.controls.bpm}
-            />
+            <HeroStat label={musicalKey} value={bpm} />
             <HeroStat
               label="scorecards"
               value={overview.samplesStudio.scorecardCount}
@@ -82,41 +122,129 @@ export function SamplesScreen() {
         }
       />
 
+      <MainSurface className="studio-compose" ariaLabel="Compose loop">
+        <SectionHeading title="Compose" eyebrow="prompt + groove" />
+        <label className="field">
+          <span>Prompt</span>
+          <textarea
+            className="field-input"
+            rows={3}
+            value={prompt}
+            onChange={(event) => {
+              editedRef.current = true;
+              setPrompt(event.target.value);
+            }}
+            placeholder="Describe the instrument, groove, or loop…"
+          />
+          <small className="field-hint">{trimmed.length} characters</small>
+        </label>
+        <div className="field-row">
+          <label className="field">
+            <span>BPM {bpm}</span>
+            <input
+              className="field-input"
+              type="range"
+              min={40}
+              max={240}
+              value={bpm}
+              onChange={(event) => {
+                editedRef.current = true;
+                setBpm(Number(event.target.value));
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Key</span>
+            <input
+              className="field-input"
+              type="text"
+              value={musicalKey}
+              onChange={(event) => {
+                editedRef.current = true;
+                setMusicalKey(event.target.value);
+              }}
+            />
+          </label>
+        </div>
+        <div className="field-row">
+          <label className="field">
+            <span>Bars</span>
+            <input
+              className="field-input"
+              type="number"
+              min={1}
+              max={16}
+              value={bars}
+              onChange={(event) => {
+                editedRef.current = true;
+                setBars(Number(event.target.value));
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Beats / bar</span>
+            <input
+              className="field-input"
+              type="number"
+              min={1}
+              max={12}
+              value={beats}
+              onChange={(event) => {
+                editedRef.current = true;
+                setBeats(Number(event.target.value));
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Velocity {velocity}</span>
+            <input
+              className="field-input"
+              type="range"
+              min={1}
+              max={100}
+              value={velocity}
+              onChange={(event) => {
+                editedRef.current = true;
+                setVelocity(Number(event.target.value));
+              }}
+            />
+          </label>
+          <label className="field field-check">
+            <input
+              type="checkbox"
+              checked={loopable}
+              onChange={(event) => {
+                editedRef.current = true;
+                setLoopable(event.target.checked);
+              }}
+            />
+            <span>Loopable</span>
+          </label>
+        </div>
+      </MainSurface>
+
+      <GenerationPanel
+        job={runtimeOperation}
+        workflows={["instrument-sample", "loop"]}
+        typeLabel="Sample"
+        onCancel={cancelRuntimeOperation}
+        onRetry={retryRuntimeOperation}
+      >
+        <button
+          type="button"
+          className="secondary-action"
+          disabled={!selectedItemId}
+          onClick={() => selectedItemId && previewLibraryItem(selectedItemId)}
+          title="Play the saved loop"
+        >
+          <Play aria-hidden="true" size={16} />
+          <span>Play latest</span>
+        </button>
+        <PlaybackControl playback={libraryPlayback} />
+      </GenerationPanel>
+
       <div className="samples-layout">
         <div className="samples-main">
-          <MainSurface className="sfx-prompt-panel" ariaLabel="Sample prompt">
-            <SectionHeading
-              title={statusLabel(samplesStudio.prompt.instrumentFamily)}
-              eyebrow={samplesStudio.prompt.genreTags.length}
-            />
-            <p>{samplesStudio.prompt.text}</p>
-            <small>{samplesStudio.prompt.negativePrompt}</small>
-            <div className="candidate-strip">
-              {samplesStudio.prompt.genreTags.map((tag, index) => (
-                <span key={index}>{tag}</span>
-              ))}
-            </div>
-          </MainSurface>
-
-          <div className="samples-control-grid" aria-label="Sample controls">
-            <div>
-              <strong>{samplesStudio.controls.bars} bars</strong>
-              <span>{samplesStudio.controls.beats}/4 grid</span>
-            </div>
-            <div>
-              <strong>{samplesStudio.controls.batchSize}</strong>
-              <span>batch size</span>
-            </div>
-            <div>
-              <strong>{samplesStudio.controls.velocityEnergy}</strong>
-              <span>velocity</span>
-            </div>
-            <div>
-              <strong>{samplesStudio.controls.dryWetAmbience}</strong>
-              <span>ambience</span>
-            </div>
-          </div>
-
           <div className="samples-variant-grid" aria-label="Sample variants">
             {samplesStudio.variants.map((variant) => (
               <article
@@ -164,8 +292,8 @@ export function SamplesScreen() {
               >
                 <strong>{workflowLabel(provider.workflow)}</strong>
                 <small>
-                  {statusLabel(provider.installStatus)} /{" "}
-                  {provider.sampleRateHz} Hz /{" "}
+                  {statusLabel(provider.installStatus)} / {provider.sampleRateHz}{" "}
+                  Hz /{" "}
                   {provider.supportsLoopPoints ? "loop points" : "metadata"}
                 </small>
                 <p>{provider.supportedControls.map(statusLabel).join(" / ")}</p>
@@ -222,10 +350,7 @@ export function SamplesScreen() {
       <div className="samples-review-grid">
         <ol className="voice-checks" aria-label="Sample post-processing">
           {samplesStudio.postProcessingActions.map((action) => (
-            <li
-              className={action.enabled ? "ready" : "warning"}
-              key={action.id}
-            >
+            <li className={action.enabled ? "ready" : "warning"} key={action.id}>
               <SlidersHorizontal aria-hidden="true" size={16} />
               <span>{action.summary}</span>
             </li>

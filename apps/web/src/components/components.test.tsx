@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import {
   EmptyPanel,
   FeedbackLine,
+  GenerationPanel,
   PlaybackControl,
   SegmentedControl,
   StatusBadge,
@@ -10,6 +11,28 @@ import {
   WorkerProgressCard,
 } from "./index";
 import { actionFeedback } from "../viewModel";
+import type { RuntimeJobSnapshot } from "../types";
+
+function fakeJob(overrides: Partial<RuntimeJobSnapshot>): RuntimeJobSnapshot {
+  return {
+    id: "job-1",
+    kind: "generate-audio",
+    status: "running",
+    providerId: "p",
+    modelId: "m",
+    workflow: "tts",
+    adapter: "native-rust",
+    progress: { percent: 40, message: "Synthesizing" },
+    cancellation: "cancellable",
+    retryCount: 0,
+    createdAt: "0",
+    updatedAt: "0",
+    recordRoot: "jobs/job-1",
+    logTail: [],
+    artifacts: [],
+    ...overrides,
+  };
+}
 
 describe("shared component grammar", () => {
   it("SurfaceHeader renders eyebrow/title/blurb in the SceneWorks hero shape", () => {
@@ -117,5 +140,75 @@ describe("shared component grammar", () => {
 
     rerender(<PlaybackControl playback={null} />);
     expect(container.querySelector(".playback-control")).toBeNull();
+  });
+
+  it("GenerationPanel shows progress + cancel for a running job it owns", () => {
+    const onCancel = vi.fn();
+    render(
+      <GenerationPanel
+        job={fakeJob({ status: "running" })}
+        workflows={["tts"]}
+        onCancel={onCancel}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
+      "40",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancel).toHaveBeenCalledWith("job-1");
+  });
+
+  it("GenerationPanel renders nothing for a job from another workflow", () => {
+    const { container } = render(
+      <GenerationPanel
+        job={fakeJob({ workflow: "song" })}
+        workflows={["tts"]}
+        onCancel={vi.fn()}
+        onRetry={vi.fn()}
+      >
+        <span>result</span>
+      </GenerationPanel>,
+    );
+    expect(container.querySelector(".generation-panel")).toBeNull();
+  });
+
+  it("GenerationPanel shows the result slot + Retry only on the right states", () => {
+    const onRetry = vi.fn();
+    const { rerender } = render(
+      <GenerationPanel
+        job={fakeJob({ status: "succeeded", progress: { percent: 100 } })}
+        workflows={["tts"]}
+        onCancel={vi.fn()}
+        onRetry={onRetry}
+      >
+        <span>saved-result</span>
+      </GenerationPanel>,
+    );
+    expect(screen.getByText("saved-result")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+
+    rerender(
+      <GenerationPanel
+        job={fakeJob({
+          status: "failed",
+          progress: { percent: 100 },
+          actionableError: {
+            code: "x",
+            summary: "Adapter failed",
+            recovery: "Retry later",
+          },
+        })}
+        workflows={["tts"]}
+        onCancel={vi.fn()}
+        onRetry={onRetry}
+      >
+        <span>saved-result</span>
+      </GenerationPanel>,
+    );
+    expect(screen.queryByText("saved-result")).toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain("Adapter failed");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalledWith("job-1");
   });
 });

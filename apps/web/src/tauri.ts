@@ -22,12 +22,15 @@ import type {
   AssetLibraryOverview,
   CompositionEditorOverview,
   CreateProjectRequest,
+  ExportLibraryItemRequest,
+  ExportLibraryItemResult,
   ExportWorkflowOverview,
   ImportRuntimeArtifactRequest,
   LibraryMutationRequest,
   LibraryPlayback,
   MvpValidationOverview,
   ProjectLibraryActionResult,
+  ReviewEditResult,
   RightsSafetyOverview,
   ReviewWorkspaceOverview,
   RuntimeOverview,
@@ -37,6 +40,7 @@ import type {
   ModelManagerOperation,
   ModelManagerOverview,
   SamplesStudioOverview,
+  SaveReviewEditRequest,
   SongStudioOverview,
   SfxStudioOverview,
   TtsStudioOverview,
@@ -317,6 +321,32 @@ export async function loadLibraryPlayback(
   return playback.path
     ? { ...playback, path: convertFileSrc(playback.path) }
     : playback;
+}
+
+export async function saveReviewEdit(
+  request: SaveReviewEditRequest,
+): Promise<ReviewEditResult> {
+  try {
+    return await invoke<ReviewEditResult>("save_review_edit", { request });
+  } catch {
+    throw new Error(
+      "Saving review edits requires the Tauri desktop shell and a persisted audio file.",
+    );
+  }
+}
+
+export async function exportLibraryItem(
+  request: ExportLibraryItemRequest,
+): Promise<ExportLibraryItemResult> {
+  try {
+    return await invoke<ExportLibraryItemResult>("export_library_item", {
+      request,
+    });
+  } catch {
+    throw new Error(
+      "Export requires the Tauri desktop shell and a persisted audio file.",
+    );
+  }
 }
 
 function fallbackProjectLibraryResult(

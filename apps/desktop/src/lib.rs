@@ -1,11 +1,13 @@
 use soundworks_core::{
     AppOverview, AssetLibraryOverview, CompositionEditorOverview, CreateProjectRequest,
-    ExportWorkflowOverview, ImportRuntimeArtifactRequest, LibraryMutationRequest, LibraryPlayback,
-    ModelEvaluationCatalog, ModelManagerOperation, ModelManagerOverview, MvpValidationOverview,
-    ProjectLibraryActionResult, ProjectLibraryStore, ProviderCatalog, ReviewWorkspaceOverview,
+    ExportLibraryItemRequest, ExportLibraryItemResult, ExportWorkflowOverview,
+    ImportRuntimeArtifactRequest, LibraryMutationRequest, LibraryPlayback, ModelEvaluationCatalog,
+    ModelManagerOperation, ModelManagerOverview, MvpValidationOverview, ProjectLibraryActionResult,
+    ProjectLibraryStore, ProviderCatalog, ReviewEditResult, ReviewWorkspaceOverview,
     RightsSafetyOverview, RuntimeJobArtifact, RuntimeJobRequest, RuntimeJobSnapshot,
-    RuntimeJobStore, RuntimeOverview, SamplesStudioOverview, SfxStudioOverview, SongStudioOverview,
-    TtsStudioOverview, VideoToAudioOverview, VoiceLabOverview, WorkspaceOverview,
+    RuntimeJobStore, RuntimeOverview, SamplesStudioOverview, SaveReviewEditRequest,
+    SfxStudioOverview, SongStudioOverview, TtsStudioOverview, VideoToAudioOverview,
+    VoiceLabOverview, WorkspaceOverview,
 };
 
 #[tauri::command]
@@ -57,6 +59,18 @@ fn mutate_library_item(
 #[tauri::command]
 fn get_library_playback(item_id: String) -> Result<LibraryPlayback, String> {
     library_playback(item_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn save_review_edit(request: SaveReviewEditRequest) -> Result<ReviewEditResult, String> {
+    review_edit(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn export_library_item(
+    request: ExportLibraryItemRequest,
+) -> Result<ExportLibraryItemResult, String> {
+    export_item(request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -213,6 +227,14 @@ pub fn library_playback(item_id: String) -> std::io::Result<LibraryPlayback> {
     ProjectLibraryStore::default().playback_for_item(&item_id)
 }
 
+pub fn review_edit(request: SaveReviewEditRequest) -> std::io::Result<ReviewEditResult> {
+    ProjectLibraryStore::default().save_review_edit(request)
+}
+
+pub fn export_item(request: ExportLibraryItemRequest) -> std::io::Result<ExportLibraryItemResult> {
+    ProjectLibraryStore::default().export_library_item(request)
+}
+
 pub fn export_workflow_overview() -> ExportWorkflowOverview {
     ExportWorkflowOverview::reference()
 }
@@ -331,6 +353,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             import_runtime_artifact_to_library,
             mutate_library_item,
             get_library_playback,
+            save_review_edit,
+            export_library_item,
             get_export_workflow_overview,
             get_composition_editor_overview,
             get_runtime_overview,

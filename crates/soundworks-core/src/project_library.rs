@@ -94,6 +94,72 @@ pub struct LibraryPlayback {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveReviewEditRequest {
+    pub item_id: String,
+    pub start_ms: Option<u64>,
+    pub end_ms: Option<u64>,
+    pub fade_in_ms: Option<u64>,
+    pub fade_out_ms: Option<u64>,
+    pub normalize_loudness_lufs: Option<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewEditResult {
+    pub library: ProjectLibraryActionResult,
+    pub source_path: String,
+    pub edited_path: String,
+    pub provenance_sidecar_path: String,
+    pub version_id: String,
+    pub duration_ms: u64,
+    pub loudness_lufs: Option<f32>,
+    pub true_peak_dbfs: Option<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportLibraryItemRequest {
+    pub item_id: String,
+    pub preset_id: String,
+    pub formats: Vec<AudioFileFormat>,
+    pub scene_works_project_id: Option<String>,
+    pub scene_works_video_asset_id: Option<String>,
+    pub replace_existing_audio: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportedArtifact {
+    pub path: String,
+    pub format: Option<AudioFileFormat>,
+    pub kind: String,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportLibraryItemResult {
+    pub item_id: String,
+    pub preset_id: String,
+    pub output_root: String,
+    pub artifacts: Vec<ExportedArtifact>,
+    pub sidecar_path: String,
+    pub scene_works_manifest_path: String,
+    pub can_attach_directly: bool,
+    pub warnings: Vec<String>,
+    pub validation_checks: Vec<ExportValidationEvidence>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportValidationEvidence {
+    pub id: String,
+    pub passed: bool,
+    pub summary: String,
+}
+
 impl ProjectLibraryStore {
     pub fn default_root() -> PathBuf {
         if let Ok(root) = std::env::var("SOUNDWORKS_LIBRARY_ROOT") {
@@ -571,6 +637,343 @@ impl ProjectLibraryStore {
         }
     }
 
+    pub fn save_review_edit(&self, request: SaveReviewEditRequest) -> io::Result<ReviewEditResult> {
+        let mut record = self
+            .read_asset_record(&request.item_id)?
+            .ok_or_else(|| persisted_item_required(&request.item_id))?;
+        let source_version = record.item.current_version.clone().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "item has no audio version")
+        })?;
+        let source_path = PathBuf::from(
+            record
+                .audio_path
+                .clone()
+                .unwrap_or_else(|| source_version.file.storage_path.clone()),
+        );
+        let wav = read_pcm16_wav(&source_path)?;
+        let start_ms = request.start_ms.unwrap_or(0);
+        let end_ms = request
+            .end_ms
+            .unwrap_or(source_version.technical.duration_ms)
+            .min(source_version.technical.duration_ms);
+        if end_ms <= start_ms {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "review edit end_ms must be after start_ms",
+            ));
+        }
+
+        let start_frame = ms_to_frame(start_ms, wav.sample_rate);
+        let end_frame = ms_to_frame(end_ms, wav.sample_rate).min(wav.frame_count());
+        let mut samples = wav.slice_frames(start_frame, end_frame);
+        apply_fade(
+            &mut samples,
+            wav.channels,
+            wav.sample_rate,
+            request.fade_in_ms.unwrap_or(60),
+            true,
+        );
+        apply_fade(
+            &mut samples,
+            wav.channels,
+            wav.sample_rate,
+            request.fade_out_ms.unwrap_or(120),
+            false,
+        );
+        if let Some(target_lufs) = request.normalize_loudness_lufs {
+            normalize_to_lufs(&mut samples, target_lufs);
+        }
+        let stats = pcm_stats(&samples);
+
+        let next_index = source_version.version_index + 1;
+        let version_id = format!("version-{}-review-{next_index}", request.item_id);
+        let asset = record.item.asset.as_ref().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "item has no asset metadata")
+        })?;
+        let asset_root = self.asset_version_root(
+            &record.item.scope,
+            asset.kind,
+            &request.item_id,
+            &version_id,
+        );
+        fs::create_dir_all(asset_root.join("metadata"))?;
+        let edited_path = asset_root.join("media.wav");
+        write_pcm16_wav(&edited_path, wav.sample_rate, wav.channels, &samples)?;
+        let duration_ms =
+            samples.len() as u64 * 1000 / u64::from(wav.sample_rate) / u64::from(wav.channels);
+        let byte_size = fs::metadata(&edited_path)?.len();
+
+        let mut edited_asset = asset.clone();
+        edited_asset.current_version_id = version_id.clone();
+        if !edited_asset.version_ids.iter().any(|id| id == &version_id) {
+            edited_asset.version_ids.push(version_id.clone());
+        }
+        let provenance_id = format!("provenance-{}-review-{next_index}", request.item_id);
+        if !edited_asset
+            .provenance_ids
+            .iter()
+            .any(|id| id == &provenance_id)
+        {
+            edited_asset.provenance_ids.push(provenance_id.clone());
+        }
+
+        let mut edited_version = source_version.clone();
+        edited_version.id = version_id.clone();
+        edited_version.version_index = next_index;
+        edited_version.file = AudioFileReference {
+            storage_path: edited_path.display().to_string(),
+            format: AudioFileFormat::Wav,
+            codec: Some("pcm_s16le".to_string()),
+            byte_size: Some(byte_size),
+            content_hash: None,
+        };
+        edited_version.technical.duration_ms = duration_ms;
+        edited_version.technical.loudness_lufs = Some(stats.loudness_lufs);
+        edited_version.technical.true_peak_dbfs = Some(stats.true_peak_dbfs);
+        edited_version.technical.has_clipping = stats.true_peak_dbfs >= -0.01;
+        edited_version.created_by = AssetCreation::Edited {
+            source_version_id: source_version.id.clone(),
+            edit_recipe_id: format!("recipe-review-edit-{}", request.item_id),
+        };
+        edited_version.waveform_preview_cache = Some(edited_path.display().to_string());
+
+        record.item.asset = Some(edited_asset.clone());
+        record.item.current_version = Some(edited_version.clone());
+        record.item.duration_ms = Some(duration_ms);
+        record.item.waveform_thumbnail = Some(WaveformThumbnail {
+            preview_path: edited_path.display().to_string(),
+            peak_count: 1,
+            duration_ms,
+            ready: true,
+        });
+        record.item.quick_audition.previewable = true;
+        record.item.quick_audition.playable_range_ms = Some((0, duration_ms));
+        if !record
+            .item
+            .badges
+            .iter()
+            .any(|badge| badge == "review-edited")
+        {
+            record.item.badges.push("review-edited".to_string());
+        }
+        if !record
+            .item
+            .generated_tags
+            .iter()
+            .any(|tag| tag == "edited-version")
+        {
+            record
+                .item
+                .generated_tags
+                .push("edited-version".to_string());
+        }
+        record.audio_path = Some(edited_path.display().to_string());
+        record.updated_at = timestamp_string();
+
+        let provenance_sidecar = asset_root
+            .join("metadata")
+            .join("review-edit-provenance.json");
+        write_json(
+            &provenance_sidecar,
+            &serde_json::json!({
+                "assetId": request.item_id,
+                "sourceVersionId": source_version.id,
+                "editedVersionId": version_id,
+                "sourcePath": source_path,
+                "editedPath": edited_path,
+                "operations": {
+                    "trimStartMs": start_ms,
+                    "trimEndMs": end_ms,
+                    "fadeInMs": request.fade_in_ms.unwrap_or(60),
+                    "fadeOutMs": request.fade_out_ms.unwrap_or(120),
+                    "normalizeLoudnessLufs": request.normalize_loudness_lufs,
+                },
+                "technical": edited_version.technical,
+                "nonDestructive": true,
+            }),
+        )?;
+        write_json(&record.metadata_sidecar_path, &record)?;
+        self.write_asset_record(&record)?;
+
+        let library = self.action_result(
+            Some(request.item_id.clone()),
+            format!("Saved non-destructive edited WAV version {next_index}."),
+        )?;
+
+        Ok(ReviewEditResult {
+            library,
+            source_path: source_path.display().to_string(),
+            edited_path: edited_path.display().to_string(),
+            provenance_sidecar_path: provenance_sidecar.display().to_string(),
+            version_id,
+            duration_ms,
+            loudness_lufs: Some(stats.loudness_lufs),
+            true_peak_dbfs: Some(stats.true_peak_dbfs),
+        })
+    }
+
+    pub fn export_library_item(
+        &self,
+        request: ExportLibraryItemRequest,
+    ) -> io::Result<ExportLibraryItemResult> {
+        let record = self
+            .read_asset_record(&request.item_id)?
+            .ok_or_else(|| persisted_item_required(&request.item_id))?;
+        let version = record.item.current_version.as_ref().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "item has no audio version")
+        })?;
+        let source_path = PathBuf::from(
+            record
+                .audio_path
+                .clone()
+                .unwrap_or_else(|| version.file.storage_path.clone()),
+        );
+        if !source_path.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("audio file is missing on disk: {}", source_path.display()),
+            ));
+        }
+        let source_audio = read_pcm16_wav(&source_path)?;
+        let export_id = format!("export-{}-{}", request.item_id, timestamp_millis());
+        let output_root = self.root.join("exports").join(&export_id);
+        fs::create_dir_all(&output_root)?;
+
+        let requested_formats = if request.formats.is_empty() {
+            vec![AudioFileFormat::Wav]
+        } else {
+            request.formats.clone()
+        };
+        let mut artifacts = vec![];
+        let mut warnings = vec![];
+        for format in requested_formats {
+            if format == AudioFileFormat::Wav {
+                let audio_path = output_root.join(format!("{}.wav", slug(&record.item.name)));
+                fs::copy(&source_path, &audio_path)?;
+                artifacts.push(ExportedArtifact {
+                    path: audio_path.display().to_string(),
+                    format: Some(AudioFileFormat::Wav),
+                    kind: "audio-file".to_string(),
+                    bytes: fs::metadata(&audio_path)?.len(),
+                });
+            } else {
+                warnings.push(format!(
+                    "{} export is blocked until a local encoder is added and validated.",
+                    format.extension().to_ascii_uppercase()
+                ));
+            }
+        }
+        if artifacts
+            .iter()
+            .all(|artifact| artifact.kind != "audio-file")
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "at least one supported export format is required; WAV is currently supported",
+            ));
+        }
+
+        let sidecar_path = output_root.join("soundworks-export.json");
+        let scene_works_manifest_path = output_root.join("sceneworks-handoff.json");
+        write_json(
+            &sidecar_path,
+            &serde_json::json!({
+                "exportId": export_id,
+                "presetId": request.preset_id,
+                "assetId": request.item_id,
+                "assetName": record.item.name,
+                "sourceAudioPath": source_path,
+                "exportedArtifacts": artifacts,
+                "recipe": record.item.recipe,
+                "rights": record.item.asset.as_ref().map(|asset| &asset.rights),
+                "technical": version.technical,
+                "sourceProvenanceSidecar": record.provenance_sidecar_path,
+                "warnings": warnings,
+            }),
+        )?;
+        write_json(
+            &scene_works_manifest_path,
+            &serde_json::json!({
+                "schema": "soundworks.sceneworks-audio-handoff.v1",
+                "exportId": export_id,
+                "soundWorksAssetId": request.item_id,
+                "soundWorksVersionId": version.id,
+                "renderedMixdownPath": artifacts.iter().find(|artifact| artifact.kind == "audio-file").map(|artifact| &artifact.path),
+                "provenanceSidecarPath": sidecar_path,
+                "target": {
+                    "projectId": request.scene_works_project_id,
+                    "videoAssetId": request.scene_works_video_asset_id,
+                    "replaceExistingAudio": request.replace_existing_audio,
+                    "directAttachmentSupported": false,
+                },
+                "audio": {
+                    "durationMs": version.technical.duration_ms,
+                    "sampleRateHz": source_audio.sample_rate,
+                    "channels": source_audio.channels,
+                    "loudnessLufs": version.technical.loudness_lufs,
+                    "truePeakDbfs": version.technical.true_peak_dbfs,
+                },
+                "compatibility": [
+                    {
+                        "id": "source.file.exists",
+                        "passed": true,
+                        "summary": "SoundWorks source audio exists on disk."
+                    },
+                    {
+                        "id": "sceneworks.direct.import",
+                        "passed": false,
+                        "summary": "SceneWorks has no verified standalone audio-track importer in this slice; package handoff is file-backed only."
+                    }
+                ]
+            }),
+        )?;
+        artifacts.push(ExportedArtifact {
+            path: sidecar_path.display().to_string(),
+            format: None,
+            kind: "metadata-sidecar".to_string(),
+            bytes: fs::metadata(&sidecar_path)?.len(),
+        });
+        artifacts.push(ExportedArtifact {
+            path: scene_works_manifest_path.display().to_string(),
+            format: None,
+            kind: "sceneworks-package-manifest".to_string(),
+            bytes: fs::metadata(&scene_works_manifest_path)?.len(),
+        });
+
+        Ok(ExportLibraryItemResult {
+            item_id: request.item_id,
+            preset_id: request.preset_id,
+            output_root: output_root.display().to_string(),
+            artifacts,
+            sidecar_path: sidecar_path.display().to_string(),
+            scene_works_manifest_path: scene_works_manifest_path.display().to_string(),
+            can_attach_directly: false,
+            warnings,
+            validation_checks: vec![
+                ExportValidationEvidence {
+                    id: "export.audio_file".to_string(),
+                    passed: true,
+                    summary: "Export wrote at least one real audio file to disk.".to_string(),
+                },
+                ExportValidationEvidence {
+                    id: "export.sidecar".to_string(),
+                    passed: true,
+                    summary: "Export wrote a SoundWorks provenance sidecar.".to_string(),
+                },
+                ExportValidationEvidence {
+                    id: "sceneworks.package_manifest".to_string(),
+                    passed: true,
+                    summary: "SceneWorks handoff manifest references the exported audio artifact.".to_string(),
+                },
+                ExportValidationEvidence {
+                    id: "sceneworks.direct_attachment".to_string(),
+                    passed: false,
+                    summary: "Direct SceneWorks runtime attachment remains blocked until an importer exists.".to_string(),
+                },
+            ],
+        })
+    }
+
     fn action_result(
         &self,
         selected_item_id: Option<String>,
@@ -900,13 +1303,232 @@ fn read_json<T: DeserializeOwned>(path: impl AsRef<Path>) -> io::Result<T> {
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
 }
 
+fn persisted_item_required(item_id: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("item {item_id} must be a persisted runtime library item"),
+    )
+}
+
+#[derive(Debug, Clone)]
+struct Pcm16Wav {
+    sample_rate: u32,
+    channels: u16,
+    samples: Vec<i16>,
+}
+
+impl Pcm16Wav {
+    fn frame_count(&self) -> usize {
+        self.samples.len() / usize::from(self.channels)
+    }
+
+    fn slice_frames(&self, start_frame: usize, end_frame: usize) -> Vec<i16> {
+        let channels = usize::from(self.channels);
+        let start = start_frame.min(self.frame_count()) * channels;
+        let end = end_frame.min(self.frame_count()) * channels;
+        self.samples[start..end].to_vec()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PcmStats {
+    loudness_lufs: f32,
+    true_peak_dbfs: f32,
+}
+
+fn read_pcm16_wav(path: &Path) -> io::Result<Pcm16Wav> {
+    let bytes = fs::read(path)?;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "only RIFF/WAVE PCM files are supported",
+        ));
+    }
+
+    let mut cursor = 12usize;
+    let mut channels = None;
+    let mut sample_rate = None;
+    let mut bits_per_sample = None;
+    let mut data_range = None;
+    while cursor + 8 <= bytes.len() {
+        let id = &bytes[cursor..cursor + 4];
+        let size = u32::from_le_bytes(
+            bytes[cursor + 4..cursor + 8]
+                .try_into()
+                .expect("slice length"),
+        ) as usize;
+        let chunk_start = cursor + 8;
+        let chunk_end = chunk_start.saturating_add(size).min(bytes.len());
+        if id == b"fmt " {
+            if size < 16 || chunk_end > bytes.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid fmt chunk",
+                ));
+            }
+            let audio_format = u16::from_le_bytes(
+                bytes[chunk_start..chunk_start + 2]
+                    .try_into()
+                    .expect("slice length"),
+            );
+            if audio_format != 1 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "only PCM WAV files are supported",
+                ));
+            }
+            channels = Some(u16::from_le_bytes(
+                bytes[chunk_start + 2..chunk_start + 4]
+                    .try_into()
+                    .expect("slice length"),
+            ));
+            sample_rate = Some(u32::from_le_bytes(
+                bytes[chunk_start + 4..chunk_start + 8]
+                    .try_into()
+                    .expect("slice length"),
+            ));
+            bits_per_sample = Some(u16::from_le_bytes(
+                bytes[chunk_start + 14..chunk_start + 16]
+                    .try_into()
+                    .expect("slice length"),
+            ));
+        } else if id == b"data" {
+            data_range = Some((chunk_start, chunk_end));
+        }
+        cursor = chunk_start + size + (size % 2);
+    }
+
+    let channels = channels.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "WAV fmt chunk is missing channels",
+        )
+    })?;
+    let sample_rate = sample_rate.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "WAV fmt chunk is missing sample rate",
+        )
+    })?;
+    if bits_per_sample != Some(16) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "only 16-bit PCM WAV files are supported",
+        ));
+    }
+    let (data_start, data_end) = data_range
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "WAV data chunk is missing"))?;
+    let mut samples = Vec::with_capacity((data_end - data_start) / 2);
+    for chunk in bytes[data_start..data_end].chunks_exact(2) {
+        samples.push(i16::from_le_bytes(chunk.try_into().expect("slice length")));
+    }
+
+    Ok(Pcm16Wav {
+        sample_rate,
+        channels,
+        samples,
+    })
+}
+
+fn write_pcm16_wav(
+    path: &Path,
+    sample_rate: u32,
+    channels: u16,
+    samples: &[i16],
+) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let data_bytes = samples.len() as u32 * 2;
+    let mut bytes = Vec::with_capacity(44 + data_bytes as usize);
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&channels.to_le_bytes());
+    bytes.extend_from_slice(&sample_rate.to_le_bytes());
+    bytes.extend_from_slice(&(sample_rate * u32::from(channels) * 2).to_le_bytes());
+    bytes.extend_from_slice(&(channels * 2).to_le_bytes());
+    bytes.extend_from_slice(&16u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&data_bytes.to_le_bytes());
+    for sample in samples {
+        bytes.extend_from_slice(&sample.to_le_bytes());
+    }
+    fs::write(path, bytes)
+}
+
+fn ms_to_frame(ms: u64, sample_rate: u32) -> usize {
+    (ms.saturating_mul(u64::from(sample_rate)) / 1000) as usize
+}
+
+fn apply_fade(
+    samples: &mut [i16],
+    channels: u16,
+    sample_rate: u32,
+    duration_ms: u64,
+    fade_in: bool,
+) {
+    let channels = usize::from(channels);
+    let fade_frames = ms_to_frame(duration_ms, sample_rate).min(samples.len() / channels);
+    if fade_frames == 0 {
+        return;
+    }
+    for frame in 0..fade_frames {
+        let gain = frame as f32 / fade_frames as f32;
+        let gain = if fade_in { gain } else { 1.0 - gain };
+        let target_frame = if fade_in {
+            frame
+        } else {
+            samples.len() / channels - 1 - frame
+        };
+        for channel in 0..channels {
+            let index = target_frame * channels + channel;
+            samples[index] = scale_sample(samples[index], gain);
+        }
+    }
+}
+
+fn normalize_to_lufs(samples: &mut [i16], target_lufs: f32) {
+    let stats = pcm_stats(samples);
+    let gain = 10.0_f32.powf((target_lufs - stats.loudness_lufs) / 20.0);
+    for sample in samples {
+        *sample = scale_sample(*sample, gain);
+    }
+}
+
+fn scale_sample(sample: i16, gain: f32) -> i16 {
+    (sample as f32 * gain)
+        .clamp(i16::MIN as f32, i16::MAX as f32)
+        .round() as i16
+}
+
+fn pcm_stats(samples: &[i16]) -> PcmStats {
+    let mut sum_squares = 0.0f32;
+    let mut peak = 0.0f32;
+    for sample in samples {
+        let value = *sample as f32 / i16::MAX as f32;
+        sum_squares += value * value;
+        peak = peak.max(value.abs());
+    }
+    let rms = (sum_squares / samples.len().max(1) as f32)
+        .sqrt()
+        .max(0.000_001);
+    let peak = peak.max(0.000_001);
+    PcmStats {
+        loudness_lufs: 20.0 * rms.log10(),
+        true_peak_dbfs: 20.0 * peak.log10(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        CreateProjectRequest, ImportRuntimeArtifactRequest, LibraryMutationAction,
-        LibraryMutationRequest, ProjectLibraryStore,
+        CreateProjectRequest, ExportLibraryItemRequest, ImportRuntimeArtifactRequest,
+        LibraryMutationAction, LibraryMutationRequest, ProjectLibraryStore, SaveReviewEditRequest,
     };
-    use crate::domain::{JobKind, JobProgress, JobStatus};
+    use crate::domain::{AudioFileFormat, JobKind, JobProgress, JobStatus};
     use crate::manifests::CapabilityWorkflow;
     use crate::runtime::{
         CancellationState, ProviderAdapterKind, RuntimeArtifactKind, RuntimeJobArtifact,
@@ -1023,12 +1645,114 @@ mod tests {
             .is_none());
     }
 
+    #[test]
+    fn review_edit_writes_non_destructive_audio_version_and_sidecar() {
+        let store = ProjectLibraryStore::new(temp_root("review-edit"));
+        let runtime_root = temp_root("review-runtime");
+        let runtime_store = RuntimeJobStore::new(&runtime_root);
+        let job_id = seed_runtime_job(&runtime_root);
+        let imported = store
+            .import_runtime_artifact_from_store(
+                ImportRuntimeArtifactRequest {
+                    job_id,
+                    project_id: None,
+                    name: Some("Editable runtime clip".to_string()),
+                    scope: None,
+                    tags: vec!["review".to_string()],
+                },
+                &runtime_store,
+            )
+            .expect("runtime artifact imported");
+        let item_id = imported.asset_library.selected_item.item.id.clone();
+
+        let edit = store
+            .save_review_edit(SaveReviewEditRequest {
+                item_id: item_id.clone(),
+                start_ms: Some(100),
+                end_ms: Some(650),
+                fade_in_ms: Some(25),
+                fade_out_ms: Some(50),
+                normalize_loudness_lufs: Some(-18.0),
+            })
+            .expect("review edit saved");
+
+        assert_eq!(edit.library.selected_item.item.id, item_id);
+        assert!(PathBuf::from(&edit.source_path).is_file());
+        assert!(PathBuf::from(&edit.edited_path).is_file());
+        assert!(PathBuf::from(&edit.provenance_sidecar_path).is_file());
+        assert!(edit.duration_ms <= 560);
+        assert_ne!(
+            edit.source_path, edit.edited_path,
+            "review edit must not overwrite the source audio"
+        );
+        assert_eq!(
+            edit.library
+                .selected_item
+                .item
+                .current_version
+                .as_ref()
+                .expect("edited current version")
+                .version_index,
+            2
+        );
+    }
+
+    #[test]
+    fn export_writes_real_wav_sidecar_and_sceneworks_manifest() {
+        let store = ProjectLibraryStore::new(temp_root("export"));
+        let runtime_root = temp_root("export-runtime");
+        let runtime_store = RuntimeJobStore::new(&runtime_root);
+        let job_id = seed_runtime_job(&runtime_root);
+        let imported = store
+            .import_runtime_artifact_from_store(
+                ImportRuntimeArtifactRequest {
+                    job_id,
+                    project_id: None,
+                    name: Some("Exportable runtime clip".to_string()),
+                    scope: None,
+                    tags: vec!["export".to_string()],
+                },
+                &runtime_store,
+            )
+            .expect("runtime artifact imported");
+
+        let export = store
+            .export_library_item(ExportLibraryItemRequest {
+                item_id: imported.asset_library.selected_item.item.id.clone(),
+                preset_id: "preset-sceneworks-video-track".to_string(),
+                formats: vec![AudioFileFormat::Wav, AudioFileFormat::Mp3],
+                scene_works_project_id: Some("scene-project".to_string()),
+                scene_works_video_asset_id: Some("video-asset".to_string()),
+                replace_existing_audio: true,
+            })
+            .expect("export written");
+
+        assert!(PathBuf::from(&export.output_root).is_dir());
+        assert!(PathBuf::from(&export.sidecar_path).is_file());
+        assert!(PathBuf::from(&export.scene_works_manifest_path).is_file());
+        assert!(export.artifacts.iter().any(|artifact| {
+            artifact.kind == "audio-file"
+                && artifact.format == Some(AudioFileFormat::Wav)
+                && artifact.bytes > 44
+                && PathBuf::from(&artifact.path).is_file()
+        }));
+        assert!(export
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("MP3 export is blocked")));
+        assert!(!export.can_attach_directly);
+        assert!(export
+            .validation_checks
+            .iter()
+            .any(|check| { check.id == "sceneworks.package_manifest" && check.passed }));
+    }
+
     fn seed_runtime_job(root: &PathBuf) -> String {
         let job_id = "job-test-runtime".to_string();
         let job_root = root.join("jobs").join(&job_id);
         let artifact_path = job_root.join("artifacts").join("runtime-smoke.wav");
         fs::create_dir_all(artifact_path.parent().expect("artifact parent")).unwrap();
-        fs::write(&artifact_path, b"RIFFtestWAVEfmt ").unwrap();
+        write_test_wav(&artifact_path);
         let job = RuntimeJobSnapshot {
             id: job_id.clone(),
             kind: JobKind::GenerateAudio,
@@ -1054,7 +1778,7 @@ mod tests {
                 kind: RuntimeArtifactKind::AudioPreview,
                 path: artifact_path.display().to_string(),
                 mime_type: "audio/wav".to_string(),
-                bytes: 16,
+                bytes: fs::metadata(&artifact_path).unwrap().len(),
                 summary: "test audio".to_string(),
             }],
             actionable_error: None,
@@ -1074,5 +1798,30 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
         root
+    }
+
+    fn write_test_wav(path: &PathBuf) {
+        let sample_rate = 16_000u32;
+        let samples = sample_rate;
+        let data_bytes = samples * 2;
+        let mut bytes = Vec::with_capacity(44 + data_bytes as usize);
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&sample_rate.to_le_bytes());
+        bytes.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_bytes.to_le_bytes());
+        for index in 0..samples {
+            let phase = index as f32 / sample_rate as f32 * 440.0 * std::f32::consts::TAU;
+            let sample = (phase.sin() * i16::MAX as f32 * 0.3) as i16;
+            bytes.extend_from_slice(&sample.to_le_bytes());
+        }
+        fs::write(path, bytes).unwrap();
     }
 }

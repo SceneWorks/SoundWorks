@@ -5,6 +5,7 @@
 // All Export wiring, gating, and data bindings are preserved verbatim.
 import { CircleCheck, ClipboardCheck, Download } from "lucide-react";
 import {
+  FeedbackLine,
   HeroStat,
   MainSurface,
   SectionHeading,
@@ -61,7 +62,7 @@ export function ExportScreen() {
           </>
         }
       />
-      <p className="action-status">{exportActionStatus}</p>
+      <FeedbackLine feedback={exportActionStatus} />
 
       <div className="export-layout">
         <div className="export-preset-grid" aria-label="Export presets">

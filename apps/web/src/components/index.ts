@@ -15,3 +15,5 @@ export type { ModelCardMeta } from "./ModelCard";
 export { WorkerProgressCard } from "./WorkerProgressCard";
 export type { WorkerProgressError } from "./WorkerProgressCard";
 export { ModelAvailabilityGate } from "./ModelAvailabilityGate";
+export { FeedbackLine } from "./FeedbackLine";
+export { PlaybackControl } from "./PlaybackControl";

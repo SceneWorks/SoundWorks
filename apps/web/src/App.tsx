@@ -81,11 +81,12 @@ import {
 } from "./accents";
 import type { ThemeMode } from "./accents";
 import {
+  actionFeedback,
   runtimeModelFor,
   visibleModelManagerOperation,
   workflowLabel,
 } from "./viewModel";
-import type { ActiveView, NavItem } from "./viewModel";
+import type { ActionFeedback, ActiveView, NavItem } from "./viewModel";
 import { AppContext } from "./screens/context";
 import type { AppContextValue } from "./screens/context";
 import { WorkspaceScreen } from "./screens/WorkspaceScreen";
@@ -330,14 +331,14 @@ export function App() {
     useState<WorkspaceOverview>(fallbackWorkspace);
   const [assetLibrary, setAssetLibrary] =
     useState<AssetLibraryOverview>(fallbackAssetLibrary);
-  const [libraryActionStatus, setLibraryActionStatus] = useState(
-    "Project and library actions are ready.",
+  const [libraryActionStatus, setLibraryActionStatus] = useState<ActionFeedback>(
+    actionFeedback.idle("Project and library actions are ready."),
   );
-  const [reviewActionStatus, setReviewActionStatus] = useState(
-    "Review actions require a saved runtime audio asset.",
+  const [reviewActionStatus, setReviewActionStatus] = useState<ActionFeedback>(
+    actionFeedback.idle("Review actions require a saved runtime audio asset."),
   );
-  const [exportActionStatus, setExportActionStatus] = useState(
-    "Export writes are ready for persisted runtime audio.",
+  const [exportActionStatus, setExportActionStatus] = useState<ActionFeedback>(
+    actionFeedback.idle("Export writes are ready for persisted runtime audio."),
   );
   const [libraryPlayback, setLibraryPlayback] =
     useState<LibraryPlayback | null>(null);
@@ -568,17 +569,20 @@ export function App() {
   }) {
     setWorkspace(result.workspace);
     setAssetLibrary(result.assetLibrary);
-    setLibraryActionStatus(result.message);
+    setLibraryActionStatus(actionFeedback.success(result.message));
     refreshOverviewSummary();
   }
 
   function createProject() {
+    setLibraryActionStatus(actionFeedback.pending("Creating project…"));
     createSoundWorksProject({
       name: `SoundWorks Recovery ${new Date().toLocaleTimeString()}`,
     })
       .then(applyProjectLibraryResult)
       .catch((error) => {
-        setLibraryActionStatus(`Create project unavailable: ${String(error)}`);
+        setLibraryActionStatus(
+          actionFeedback.error(`Create project unavailable: ${String(error)}`),
+        );
       });
   }
 
@@ -588,10 +592,15 @@ export function App() {
         (candidate) =>
           candidate.project.id !== workspace.activeProject.project.id,
       ) ?? workspace.activeProject;
+    setLibraryActionStatus(
+      actionFeedback.pending(`Opening ${project.project.name}…`),
+    );
     openSoundWorksProject(project.project.id)
       .then(applyProjectLibraryResult)
       .catch((error) => {
-        setLibraryActionStatus(`Open project unavailable: ${String(error)}`);
+        setLibraryActionStatus(
+          actionFeedback.error(`Open project unavailable: ${String(error)}`),
+        );
       });
   }
 
@@ -599,10 +608,13 @@ export function App() {
     const job = latestImportableRuntimeJob;
     if (!job) {
       setLibraryActionStatus(
-        "No succeeded runtime audio artifact is available to save.",
+        actionFeedback.error(
+          "No succeeded runtime audio artifact is available to save.",
+        ),
       );
       return;
     }
+    setLibraryActionStatus(actionFeedback.pending("Saving runtime artifact…"));
     importRuntimeArtifactToLibrary({
       jobId: job.id,
       projectId: workspace.activeProject.project.id,
@@ -612,7 +624,9 @@ export function App() {
       .then(applyProjectLibraryResult)
       .catch((error) => {
         setLibraryActionStatus(
-          `Save runtime artifact unavailable: ${String(error)}`,
+          actionFeedback.error(
+            `Save runtime artifact unavailable: ${String(error)}`,
+          ),
         );
       });
   }
@@ -620,9 +634,14 @@ export function App() {
   function mutateSelectedLibraryItem(action: LibraryMutationAction) {
     const detail = assetLibrary.selectedItem;
     if (!detail) {
-      setLibraryActionStatus("Select a library item first.");
+      setLibraryActionStatus(
+        actionFeedback.error("Select a library item first."),
+      );
       return;
     }
+    setLibraryActionStatus(
+      actionFeedback.pending(`Applying ${action} to ${detail.item.name}…`),
+    );
     mutateLibraryItem({
       itemId: detail.item.id,
       action,
@@ -630,23 +649,28 @@ export function App() {
     })
       .then(applyProjectLibraryResult)
       .catch((error) => {
-        setLibraryActionStatus(`Library action unavailable: ${String(error)}`);
+        setLibraryActionStatus(
+          actionFeedback.error(`Library action unavailable: ${String(error)}`),
+        );
       });
   }
 
   function previewLibraryItem(itemId: string) {
+    setLibraryActionStatus(actionFeedback.pending(`Loading preview…`));
     loadLibraryPlayback(itemId)
       .then((playback) => {
         setLibraryPlayback(playback);
         setLibraryActionStatus(
           playback.playable
-            ? `Previewing ${itemId} from disk.`
-            : (playback.reason ?? "Preview is unavailable."),
+            ? actionFeedback.success(`Previewing ${itemId} from disk.`)
+            : actionFeedback.idle(playback.reason ?? "Preview is unavailable."),
         );
       })
       .catch((error) => {
         setLibraryPlayback(null);
-        setLibraryActionStatus(`Preview unavailable: ${String(error)}`);
+        setLibraryActionStatus(
+          actionFeedback.error(`Preview unavailable: ${String(error)}`),
+        );
       });
   }
 
@@ -654,10 +678,13 @@ export function App() {
     const selection = reviewWorkspace.transport.selection;
     const detail = assetLibrary.selectedItem;
     if (!detail) {
-      setReviewActionStatus("Select a library item first.");
+      setReviewActionStatus(
+        actionFeedback.error("Select a library item first."),
+      );
       return;
     }
     const itemId = detail.item.id;
+    setReviewActionStatus(actionFeedback.pending("Saving edited version…"));
     saveReviewEdit({
       itemId,
       startMs: selection?.startMs ?? 0,
@@ -672,7 +699,9 @@ export function App() {
       .then((result) => {
         applyProjectLibraryResult(result.library);
         setReviewActionStatus(
-          `Saved ${result.versionId} from real audio at ${result.editedPath}.`,
+          actionFeedback.success(
+            `Saved ${result.versionId} from real audio at ${result.editedPath}.`,
+          ),
         );
         if (result.library.selectedItem) {
           previewLibraryItem(result.library.selectedItem.item.id);
@@ -680,17 +709,22 @@ export function App() {
         loadReviewWorkspaceOverview().then(setReviewWorkspace);
       })
       .catch((error) => {
-        setReviewActionStatus(`Save version unavailable: ${String(error)}`);
+        setReviewActionStatus(
+          actionFeedback.error(`Save version unavailable: ${String(error)}`),
+        );
       });
   }
 
   function exportSelectedLibraryItem() {
     const detail = assetLibrary.selectedItem;
     if (!detail) {
-      setExportActionStatus("Select a library item first.");
+      setExportActionStatus(
+        actionFeedback.error("Select a library item first."),
+      );
       return;
     }
     const itemId = detail.item.id;
+    setExportActionStatus(actionFeedback.pending("Exporting…"));
     exportLibraryItem({
       itemId,
       presetId: exportWorkflow.selectedExport.presetId,
@@ -710,12 +744,16 @@ export function App() {
           ? ` ${result.warnings.join(" ")}`
           : "";
         setExportActionStatus(
-          `Export wrote ${audioCount} audio file plus sidecars to ${result.outputRoot}.${warningText}`,
+          actionFeedback.success(
+            `Export wrote ${audioCount} audio file plus sidecars to ${result.outputRoot}.${warningText}`,
+          ),
         );
         loadExportWorkflowOverview().then(setExportWorkflow);
       })
       .catch((error) => {
-        setExportActionStatus(`Export unavailable: ${String(error)}`);
+        setExportActionStatus(
+          actionFeedback.error(`Export unavailable: ${String(error)}`),
+        );
       });
   }
 
@@ -746,7 +784,9 @@ export function App() {
         .then(applyProjectLibraryResult)
         .catch((error) => {
           setLibraryActionStatus(
-            `TTS generated but save unavailable: ${String(error)}`,
+            actionFeedback.error(
+              `TTS generated but save unavailable: ${String(error)}`,
+            ),
           );
         });
     } else if (workflow === "sfx" || workflow === "ambience") {
@@ -759,7 +799,9 @@ export function App() {
         .then(applyProjectLibraryResult)
         .catch((error) => {
           setLibraryActionStatus(
-            `SFX generated but save unavailable: ${String(error)}`,
+            actionFeedback.error(
+              `SFX generated but save unavailable: ${String(error)}`,
+            ),
           );
         });
     } else if (workflow === "instrument-sample" || workflow === "loop") {
@@ -778,7 +820,9 @@ export function App() {
         .then(applyProjectLibraryResult)
         .catch((error) => {
           setLibraryActionStatus(
-            `Sample/loop generated but save unavailable: ${String(error)}`,
+            actionFeedback.error(
+              `Sample/loop generated but save unavailable: ${String(error)}`,
+            ),
           );
         });
     } else if (
@@ -795,7 +839,9 @@ export function App() {
         .then(applyProjectLibraryResult)
         .catch((error) => {
           setLibraryActionStatus(
-            `${workflowLabel(workflow)} generated but save unavailable: ${String(error)}`,
+            actionFeedback.error(
+              `${workflowLabel(workflow)} generated but save unavailable: ${String(error)}`,
+            ),
           );
         });
     }
@@ -871,7 +917,9 @@ export function App() {
         trackRuntimeJob(job);
       })
       .catch((error) => {
-        setLibraryActionStatus(`Generation unavailable: ${String(error)}`);
+        setLibraryActionStatus(
+          actionFeedback.error(`Generation unavailable: ${String(error)}`),
+        );
       });
   }
 

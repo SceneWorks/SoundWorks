@@ -12,8 +12,10 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import {
+  FeedbackLine,
   HeroStat,
   MainSurface,
+  PlaybackControl,
   SectionHeading,
   SurfaceHeader,
 } from "../components";
@@ -25,6 +27,7 @@ export function ReviewScreen() {
     reviewWorkspace,
     overview,
     assetLibrary,
+    libraryPlayback,
     reviewActionStatus,
     saveSelectedReviewEdit,
     previewLibraryItem,
@@ -72,7 +75,11 @@ export function ReviewScreen() {
           </>
         }
       />
-      <p className="action-status">{reviewActionStatus}</p>
+      <FeedbackLine feedback={reviewActionStatus} />
+      <PlaybackControl
+        playback={libraryPlayback}
+        className="review-audio-preview"
+      />
 
       <div className="review-layout">
         <div className="review-main">

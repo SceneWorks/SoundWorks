@@ -562,15 +562,35 @@ h1 {
   gap: 14px;
 }
 
+/* UX-F2: the action-feedback line carries a StatusBadge (tone) + message, so it
+   lays out inline and reads the theme token instead of a hardcoded grey. */
 .action-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 0;
-  color: #52625b;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
-.library-audio-preview {
+.action-status-error {
+  color: var(--danger);
+}
+
+.playback-control,
+.library-audio-preview,
+.review-audio-preview {
   width: min(100%, 560px);
   min-height: 36px;
+}
+
+.playback-control.unavailable {
+  display: block;
+  min-height: 0;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 
 .primary-action {

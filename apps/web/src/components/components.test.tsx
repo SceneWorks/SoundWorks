@@ -2,11 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import {
   EmptyPanel,
+  FeedbackLine,
+  PlaybackControl,
   SegmentedControl,
   StatusBadge,
   SurfaceHeader,
   WorkerProgressCard,
 } from "./index";
+import { actionFeedback } from "../viewModel";
 
 describe("shared component grammar", () => {
   it("SurfaceHeader renders eyebrow/title/blurb in the SceneWorks hero shape", () => {
@@ -75,5 +78,44 @@ describe("shared component grammar", () => {
     expect(screen.getByRole("alert").textContent).toContain("Install failed");
     const bar = screen.getByRole("progressbar");
     expect(bar.getAttribute("aria-valuenow")).toBe("100");
+  });
+
+  it("FeedbackLine maps the action-feedback kind to a StatusBadge tone", () => {
+    const { container } = render(
+      <FeedbackLine feedback={actionFeedback.error("Export failed")} />,
+    );
+    const line = container.querySelector(".action-status");
+    expect(line?.classList.contains("action-status-error")).toBe(true);
+    expect(line?.textContent).toContain("Export failed");
+    expect(container.querySelector(".status-badge.failed")).not.toBeNull();
+  });
+
+  it("FeedbackLine renders nothing for an empty message", () => {
+    const { container } = render(
+      <FeedbackLine feedback={actionFeedback.idle("")} />,
+    );
+    expect(container.querySelector(".action-status")).toBeNull();
+  });
+
+  it("PlaybackControl renders an audio element only for a playable clip", () => {
+    const { container, rerender } = render(
+      <PlaybackControl
+        playback={{ itemId: "a", playable: true, path: "asset://clip.wav" }}
+      />,
+    );
+    expect(container.querySelector("audio")).not.toBeNull();
+
+    rerender(
+      <PlaybackControl
+        playback={{ itemId: "a", playable: false, reason: "No audio cached" }}
+      />,
+    );
+    expect(container.querySelector("audio")).toBeNull();
+    expect(container.querySelector(".playback-control.unavailable")?.textContent).toBe(
+      "No audio cached",
+    );
+
+    rerender(<PlaybackControl playback={null} />);
+    expect(container.querySelector(".playback-control")).toBeNull();
   });
 });

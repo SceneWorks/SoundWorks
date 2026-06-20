@@ -44,6 +44,7 @@ import type {
   SongStudioOverview,
   SfxStudioOverview,
   TtsStudioOverview,
+  UiPreferences,
   VideoToAudioOverview,
   VoiceLabOverview,
   WorkspaceOverview,
@@ -404,4 +405,31 @@ export async function loadRightsSafetyOverview(): Promise<RightsSafetyOverview> 
 
 export async function loadVideoToAudioOverview(): Promise<VideoToAudioOverview> {
   return readOverview("get_video_to_audio_overview", fallbackVideoToAudio);
+}
+
+/**
+ * DR-01: read the durable theme/accent preferences. In web preview there is no
+ * backend, so the caller relies on localStorage instead and we return an empty
+ * preference set.
+ */
+export async function loadUiPreferences(): Promise<UiPreferences> {
+  if (!isTauri()) {
+    return {};
+  }
+
+  return await invoke<UiPreferences>("get_ui_preferences");
+}
+
+/**
+ * DR-01: persist a partial theme/accent update. Fire-and-forget from the caller's
+ * perspective (localStorage is the instant cache); a no-op in web preview.
+ */
+export async function saveUiPreferences(
+  preferences: UiPreferences,
+): Promise<void> {
+  if (!isTauri()) {
+    return;
+  }
+
+  await invoke<UiPreferences>("set_ui_preferences", { preferences });
 }

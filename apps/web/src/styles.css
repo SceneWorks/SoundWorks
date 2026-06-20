@@ -13,10 +13,28 @@
   --text: oklch(0.22 0.012 240);
   --text-muted: oklch(0.5 0.012 240);
   --text-faint: oklch(0.66 0.01 240);
-  --accent: oklch(0.66 0.11 178);
-  --accent-strong: oklch(0.55 0.13 178);
-  --accent-soft: oklch(0.94 0.04 178);
+
+  /* Accent is hue-driven so a single [data-accent] swap recolors the whole app.
+     --accent-h / --warm-h are set per palette in the [data-accent] blocks below;
+     teal (178 / 235) is the default brand accent. */
+  --accent-h: 178;
+  --accent: oklch(0.66 0.11 var(--accent-h));
+  --accent-strong: oklch(0.55 0.13 var(--accent-h));
+  --accent-soft: oklch(0.94 0.04 var(--accent-h));
   --accent-fg: #ffffff;
+
+  /* Brand palette — fixed brand colors; ground/seam/strong flip per theme. */
+  --ink: #0f1622;
+  --mist: #b9babb;
+  --paper: #fbfaf6;
+  --teal: #2fa193;
+  --logo-ground: var(--ink);
+  --logo-seam: var(--paper);
+  --wordmark-strong: var(--ink);
+
+  --warm-h: 235;
+  --warm: oklch(0.72 0.11 var(--warm-h));
+  --warm-soft: oklch(0.95 0.03 var(--warm-h));
   --danger: oklch(0.62 0.18 25);
   --danger-soft: oklch(0.95 0.04 25);
   --success: oklch(0.62 0.13 155);
@@ -24,13 +42,16 @@
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
+  --r-xl: 22px;
   --r-pill: 999px;
   --gap-1: 6px;
   --gap-2: 10px;
   --gap-3: 14px;
   --gap-4: 20px;
   --gap-5: 28px;
+  --pad-tile: 14px;
   --pad-panel: 20px;
+  --row-h: 40px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --t-fast: 120ms;
   --t-med: 220ms;
@@ -38,7 +59,11 @@
     0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 1px rgba(15, 23, 42, 0.03);
   --shadow-md:
     0 4px 14px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-lg:
+    0 22px 50px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06);
   --shadow-glow: 0 0 0 4px color-mix(in oklch, var(--accent) 18%, transparent);
+  --side-w: 232px;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-family:
@@ -52,6 +77,83 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+
+/* DR-01: dark theme — applied via [data-theme="dark"] on <html>. Every surface
+   reads the tokens below, so flipping the attribute recolors the whole app. */
+[data-theme="dark"] {
+  --bg: oklch(0.165 0.012 240);
+  --bg-2: oklch(0.145 0.012 240);
+  --surface: oklch(0.205 0.012 240);
+  --surface-2: oklch(0.235 0.014 240);
+  --surface-hover: oklch(0.255 0.014 240);
+  --border: oklch(0.285 0.014 240);
+  --border-strong: oklch(0.36 0.016 240);
+  --text: oklch(0.96 0.008 240);
+  --text-muted: oklch(0.72 0.012 240);
+  --text-faint: oklch(0.56 0.012 240);
+
+  --accent: oklch(0.74 0.11 var(--accent-h));
+  --accent-strong: oklch(0.82 0.12 var(--accent-h));
+  --accent-soft: oklch(0.3 0.06 var(--accent-h));
+  --accent-fg: oklch(0.16 0.012 240);
+
+  --logo-ground: var(--mist);
+  --logo-seam: var(--ink);
+  --wordmark-strong: var(--paper);
+
+  --warm: oklch(0.78 0.11 var(--warm-h));
+  --warm-soft: oklch(0.32 0.05 var(--warm-h));
+  --danger-soft: oklch(0.3 0.06 25);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.38), 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 30px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+/* DR-01: accent palettes (user-selectable). Each sets the accent + secondary
+   hue; the light/dark ramps above consume them. `teal` keeps the fixed #2fa193
+   brand mark; the rest derive a matching --teal. */
+[data-accent="teal"] {
+  --accent-h: 178;
+  --warm-h: 235;
+}
+[data-accent="indigo"] {
+  --accent-h: 274;
+  --warm-h: 320;
+  --teal: oklch(0.58 0.16 274);
+}
+[data-accent="cobalt"] {
+  --accent-h: 252;
+  --warm-h: 205;
+  --teal: oklch(0.55 0.16 252);
+}
+[data-accent="violet"] {
+  --accent-h: 305;
+  --warm-h: 268;
+  --teal: oklch(0.55 0.18 305);
+}
+[data-accent="coral"] {
+  --accent-h: 28;
+  --warm-h: 350;
+  --teal: oklch(0.62 0.16 28);
+}
+[data-accent="amber"] {
+  --accent-h: 80;
+  --warm-h: 45;
+  --teal: oklch(0.72 0.13 80);
+  --accent-fg: oklch(0.24 0.03 80);
+}
+[data-accent="emerald"] {
+  --accent-h: 152;
+  --warm-h: 128;
+  --teal: oklch(0.56 0.14 152);
+}
+/* Amber's accent is bright enough to need dark text on chips/buttons in light
+   mode; in dark mode the default ink fg is already correct, so restore it. */
+[data-theme="dark"][data-accent="amber"] {
+  --accent-fg: oklch(0.16 0.012 240);
 }
 
 * {
@@ -197,10 +299,18 @@ button:focus-visible {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   min-height: 72px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .topbar-title {
@@ -279,6 +389,64 @@ h1 {
   background: var(--surface-hover);
   border-color: var(--border-strong);
   box-shadow: var(--shadow-md);
+}
+
+/* DR-01: topbar theme toggle + accent picker (mirrors SceneWorks). */
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+
+.icon-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.icon-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+[data-theme="dark"] .icon-btn.active {
+  color: var(--accent);
+}
+
+.accent-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.accent-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: var(--sw);
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition:
+    transform var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast);
+}
+
+.accent-swatch:hover {
+  transform: translateY(-1px);
+}
+
+.accent-swatch.active {
+  border-color: var(--sw);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--sw) 38%, transparent);
 }
 
 .status-strip span {

@@ -1,16 +1,19 @@
-// DR-02: Song studio. Extracted from App.tsx and rebuilt on the shared grammar
-// (SurfaceHeader hero + HeroStat for the header/metrics, MainSurface +
-// SectionHeading for the side/prompt panels) in place of the bespoke
-// samples-header / samples-metrics / sfx-prompt-panel / tts-subpanel /
-// subpanel-heading classes. Follows the TtsScreen template. All Generate
-// wiring, gating, and data bindings are preserved verbatim.
-import { CircleCheck, Music2, Save } from "lucide-react";
+// DR-02 + UX-07: Song studio. UX-07 adds an editable authoring draft (title,
+// prompt, lyrics, bpm, key, time signature, and an add/remove section list), a
+// live progress panel driven by the UX-F1 poll, and inline playback of the saved
+// result. No song-capable model ships today (the native music model declares only
+// sample/loop), so generation is honestly gated by ModelAvailabilityGate — the
+// authoring draft is real and feeds runRuntimeJob once a song model is installed.
+import { useEffect, useRef, useState } from "react";
+import { CircleCheck, Music2, Play, Save } from "lucide-react";
 import {
+  GenerationPanel,
   HeroStat,
   MainSurface,
+  ModelAvailabilityGate,
+  PlaybackControl,
   SectionHeading,
   SurfaceHeader,
-  ModelAvailabilityGate,
 } from "../components";
 import { formatDuration, statusLabel, workflowLabel } from "../viewModel";
 import { useAppContext } from "./context";
@@ -21,9 +24,72 @@ export function SongScreen() {
     songRuntimeModel,
     songCandidateFocus,
     runRuntimeJob,
+    runtimeOperation,
+    cancelRuntimeOperation,
+    retryRuntimeOperation,
+    assetLibrary,
+    libraryPlayback,
+    previewLibraryItem,
     overview,
     setActiveView,
   } = useAppContext();
+
+  const editedRef = useRef(false);
+  const [title, setTitle] = useState(songStudio.draft.title);
+  const [prompt, setPrompt] = useState(songStudio.draft.prompt);
+  const [lyrics, setLyrics] = useState(songStudio.draft.lyrics);
+  const [bpm, setBpm] = useState(songStudio.controls.bpm);
+  const [musicalKey, setMusicalKey] = useState(songStudio.controls.musicalKey);
+  const [timeSignature, setTimeSignature] = useState(
+    songStudio.controls.timeSignature,
+  );
+  const [sections, setSections] = useState<string[]>(
+    songStudio.draft.sections.map((section) => section.label),
+  );
+
+  useEffect(() => {
+    if (!editedRef.current) {
+      setTitle(songStudio.draft.title);
+      setPrompt(songStudio.draft.prompt);
+      setLyrics(songStudio.draft.lyrics);
+      setBpm(songStudio.controls.bpm);
+      setMusicalKey(songStudio.controls.musicalKey);
+      setTimeSignature(songStudio.controls.timeSignature);
+      setSections(songStudio.draft.sections.map((section) => section.label));
+    }
+  }, [
+    songStudio.draft.title,
+    songStudio.draft.prompt,
+    songStudio.draft.lyrics,
+    songStudio.controls.bpm,
+    songStudio.controls.musicalKey,
+    songStudio.controls.timeSignature,
+    songStudio.draft.sections,
+  ]);
+
+  const edit = () => {
+    editedRef.current = true;
+  };
+  const trimmed = prompt.trim();
+  const blockReason = !songRuntimeModel
+    ? "Install a song model to generate."
+    : trimmed.length === 0
+      ? "Enter a song prompt to generate."
+      : null;
+
+  function generate() {
+    runRuntimeJob("song", prompt, {
+      title,
+      lyrics,
+      styleTags: songStudio.draft.styleTags,
+      bpm,
+      musicalKey,
+      timeSignature,
+      sectionLabels: sections.filter((label) => label.trim().length > 0),
+    });
+  }
+
+  const selectedItemId = assetLibrary.selectedItem?.item.id;
 
   return (
     <section
@@ -32,25 +98,14 @@ export function SongScreen() {
     >
       <SurfaceHeader
         eyebrow="Song Studio"
-        title={songStudio.draft.title}
+        title={title}
         actions={
           <button
             className="primary-action samples-action"
-            disabled={!songRuntimeModel}
-            onClick={() =>
-              runRuntimeJob("song", songStudio.draft.prompt, {
-                title: songStudio.draft.title,
-                lyrics: songStudio.draft.lyrics,
-                styleTags: songStudio.draft.styleTags,
-                bpm: songStudio.controls.bpm,
-                musicalKey: songStudio.controls.musicalKey,
-                sectionLabels: songStudio.draft.sections.map(
-                  (section) => section.label,
-                ),
-              })
-            }
+            disabled={Boolean(blockReason)}
+            onClick={generate}
             type="button"
-            title="Queue song generation"
+            title={blockReason ?? "Queue song generation"}
           >
             <Music2 aria-hidden="true" size={18} />
             <span>{songRuntimeModel ? "Generate" : "Blocked"}</span>
@@ -58,18 +113,12 @@ export function SongScreen() {
         }
         stats={
           <>
-            <HeroStat
-              label="sections"
-              value={overview.songStudio.sectionCount}
-            />
+            <HeroStat label="sections" value={sections.length} />
             <HeroStat
               label="saved"
               value={overview.songStudio.savedOutputCount}
             />
-            <HeroStat
-              label={songStudio.controls.musicalKey}
-              value={songStudio.controls.bpm}
-            />
+            <HeroStat label={musicalKey} value={bpm} />
             <HeroStat
               label="scorecards"
               value={overview.songStudio.scorecardCount}
@@ -84,59 +133,156 @@ export function SongScreen() {
         onOpenModelManager={() => setActiveView("models")}
       />
 
+      <MainSurface className="studio-compose" ariaLabel="Compose song">
+        <SectionHeading title="Compose" eyebrow="structure + lyrics" />
+        <label className="field">
+          <span>Title</span>
+          <input
+            className="field-input"
+            type="text"
+            value={title}
+            onChange={(event) => {
+              edit();
+              setTitle(event.target.value);
+            }}
+          />
+        </label>
+        <label className="field">
+          <span>Prompt</span>
+          <textarea
+            className="field-input"
+            rows={2}
+            value={prompt}
+            onChange={(event) => {
+              edit();
+              setPrompt(event.target.value);
+            }}
+            placeholder="Describe the song…"
+          />
+          <small className="field-hint">{trimmed.length} characters</small>
+        </label>
+        <label className="field">
+          <span>Lyrics</span>
+          <textarea
+            className="field-input"
+            rows={4}
+            value={lyrics}
+            onChange={(event) => {
+              edit();
+              setLyrics(event.target.value);
+            }}
+            placeholder="One line per lyric…"
+          />
+        </label>
+        <div className="field-row">
+          <label className="field">
+            <span>BPM {bpm}</span>
+            <input
+              className="field-input"
+              type="range"
+              min={40}
+              max={240}
+              value={bpm}
+              onChange={(event) => {
+                edit();
+                setBpm(Number(event.target.value));
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Key</span>
+            <input
+              className="field-input"
+              type="text"
+              value={musicalKey}
+              onChange={(event) => {
+                edit();
+                setMusicalKey(event.target.value);
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Time signature</span>
+            <input
+              className="field-input"
+              type="text"
+              value={timeSignature}
+              onChange={(event) => {
+                edit();
+                setTimeSignature(event.target.value);
+              }}
+            />
+          </label>
+        </div>
+        <div className="field">
+          <span>Sections</span>
+          <div className="editable-list">
+            {sections.map((label, index) => (
+              <div className="editable-row" key={index}>
+                <input
+                  className="field-input"
+                  type="text"
+                  value={label}
+                  onChange={(event) => {
+                    edit();
+                    setSections((current) =>
+                      current.map((value, position) =>
+                        position === index ? event.target.value : value,
+                      ),
+                    );
+                  }}
+                />
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={() => {
+                    edit();
+                    setSections((current) =>
+                      current.filter((_, position) => position !== index),
+                    );
+                  }}
+                  title="Remove section"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={() => {
+                edit();
+                setSections((current) => [...current, "New section"]);
+              }}
+            >
+              Add section
+            </button>
+          </div>
+        </div>
+      </MainSurface>
+
+      <GenerationPanel
+        job={runtimeOperation}
+        workflows={["song"]}
+        typeLabel="Song"
+        onCancel={cancelRuntimeOperation}
+        onRetry={retryRuntimeOperation}
+      >
+        <button
+          type="button"
+          className="secondary-action"
+          disabled={!selectedItemId}
+          onClick={() => selectedItemId && previewLibraryItem(selectedItemId)}
+          title="Play the saved song"
+        >
+          <Play aria-hidden="true" size={16} />
+          <span>Play latest</span>
+        </button>
+        <PlaybackControl playback={libraryPlayback} />
+      </GenerationPanel>
+
       <div className="samples-layout">
         <div className="samples-main">
-          <MainSurface ariaLabel="Song prompt">
-            <SectionHeading
-              title={songStudio.draft.language}
-              eyebrow={`${songStudio.draft.styleTags.length}`}
-            />
-            <p>{songStudio.draft.prompt}</p>
-            <small>{songStudio.draft.singerHint}</small>
-            <div className="candidate-strip">
-              {songStudio.draft.styleTags.map((tag, index) => (
-                <span key={index}>{tag}</span>
-              ))}
-            </div>
-          </MainSurface>
-
-          <div className="samples-control-grid" aria-label="Song controls">
-            <div>
-              <strong>{songStudio.arrangement.totalBars} bars</strong>
-              <span>{songStudio.controls.timeSignature}</span>
-            </div>
-            <div>
-              <strong>
-                {formatDuration(songStudio.arrangement.estimatedDurationMs)}
-              </strong>
-              <span>arranged</span>
-            </div>
-            <div>
-              <strong>{songStudio.controls.variationCount}</strong>
-              <span>variants</span>
-            </div>
-            <div>
-              <strong>{songStudio.controls.requestedStems.length}</strong>
-              <span>stems</span>
-            </div>
-          </div>
-
-          <div className="samples-variant-grid" aria-label="Song sections">
-            {songStudio.arrangement.sections.map((section) => (
-              <article className="samples-variant selected" key={section.id}>
-                <div className="sfx-variant-title">
-                  <strong>{section.label}</strong>
-                  <span>{section.bars} bars</span>
-                </div>
-                <small>
-                  starts bar {section.startBar + 1} /{" "}
-                  {section.hasLyrics ? "lyrics" : "instrumental"}
-                </small>
-                <p>{section.locked ? "locked" : "regeneratable"}</p>
-              </article>
-            ))}
-          </div>
-
           <div className="samples-variant-grid" aria-label="Song variants">
             {songStudio.variants.map((variant) => (
               <article
@@ -186,9 +332,7 @@ export function SongScreen() {
                   {provider.supportsStems ? "stems" : "mixdown"} /{" "}
                   {provider.sampleRateHz} Hz
                 </small>
-                <p>
-                  {provider.supportedControls.map(statusLabel).join(" / ")}
-                </p>
+                <p>{provider.supportedControls.map(statusLabel).join(" / ")}</p>
               </article>
             ))}
           </MainSurface>

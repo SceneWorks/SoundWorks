@@ -664,6 +664,27 @@ textarea.field-input {
   gap: 10px;
 }
 
+/* UX-S1b: editable section / timed-event lists in the Song + Video studios. */
+.editable-list {
+  display: grid;
+  gap: 8px;
+}
+
+.editable-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.editable-row .field-input {
+  flex: 1 1 auto;
+}
+
+.field-input-narrow {
+  flex: 0 0 96px;
+  width: 96px;
+}
+
 .primary-action {
   display: inline-grid;
   grid-template-columns: 18px minmax(0, auto);

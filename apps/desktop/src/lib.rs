@@ -6,8 +6,8 @@ use soundworks_core::{
     ProjectLibraryActionResult, ProjectLibraryStore, ProviderCatalog, ReviewEditResult,
     ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeEngine, RuntimeJobArtifact,
     RuntimeJobRequest, RuntimeJobSnapshot, RuntimeJobStore, RuntimeOverview, SamplesStudioOverview,
-    SaveReviewEditRequest, SfxStudioOverview, SongStudioOverview, TtsStudioOverview,
-    VideoToAudioOverview, VoiceLabOverview, WorkspaceOverview,
+    SaveReviewEditRequest, SfxStudioOverview, SongStudioOverview, TtsStudioOverview, UiPreferences,
+    UiPreferencesStore, VideoToAudioOverview, VoiceLabOverview, WorkspaceOverview,
 };
 use std::sync::{Arc, Mutex};
 
@@ -236,6 +236,26 @@ fn get_rights_safety_overview() -> RightsSafetyOverview {
 #[tauri::command]
 fn get_video_to_audio_overview() -> VideoToAudioOverview {
     video_to_audio_overview()
+}
+
+/// DR-01: read the durable theme/accent preferences. Returns defaults (empty) when
+/// no preference has been persisted yet.
+#[tauri::command]
+fn get_ui_preferences() -> UiPreferences {
+    UiPreferencesStore::default().load()
+}
+
+/// DR-01: persist a partial theme/accent update. Merges over the stored copy under
+/// the write lock so concurrent toggles cannot lose an update.
+#[tauri::command]
+fn set_ui_preferences(
+    state: tauri::State<AppState>,
+    preferences: UiPreferences,
+) -> Result<UiPreferences, String> {
+    let _guard = lock_writes(&state);
+    UiPreferencesStore::default()
+        .merge(preferences)
+        .map_err(|error| error.to_string())
 }
 
 pub fn app_overview() -> AppOverview {
@@ -474,7 +494,9 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             get_song_studio_overview,
             get_review_workspace_overview,
             get_rights_safety_overview,
-            get_video_to_audio_overview
+            get_video_to_audio_overview,
+            get_ui_preferences,
+            set_ui_preferences
         ])
 }
 

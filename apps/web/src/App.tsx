@@ -17,6 +17,7 @@ import {
   Link2,
   Library,
   Mic2,
+  Moon,
   Music2,
   PackageCheck,
   Play,
@@ -26,10 +27,12 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  Sun,
   Waves,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   fallbackOverview,
   fallbackAssetLibrary,
@@ -78,7 +81,16 @@ import {
   loadWorkspaceOverview,
   revalidateModelCandidate,
   isTauri,
+  loadUiPreferences,
+  saveUiPreferences,
 } from "./tauri";
+import {
+  ACCENTS,
+  DEFAULT_ACCENT,
+  isAccentId,
+  isThemeMode,
+} from "./accents";
+import type { ThemeMode } from "./accents";
 import type {
   AppOverview,
   AssetLibraryOverview,
@@ -393,6 +405,33 @@ function runtimeModelFor(runtime: RuntimeOverview, workflow: string) {
   );
 }
 
+// DR-01: localStorage is the instant-paint cache for theme/accent; the durable
+// copy lives in the Tauri ui-preferences store (seeded on launch). Both reads are
+// guarded so private-mode / SSR never throws.
+function readStoredTheme(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+  try {
+    const saved = window.localStorage.getItem("soundworks-theme");
+    return isThemeMode(saved) ? saved : "light";
+  } catch {
+    return "light";
+  }
+}
+
+function readStoredAccent(): string {
+  if (typeof window === "undefined") {
+    return DEFAULT_ACCENT;
+  }
+  try {
+    const saved = window.localStorage.getItem("soundworks-accent");
+    return isAccentId(saved) ? saved : DEFAULT_ACCENT;
+  } catch {
+    return DEFAULT_ACCENT;
+  }
+}
+
 export function App() {
   const [activeView, setActiveView] = useState<ActiveView>("workspace");
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
@@ -446,6 +485,20 @@ export function App() {
     useState<VideoToAudioOverview>(fallbackVideoToAudio);
   const [dataError, setDataError] = useState<string | null>(null);
 
+  // DR-01: theme + accent. Each change updates state instantly and persists the
+  // single changed field to the durable store (fire-and-forget; localStorage is
+  // the instant cache applied by the effects below).
+  const [theme, setTheme] = useState<ThemeMode>(readStoredTheme);
+  const changeTheme = (next: ThemeMode) => {
+    setTheme(next);
+    void saveUiPreferences({ theme: next });
+  };
+  const [accent, setAccent] = useState<string>(readStoredAccent);
+  const changeAccent = (next: string) => {
+    setAccent(next);
+    void saveUiPreferences({ accent: next });
+  };
+
   const webPreview = !isTauri();
   const mountedRef = useRef(true);
   const loadedViewsRef = useRef<Set<ActiveView>>(new Set());
@@ -476,6 +529,56 @@ export function App() {
 
     return () => {
       mountedRef.current = false;
+    };
+  }, []);
+
+  // DR-01: apply theme/accent to <html> and cache to localStorage. Because every
+  // token-driven surface reads --bg/--text/--accent, flipping the attribute
+  // recolors the app in one paint.
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      window.localStorage.setItem("soundworks-theme", theme);
+    } catch {
+      // ignore (private mode etc.)
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    document.documentElement.setAttribute("data-accent", accent);
+    try {
+      window.localStorage.setItem("soundworks-accent", accent);
+    } catch {
+      // ignore (private mode etc.)
+    }
+  }, [accent]);
+
+  // DR-01: seed from the durable store on launch (the authoritative copy;
+  // localStorage is only an instant-paint cache). Each toggle persists itself, so
+  // there is no save effect to race with this read. No-op in web preview.
+  useEffect(() => {
+    let cancelled = false;
+    loadUiPreferences()
+      .then((prefs) => {
+        if (cancelled) {
+          return;
+        }
+        if (isThemeMode(prefs.theme)) {
+          setTheme(prefs.theme);
+        }
+        if (isAccentId(prefs.accent)) {
+          setAccent(prefs.accent);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -1003,18 +1106,63 @@ export function App() {
             <h1>{activeViewMeta.title}</h1>
             <p>{activeViewMeta.blurb}</p>
           </div>
-          <div className="status-strip" aria-label="Scaffold status">
-            <strong>{scaffoldedLayerCount}</strong>
-            <span>active layers</span>
+          <div className="topbar-actions">
+            <div className="status-strip" aria-label="Scaffold status">
+              <strong>{scaffoldedLayerCount}</strong>
+              <span>active layers</span>
+            </div>
+            <button
+              className="queue-chip"
+              onClick={() => setActiveView("jobs")}
+              type="button"
+            >
+              <Activity aria-hidden="true" size={16} />
+              <span>{runtime.jobs.length} jobs</span>
+            </button>
+            <div
+              className="accent-picker"
+              role="group"
+              aria-label="Accent color"
+            >
+              {ACCENTS.map((option) => (
+                <button
+                  aria-label={option.name}
+                  aria-pressed={accent === option.id}
+                  className={
+                    accent === option.id
+                      ? "accent-swatch active"
+                      : "accent-swatch"
+                  }
+                  key={option.id}
+                  onClick={() => changeAccent(option.id)}
+                  style={{ "--sw": option.swatch } as CSSProperties}
+                  title={option.name}
+                  type="button"
+                />
+              ))}
+            </div>
+            <button
+              className="icon-btn"
+              onClick={() => changeTheme(theme === "light" ? "dark" : "light")}
+              title={
+                theme === "light"
+                  ? "Switch to dark mode"
+                  : "Switch to light mode"
+              }
+              aria-label={
+                theme === "light"
+                  ? "Switch to dark mode"
+                  : "Switch to light mode"
+              }
+              type="button"
+            >
+              {theme === "light" ? (
+                <Moon aria-hidden="true" size={18} />
+              ) : (
+                <Sun aria-hidden="true" size={18} />
+              )}
+            </button>
           </div>
-          <button
-            className="queue-chip"
-            onClick={() => setActiveView("jobs")}
-            type="button"
-          >
-            <Activity aria-hidden="true" size={16} />
-            <span>{runtime.jobs.length} jobs</span>
-          </button>
         </header>
 
         {showWorkspace ? (

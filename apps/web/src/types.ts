@@ -1,3 +1,10 @@
+// DR-01: durable theme/accent preferences (serde Option<String> -> optional).
+// `accent` holds an accent id from accents.ts; the UI validates it on read.
+export type UiPreferences = {
+  theme?: "light" | "dark";
+  accent?: string;
+};
+
 export type ArchitectureLayer = {
   id: string;
   name: string;

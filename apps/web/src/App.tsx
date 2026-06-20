@@ -1064,9 +1064,7 @@ export function App() {
                     <button
                       aria-current={activeView === item.id ? "page" : undefined}
                       className={
-                        activeView === item.id
-                          ? "nav-button active"
-                          : "nav-button"
+                        activeView === item.id ? "nav-item active" : "nav-item"
                       }
                       key={item.id}
                       onClick={() => setActiveView(item.id)}
@@ -1074,7 +1072,7 @@ export function App() {
                       title={item.label}
                     >
                       <Icon aria-hidden="true" size={18} />
-                      <span>{item.label}</span>
+                      <span className="nav-label">{item.label}</span>
                     </button>
                   );
                 })}
@@ -1107,10 +1105,10 @@ export function App() {
             <p>{activeViewMeta.blurb}</p>
           </div>
           <div className="topbar-actions">
-            <div className="status-strip" aria-label="Scaffold status">
+            <span className="status-pill" aria-label="Scaffold status">
               <strong>{scaffoldedLayerCount}</strong>
               <span>active layers</span>
-            </div>
+            </span>
             <button
               className="queue-chip"
               onClick={() => setActiveView("jobs")}

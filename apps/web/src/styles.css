@@ -191,15 +191,18 @@ button:focus-visible {
   min-width: 0;
 }
 
+/* DR-02: theme-driven sidebar (was hardcoded dark) — light in light mode,
+   dark in dark mode, matching SceneWorks' shell. */
 .sidebar {
   display: flex;
   flex-direction: column;
   gap: 22px;
   padding: 24px 18px;
-  color: #f8fafc;
-  background: #0f1622;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
   min-width: 0;
+  overflow-y: auto;
 }
 
 .brand-mark {
@@ -223,7 +226,7 @@ button:focus-visible {
 
 .sidebar-section-title {
   margin: 0;
-  color: rgba(248, 250, 252, 0.58);
+  color: var(--text-faint);
   font-size: 0.68rem;
   font-weight: 760;
   letter-spacing: 0.08em;
@@ -235,32 +238,56 @@ button:focus-visible {
   gap: 5px;
 }
 
-.nav-button {
+/* DR-02: SceneWorks .nav-item grammar — active item gets a surface chip + an
+   accent left-bar instead of a filled accent button. */
+.nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 42px;
-  padding: 0 12px;
-  color: rgba(248, 250, 252, 0.78);
+  height: var(--row-h);
+  padding: 0 10px;
+  color: var(--text-muted);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
+  position: relative;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
 }
 
-.nav-button:hover,
-.nav-button:focus-visible {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.12);
+.nav-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
-.nav-button.active {
-  color: #0f1622;
+.nav-item.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
   background: var(--accent);
-  border-color: color-mix(in oklch, var(--accent) 82%, white);
-  box-shadow: 0 8px 24px rgba(47, 161, 147, 0.24);
+}
+
+.nav-item .nav-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace {
@@ -333,7 +360,7 @@ button:focus-visible {
 
 .eyebrow {
   margin: 0 0 6px;
-  color: #657169;
+  color: var(--text-faint);
   font-size: 0.76rem;
   font-weight: 720;
   text-transform: uppercase;
@@ -352,22 +379,27 @@ h1 {
   line-height: 1;
 }
 
-.status-strip {
-  display: grid;
-  justify-items: end;
-  gap: 2px;
-  min-width: 126px;
-  padding: 12px 14px;
-  color: var(--text);
+/* DR-02: topbar status as a SceneWorks .status-pill (was a large number tile). */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-pill);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
 }
 
-.status-strip strong {
-  font-size: 1.8rem;
-  line-height: 1;
+.status-pill strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-pill.warning {
+  border-color: color-mix(in oklch, var(--warm) 45%, var(--border));
+  color: var(--text);
 }
 
 .queue-chip {
@@ -449,8 +481,8 @@ h1 {
   box-shadow: 0 0 0 2px color-mix(in oklch, var(--sw) 38%, transparent);
 }
 
-.status-strip span {
-  color: #66726b;
+.status-pill span {
+  color: var(--text-muted);
   font-size: 0.8rem;
 }
 
@@ -3179,10 +3211,6 @@ h1 {
     align-items: start;
   }
 
-  .status-strip {
-    justify-items: start;
-  }
-
   .workflow-list li {
     grid-template-columns: 20px minmax(0, 1fr);
   }
@@ -3318,4 +3346,485 @@ h1 {
     min-width: 92px;
     font-size: 0.82rem;
   }
+}
+
+/* ===================================================================
+   DR-02: shared component grammar (ported from SceneWorks). Screens are
+   rebuilt against these in the following slices; all token-driven so they
+   theme with DR-01's light/dark + accent system.
+   =================================================================== */
+
+/* Screen / section container */
+.main-surface {
+  display: grid;
+  align-content: start;
+  gap: var(--gap-4);
+  padding: var(--pad-panel);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  min-height: 0;
+}
+
+/* Eyebrow + heading pair */
+.section-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Surface header + hero variant */
+.surface-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-end;
+}
+
+.surface-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.surface-header.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px 24px;
+  align-items: end;
+  position: relative;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--accent-soft) 70%, var(--surface)),
+    var(--surface) 60%
+  );
+}
+
+[data-theme="dark"] .surface-header.hero {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--accent) 12%, var(--surface)),
+    var(--surface) 65%
+  );
+}
+
+.surface-header.hero::after {
+  content: "";
+  position: absolute;
+  right: -80px;
+  top: -80px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--warm) 35%, transparent),
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.surface-header.hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.surface-header.hero .section-heading h2 {
+  font-size: 24px;
+  letter-spacing: -0.015em;
+}
+
+.hero-blurb {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+.hero-stats {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.hero-stat {
+  display: grid;
+  gap: 2px;
+  padding: 8px 14px;
+  min-width: 140px;
+  background: color-mix(in oklch, var(--surface) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.hero-stat-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.hero-stat-value {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .surface-header.hero {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Segmented control */
+.segmented-control,
+.compact-segment {
+  display: inline-flex;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 3px;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.segmented-control button,
+.compact-segment button {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segmented-control button:hover:not(:disabled),
+.compact-segment button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.segmented-control button.active,
+.compact-segment button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.segmented-control button:disabled,
+.compact-segment button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.compact-segment {
+  padding: 2px;
+}
+
+.compact-segment button {
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.status-badge.installed,
+.status-badge.completed {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+[data-theme="dark"] .status-badge.installed,
+[data-theme="dark"] .status-badge.completed {
+  color: var(--accent);
+}
+
+.status-badge.warning {
+  border-color: color-mix(in oklch, var(--warm) 45%, transparent);
+  background: var(--warm-soft);
+  color: color-mix(in oklch, var(--warm) 85%, var(--text));
+}
+
+.status-badge.failed,
+.status-badge.canceled,
+.status-badge.interrupted {
+  border-color: color-mix(in oklch, var(--danger) 45%, transparent);
+  background: var(--danger-soft);
+  color: color-mix(in oklch, var(--danger) 85%, var(--text));
+}
+
+/* Empty / placeholder panel */
+.empty-panel {
+  padding: 18px;
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  border-style: dashed;
+}
+
+.empty-panel.compact-panel {
+  padding: 12px;
+}
+
+/* Model grid + cards */
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--gap-3);
+}
+
+.model-type-group {
+  display: grid;
+  gap: 12px;
+}
+
+.model-type-group + .model-type-group {
+  margin-top: var(--gap-3);
+}
+
+.model-type-group-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.model-type-group-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.model-type-group-heading > span {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.model-card {
+  gap: 12px;
+  padding: 14px;
+}
+
+.model-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.model-card-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.model-card p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.model-card dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.model-card dt {
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.model-card dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.model-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Progress track (shared by WorkerProgressCard) */
+.progress-track {
+  position: relative;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--t-med) var(--ease-out);
+}
+
+.progress-track.indeterminate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: progress-indeterminate 1.1s var(--ease-out) infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+/* Actionable error block */
+.actionable-error {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklch, var(--danger) 45%, transparent);
+  background: var(--danger-soft);
+  color: color-mix(in oklch, var(--danger) 85%, var(--text));
+  font-size: 13px;
+}
+
+.actionable-error strong {
+  font-weight: 650;
+}
+
+/* Worker / job progress card */
+.worker-progress-card {
+  gap: 12px;
+  padding: 16px;
+}
+
+.worker-progress-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.worker-progress-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.worker-progress-card__title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-progress-card__type {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .worker-progress-card__type {
+  color: var(--accent);
+}
+
+.worker-progress-card__message {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.worker-progress-card__log {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.worker-progress-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }

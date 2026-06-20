@@ -10,6 +10,7 @@ import {
   MainSurface,
   SectionHeading,
   SurfaceHeader,
+  ModelAvailabilityGate,
 } from "../components";
 import { formatDuration, statusLabel, workflowLabel } from "../viewModel";
 import { useAppContext } from "./context";
@@ -21,6 +22,7 @@ export function SongScreen() {
     songCandidateFocus,
     runRuntimeJob,
     overview,
+    setActiveView,
   } = useAppContext();
 
   return (
@@ -74,6 +76,12 @@ export function SongScreen() {
             />
           </>
         }
+      />
+
+      <ModelAvailabilityGate
+        installed={Boolean(songRuntimeModel)}
+        label="song"
+        onOpenModelManager={() => setActiveView("models")}
       />
 
       <div className="samples-layout">

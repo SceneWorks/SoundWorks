@@ -14,3 +14,4 @@ export { ModelGrid, ModelCard } from "./ModelCard";
 export type { ModelCardMeta } from "./ModelCard";
 export { WorkerProgressCard } from "./WorkerProgressCard";
 export type { WorkerProgressError } from "./WorkerProgressCard";
+export { ModelAvailabilityGate } from "./ModelAvailabilityGate";

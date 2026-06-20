@@ -147,6 +147,11 @@ describe("App", () => {
     const convert = await screen.findByTitle("Queue voice conversion");
     expect(convert.tagName).toBe("BUTTON");
     expect(convert).toBeDisabled();
+    // DR-03: with no installed model (web preview), the studio shows an
+    // actionable availability gate instead of leaving only a dead Blocked button.
+    expect(
+      screen.getByRole("button", { name: "Open Model Manager" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(navButton("Video Audio"));
     expect(

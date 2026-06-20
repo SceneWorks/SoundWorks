@@ -169,6 +169,32 @@ button:focus-visible {
   min-width: 0;
 }
 
+.preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.preview-banner svg {
+  flex: none;
+  color: var(--accent-strong);
+}
+
+.preview-banner-error {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.preview-banner-error svg {
+  color: var(--danger);
+}
+
 .topbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

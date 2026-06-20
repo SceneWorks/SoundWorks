@@ -280,15 +280,61 @@ const navSections: Array<{ label: string; items: NavItem[] }> = [
 
 const navItems = navSections.flatMap((section) => section.items);
 
-const studioIcons = [
-  Mic2,
-  Radio,
-  Waves,
-  Boxes,
-  Music2,
-  ClipboardCheck,
-  Sparkles,
+// Explicit studio-id -> destination view + icon so the workspace studio cards
+// deep-link by identity, not by positional coupling to the nav order (F-028).
+const studioViewById: Record<string, ActiveView> = {
+  tts: "tts",
+  "voice-lab": "voice",
+  sfx: "sfx",
+  loops: "samples",
+  songs: "song",
+  review: "review",
+  "rights-safety": "rights",
+  "composition-editor": "multitrack",
+  "video-to-audio": "video-audio",
+};
+
+const studioIconById: Record<string, LucideIcon> = {
+  tts: Mic2,
+  "voice-lab": Radio,
+  sfx: Waves,
+  loops: Boxes,
+  songs: Music2,
+  review: Play,
+  "rights-safety": ShieldCheck,
+  "composition-editor": SlidersHorizontal,
+  "video-to-audio": FileVideo,
+};
+
+// The set of recognized library lifecycle actions. An action id from the
+// backend is mapped to the typed union explicitly; unknown ids are rejected
+// rather than silently treated as "add-tag" (F-027).
+const LIBRARY_MUTATION_ACTIONS: readonly LibraryMutationAction[] = [
+  "favorite",
+  "reject",
+  "archive",
+  "restore",
+  "promote-to-global",
+  "add-tag",
 ];
+
+function toLibraryMutationAction(id: string): LibraryMutationAction | null {
+  return (LIBRARY_MUTATION_ACTIONS as readonly string[]).includes(id)
+    ? (id as LibraryMutationAction)
+    : null;
+}
+
+// Only render externally-controlled URLs as links when they use a safe
+// http(s) scheme; anything else (javascript:, data:, etc.) renders as plain
+// text. Links also get rel="noopener noreferrer" at the call site (F-036).
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 function workflowLabel(workflow: string) {
   return workflow
@@ -1110,8 +1156,8 @@ export function App() {
                 </div>
                 <ol className="voice-checks">
                   {workspace.sourcePicker.provenanceRequirements.map(
-                    (requirement) => (
-                      <li className="passed" key={requirement}>
+                    (requirement, index) => (
+                      <li className="passed" key={index}>
                         <ShieldCheck aria-hidden="true" size={16} />
                         <span>{requirement}</span>
                       </li>
@@ -1190,16 +1236,20 @@ export function App() {
 
         {showWorkspace ? (
           <section className="studio-grid" aria-label="Studios">
-            {overview.studios.map((studio, index) => {
-              const Icon = studioIcons[index % studioIcons.length];
-              const viewId =
-                navSections[1].items[index % navSections[1].items.length].id;
+            {overview.studios.map((studio) => {
+              const Icon = studioIconById[studio.id] ?? Sparkles;
+              const viewId = studioViewById[studio.id];
 
               return (
                 <button
                   className="studio-card"
                   key={studio.id}
-                  onClick={() => setActiveView(viewId)}
+                  disabled={!viewId}
+                  onClick={() => {
+                    if (viewId) {
+                      setActiveView(viewId);
+                    }
+                  }}
                   type="button"
                 >
                   <span className="icon-badge">
@@ -1339,8 +1389,8 @@ export function App() {
                       <div className="asset-tag-row">
                         {[...item.tags, ...item.generatedTags]
                           .slice(0, 5)
-                          .map((tag) => (
-                            <span key={`${item.id}-${tag}`}>{tag}</span>
+                          .map((tag, index) => (
+                            <span key={`${item.id}-${index}`}>{tag}</span>
                           ))}
                       </div>
                     </div>
@@ -1464,19 +1514,16 @@ export function App() {
                     <button
                       className="secondary-action"
                       key={action.id}
-                      onClick={() =>
-                        mutateSelectedLibraryItem(
-                          action.id === "promote-to-global"
-                            ? "promote-to-global"
-                            : action.id === "reject"
-                              ? "reject"
-                              : action.id === "archive"
-                                ? "archive"
-                                : action.id === "favorite"
-                                  ? "favorite"
-                                  : "add-tag",
-                        )
-                      }
+                      onClick={() => {
+                        const mutation = toLibraryMutationAction(action.id);
+                        if (!mutation) {
+                          setLibraryActionStatus(
+                            `Unknown library action "${action.id}".`,
+                          );
+                          return;
+                        }
+                        mutateSelectedLibraryItem(mutation);
+                      }}
                       type="button"
                     >
                       {action.label}
@@ -1569,8 +1616,8 @@ export function App() {
                     </div>
                     <p>{preset.description}</p>
                     <div className="asset-tag-row">
-                      {preset.formats.map((format) => (
-                        <span key={`${preset.preset.id}-${format}`}>
+                      {preset.formats.map((format, index) => (
+                        <span key={`${preset.preset.id}-${index}`}>
                           {format}
                         </span>
                       ))}
@@ -1597,15 +1644,17 @@ export function App() {
                     {exportWorkflow.selectedExport.sourceId}
                   </p>
                   <ol className="version-list">
-                    {exportWorkflow.selectedExport.outputPaths.map((path) => (
-                      <li key={path}>
-                        <CircleCheck aria-hidden="true" size={16} />
-                        <div>
-                          <strong>{path.split("/").pop()}</strong>
-                          <small>{path}</small>
-                        </div>
-                      </li>
-                    ))}
+                    {exportWorkflow.selectedExport.outputPaths.map(
+                      (path, index) => (
+                        <li key={index}>
+                          <CircleCheck aria-hidden="true" size={16} />
+                          <div>
+                            <strong>{path.split("/").pop()}</strong>
+                            <small>{path}</small>
+                          </div>
+                        </li>
+                      ),
+                    )}
                   </ol>
                 </section>
 
@@ -1883,9 +1932,11 @@ export function App() {
                     </span>
                   </div>
                   <div className="timeline-ruler" aria-label="Timeline ruler">
-                    {compositionEditor.timeline.gridLabels.map((label) => (
-                      <span key={label}>{label}</span>
-                    ))}
+                    {compositionEditor.timeline.gridLabels.map(
+                      (label, index) => (
+                        <span key={index}>{label}</span>
+                      ),
+                    )}
                   </div>
                   {compositionEditor.tracks.map((track) => (
                     <article className="timeline-track" key={track.trackId}>
@@ -1998,13 +2049,15 @@ export function App() {
                           {track.gainDb} dB / pan {track.pan}
                         </small>
                         <div className="asset-tag-row">
-                          {track.effectChain.map((effect) => (
-                            <span key={`${track.trackId}-${effect}`}>
+                          {track.effectChain.map((effect, index) => (
+                            <span key={`${track.trackId}-effect-${index}`}>
                               {effect}
                             </span>
                           ))}
-                          {track.sendTargets.map((send) => (
-                            <span key={`${track.trackId}-${send}`}>{send}</span>
+                          {track.sendTargets.map((send, index) => (
+                            <span key={`${track.trackId}-send-${index}`}>
+                              {send}
+                            </span>
                           ))}
                         </div>
                       </article>
@@ -2050,9 +2103,11 @@ export function App() {
                 </div>
                 <p>{compositionEditor.exportPlan.mixdownPath}</p>
                 <div className="asset-tag-row detail-tags">
-                  {compositionEditor.exportPlan.presetIds.map((preset) => (
-                    <span key={preset}>{preset}</span>
-                  ))}
+                  {compositionEditor.exportPlan.presetIds.map(
+                    (preset, index) => (
+                      <span key={index}>{preset}</span>
+                    ),
+                  )}
                 </div>
                 <small>{compositionEditor.exportPlan.sceneWorksWarning}</small>
               </section>
@@ -2083,7 +2138,17 @@ export function App() {
                       </small>
                       <p>{decision.prototypeEvidence}</p>
                       <p>{decision.decision}</p>
-                      <a href={decision.sourceUrl}>{decision.sourceUrl}</a>
+                      {isHttpUrl(decision.sourceUrl) ? (
+                        <a
+                          href={decision.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {decision.sourceUrl}
+                        </a>
+                      ) : (
+                        <span>{decision.sourceUrl}</span>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -2176,8 +2241,8 @@ export function App() {
                         <div className="asset-tag-row">
                           {workflow.requiredArtifacts
                             .slice(0, 4)
-                            .map((artifact) => (
-                              <span key={`${workflow.id}-${artifact}`}>
+                            .map((artifact, index) => (
+                              <span key={`${workflow.id}-${index}`}>
                                 {artifact}
                               </span>
                             ))}
@@ -2492,8 +2557,8 @@ export function App() {
                         {provider.sampleRateHz} Hz
                       </small>
                       <ul>
-                        {provider.limitations.map((limitation) => (
-                          <li key={limitation}>{limitation}</li>
+                        {provider.limitations.map((limitation, index) => (
+                          <li key={index}>{limitation}</li>
                         ))}
                       </ul>
                     </article>
@@ -2802,8 +2867,8 @@ export function App() {
                   <p>{sfxStudio.prompt.text}</p>
                   <small>{sfxStudio.prompt.negativePrompt}</small>
                   <div className="candidate-strip">
-                    {sfxStudio.prompt.tags.map((tag) => (
-                      <span key={tag}>{tag}</span>
+                    {sfxStudio.prompt.tags.map((tag, index) => (
+                      <span key={index}>{tag}</span>
                     ))}
                   </div>
                 </section>
@@ -2855,8 +2920,8 @@ export function App() {
                           : "one-shot preview"}
                       </p>
                       <div className="candidate-strip">
-                        {variant.tags.slice(0, 4).map((tag) => (
-                          <span key={tag}>{tag}</span>
+                        {variant.tags.slice(0, 4).map((tag, index) => (
+                          <span key={index}>{tag}</span>
                         ))}
                       </div>
                     </article>
@@ -3310,8 +3375,8 @@ export function App() {
                   <p>{samplesStudio.prompt.text}</p>
                   <small>{samplesStudio.prompt.negativePrompt}</small>
                   <div className="candidate-strip">
-                    {samplesStudio.prompt.genreTags.map((tag) => (
-                      <span key={tag}>{tag}</span>
+                    {samplesStudio.prompt.genreTags.map((tag, index) => (
+                      <span key={index}>{tag}</span>
                     ))}
                   </div>
                 </section>
@@ -3366,8 +3431,8 @@ export function App() {
                           : variant.articulation}
                       </p>
                       <div className="candidate-strip">
-                        {variant.tags.slice(0, 4).map((tag) => (
-                          <span key={tag}>{tag}</span>
+                        {variant.tags.slice(0, 4).map((tag, index) => (
+                          <span key={index}>{tag}</span>
                         ))}
                       </div>
                     </article>
@@ -3545,8 +3610,8 @@ export function App() {
                   <p>{songStudio.draft.prompt}</p>
                   <small>{songStudio.draft.singerHint}</small>
                   <div className="candidate-strip">
-                    {songStudio.draft.styleTags.map((tag) => (
-                      <span key={tag}>{tag}</span>
+                    {songStudio.draft.styleTags.map((tag, index) => (
+                      <span key={index}>{tag}</span>
                     ))}
                   </div>
                 </section>
@@ -3625,8 +3690,8 @@ export function App() {
                         {variant.structureMatchScore}
                       </p>
                       <div className="candidate-strip">
-                        {variant.stemKinds.slice(0, 5).map((stem) => (
-                          <span key={stem}>{statusLabel(stem)}</span>
+                        {variant.stemKinds.slice(0, 5).map((stem, index) => (
+                          <span key={index}>{statusLabel(stem)}</span>
                         ))}
                       </div>
                     </article>
@@ -3821,7 +3886,7 @@ export function App() {
                       <span
                         aria-hidden="true"
                         className="waveform-bar"
-                        key={`${peak.min}-${peak.max}-${index}`}
+                        key={index}
                         style={{ height: `${Math.max(20, peak.max * 86)}%` }}
                       />
                     ))}
@@ -4178,12 +4243,14 @@ export function App() {
                     </span>
                   </div>
                   <ol className="policy-list">
-                    {rightsSafety.policy.exportRequires.map((requirement) => (
-                      <li key={requirement}>
-                        <CircleCheck aria-hidden="true" size={16} />
-                        <span>{requirement}</span>
-                      </li>
-                    ))}
+                    {rightsSafety.policy.exportRequires.map(
+                      (requirement, index) => (
+                        <li key={index}>
+                          <CircleCheck aria-hidden="true" size={16} />
+                          <span>{requirement}</span>
+                        </li>
+                      ),
+                    )}
                   </ol>
                 </section>
               </div>

@@ -117,6 +117,18 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("deep-links studio cards to their view by id, not array position", async () => {
+    render(<App />);
+
+    const studios = screen.getByRole("region", { name: "Studios" });
+    fireEvent.click(
+      within(studios).getByRole("button", { name: /Multitrack Editor/ }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Demo timeline" }),
+    ).toBeInTheDocument();
+  });
+
   it("wires Voice/Video/Song generation and demotes genuinely inert controls", async () => {
     render(<App />);
 

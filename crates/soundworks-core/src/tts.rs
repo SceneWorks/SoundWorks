@@ -6,12 +6,13 @@ use crate::domain::{
     SourceReferenceType, TechnicalAudioMetadata, TtsRecipe, VoiceConsentStatus, VoiceProfile,
     VoiceUse, WatermarkStatus,
 };
-use crate::manifests::{
-    CapabilityInput, CapabilitySafety, CapabilityWorkflow, ChannelLayout, ModelLicense,
-    ProviderCatalog,
-};
+use crate::manifests::{CapabilityInput, CapabilityWorkflow, ChannelLayout, ProviderCatalog};
 use crate::runtime::RuntimeOverview;
 use crate::storage::{StoragePathAllocator, StoragePathError, StoragePaths};
+use crate::studio_common::{
+    kebab_label, limitations_for_license, limitations_for_safety, SafetyLimitationOptions,
+    StudioInstallStatus, StudioSubmissionPreview,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -65,7 +66,7 @@ impl TtsStudioOverview {
             });
         let controls = TtsControls::reference();
         let generation_plan = TtsGenerationPlan::from_script(&script, &speakers, &controls);
-        let submission = TtsSubmissionPreview::build(
+        let submission = tts_submission_preview(
             &script,
             &speakers,
             &provider_options,
@@ -321,123 +322,115 @@ pub struct TtsStitchingPlan {
     pub normalize_loudness_lufs: Option<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TtsSubmissionPreview {
-    pub can_submit: bool,
-    pub job: GenerationJob,
-    pub recipe: GenerationRecipe,
-    pub blocking_reasons: Vec<String>,
-    pub warnings: Vec<String>,
-}
+/// UI submission readiness preview (see [`StudioSubmissionPreview`]); the real
+/// gate is `runtime::RuntimeJobStore::enqueue`, not `can_submit` (F-021).
+pub type TtsSubmissionPreview = StudioSubmissionPreview;
 
-impl TtsSubmissionPreview {
-    fn build(
-        script: &TtsScript,
-        speakers: &[TtsSpeaker],
-        provider_options: &[TtsProviderOption],
-        selected_provider: &TtsProviderSelection,
-        controls: &TtsControls,
-        generation_plan: &TtsGenerationPlan,
-    ) -> Self {
-        let mut blocking_reasons = vec![];
-        let mut warnings = vec![];
-        let selected_option = provider_options.iter().find(|option| {
-            option.provider_id == selected_provider.provider_id
-                && option.model_id == selected_provider.model_id
-        });
+fn tts_submission_preview(
+    script: &TtsScript,
+    speakers: &[TtsSpeaker],
+    provider_options: &[TtsProviderOption],
+    selected_provider: &TtsProviderSelection,
+    controls: &TtsControls,
+    generation_plan: &TtsGenerationPlan,
+) -> StudioSubmissionPreview {
+    let mut blocking_reasons = vec![];
+    let mut warnings = vec![];
+    let selected_option = provider_options.iter().find(|option| {
+        option.provider_id == selected_provider.provider_id
+            && option.model_id == selected_provider.model_id
+    });
 
-        if script.plain_text().trim().is_empty() {
-            blocking_reasons.push("Script is empty.".to_string());
-        }
+    if script.plain_text().trim().is_empty() {
+        blocking_reasons.push("Script is empty.".to_string());
+    }
 
-        if selected_option.is_none() || !selected_provider.accepted {
-            blocking_reasons.push(selected_provider.blocker.clone().unwrap_or_else(|| {
+    if selected_option.is_none() || !selected_provider.accepted {
+        blocking_reasons.push(
+            selected_provider.blocker.clone().unwrap_or_else(|| {
                 "Selected provider cannot currently accept TTS jobs.".to_string()
-            }));
-        }
+            }),
+        );
+    }
 
-        if let Some(option) = selected_option {
-            if option.requires_voice_consent
-                && speakers.iter().any(|speaker| {
-                    speaker.consent_status != VoiceConsentStatus::ExplicitConsentRecorded
-                })
-            {
-                blocking_reasons.push(
+    if let Some(option) = selected_option {
+        if option.requires_voice_consent
+            && speakers.iter().any(|speaker| {
+                speaker.consent_status != VoiceConsentStatus::ExplicitConsentRecorded
+            })
+        {
+            blocking_reasons.push(
                     "Voice-clone capable TTS cannot run until every selected voice profile has explicit consent."
                         .to_string(),
                 );
-            }
+        }
 
-            if let Some(max_speakers) = option.max_speakers {
-                if speakers.len() > usize::from(max_speakers) {
-                    blocking_reasons.push(format!(
-                        "{} supports at most {max_speakers} speaker(s) for one request.",
-                        option.display_name
-                    ));
-                }
-            }
-
-            if let Some(max_duration_ms) = option.max_duration_ms {
-                if generation_plan.estimated_total_duration_ms > max_duration_ms {
-                    blocking_reasons.push(format!(
-                        "{} supports up to {} ms; current script estimates {} ms.",
-                        option.display_name,
-                        max_duration_ms,
-                        generation_plan.estimated_total_duration_ms
-                    ));
-                }
-            }
-
-            if !option.commercial_use_allowed {
-                warnings
-                    .push("Selected provider requires license review before export.".to_string());
+        if let Some(max_speakers) = option.max_speakers {
+            if speakers.len() > usize::from(max_speakers) {
+                blocking_reasons.push(format!(
+                    "{} supports at most {max_speakers} speaker(s) for one request.",
+                    option.display_name
+                ));
             }
         }
 
-        if controls.normalize_output {
-            warnings.push(
-                "Post-processing will normalize dialogue loudness after stitching.".to_string(),
-            );
+        if let Some(max_duration_ms) = option.max_duration_ms {
+            if generation_plan.estimated_total_duration_ms > max_duration_ms {
+                blocking_reasons.push(format!(
+                    "{} supports up to {} ms; current script estimates {} ms.",
+                    option.display_name,
+                    max_duration_ms,
+                    generation_plan.estimated_total_duration_ms
+                ));
+            }
         }
 
-        let can_submit = blocking_reasons.is_empty();
-        let recipe = generation_recipe(script, speakers, selected_provider, controls);
+        if !option.commercial_use_allowed {
+            warnings.push("Selected provider requires license review before export.".to_string());
+        }
+    }
 
-        Self {
-            can_submit,
-            job: GenerationJob {
-                id: "job-tts-studio-reference".to_string(),
-                recipe_id: recipe.id.clone(),
-                kind: JobKind::GenerateAudio,
-                status: if can_submit {
-                    JobStatus::Queued
-                } else {
-                    JobStatus::Failed
-                },
-                progress: Some(JobProgress {
-                    percent: if can_submit { 0.0 } else { 100.0 },
-                    message: Some(if can_submit {
-                        "Ready to queue TTS generation.".to_string()
-                    } else {
-                        "Submission blocked by validation.".to_string()
-                    }),
-                }),
-                output_version_ids: if can_submit {
-                    vec!["version-tts-studio-reference-a".to_string()]
-                } else {
-                    vec![]
-                },
-                error: if can_submit {
-                    None
-                } else {
-                    Some(blocking_reasons.join(" "))
-                },
+    if controls.normalize_output {
+        warnings
+            .push("Post-processing will normalize dialogue loudness after stitching.".to_string());
+    }
+
+    let can_submit = blocking_reasons.is_empty();
+    let recipe = generation_recipe(script, speakers, selected_provider, controls);
+
+    StudioSubmissionPreview {
+        can_submit,
+        job: GenerationJob {
+            id: "job-tts-studio-reference".to_string(),
+            recipe_id: recipe.id.clone(),
+            kind: JobKind::GenerateAudio,
+            status: if can_submit {
+                JobStatus::Queued
+            } else {
+                JobStatus::Failed
             },
-            recipe,
-            blocking_reasons,
-            warnings,
-        }
+            progress: Some(JobProgress {
+                percent: if can_submit { 0.0 } else { 100.0 },
+                message: Some(if can_submit {
+                    "Ready to queue TTS generation.".to_string()
+                } else {
+                    "Submission blocked by validation.".to_string()
+                }),
+            }),
+            output_version_ids: if can_submit {
+                vec!["version-tts-studio-reference-a".to_string()]
+            } else {
+                vec![]
+            },
+            error: if can_submit {
+                None
+            } else {
+                Some(blocking_reasons.join(" "))
+            },
+        },
+        recipe,
+        blocking_reasons,
+        warnings,
     }
 }
 
@@ -503,7 +496,14 @@ fn provider_options(
             }
 
             limitations.extend(limitations_for_license(model.requirements.license));
-            limitations.extend(limitations_for_safety(&capability.safety));
+            limitations.extend(limitations_for_safety(
+                &capability.safety,
+                SafetyLimitationOptions {
+                    check_voice_consent: true,
+                    check_commercial_use: false,
+                    check_provenance_sidecar: false,
+                },
+            ));
 
             options.push(TtsProviderOption {
                 provider_id: provider.id.clone(),
@@ -511,7 +511,7 @@ fn provider_options(
                 model_version: model.version.clone(),
                 display_name: format!("{} / {}", provider.name, model.name),
                 runtime: model.runtime,
-                install_status: format!("{:?}", model.install.status).to_case_label(),
+                install_status: kebab_label(&model.install.status),
                 runnable: state.map_or(false, |state| {
                     matches!(
                         state.availability,
@@ -534,37 +534,6 @@ fn provider_options(
     }
 
     options
-}
-
-fn limitations_for_license(license: ModelLicense) -> Vec<String> {
-    match license {
-        ModelLicense::Open | ModelLicense::CommercialAllowed | ModelLicense::ProviderTerms => {
-            vec![]
-        }
-        ModelLicense::NonCommercial => {
-            vec!["Noncommercial license requires SoundWorks compatibility review.".to_string()]
-        }
-        ModelLicense::Unknown => {
-            vec!["License must be reviewed before production use.".to_string()]
-        }
-    }
-}
-
-fn limitations_for_safety(safety: &CapabilitySafety) -> Vec<String> {
-    let mut limitations = vec![];
-
-    if safety.requires_voice_consent {
-        limitations.push("Voice profile consent is required before generation.".to_string());
-    }
-
-    if !safety.disallowed_uses.is_empty() {
-        limitations.push(format!(
-            "Disallowed uses: {}.",
-            safety.disallowed_uses.join(", ")
-        ));
-    }
-
-    limitations
 }
 
 fn generation_recipe(
@@ -816,38 +785,6 @@ fn validation_checks() -> Vec<TtsValidationCheck> {
 fn estimate_segment_ms(text: &str) -> u64 {
     let word_count = text.split_whitespace().count().max(1) as u64;
     500 + word_count * 360
-}
-
-trait StudioInstallStatus {
-    fn is_runnable_for_studio(&self) -> bool;
-}
-
-impl StudioInstallStatus for crate::manifests::ModelInstall {
-    fn is_runnable_for_studio(&self) -> bool {
-        matches!(
-            self.status,
-            crate::manifests::ModelInstallStatus::Installed
-                | crate::manifests::ModelInstallStatus::Packaged
-                | crate::manifests::ModelInstallStatus::External
-        )
-    }
-}
-
-trait CaseLabel {
-    fn to_case_label(self) -> String;
-}
-
-impl CaseLabel for String {
-    fn to_case_label(self) -> String {
-        let mut label = String::new();
-        for (index, character) in self.chars().enumerate() {
-            if index > 0 && character.is_uppercase() {
-                label.push('-');
-            }
-            label.push(character.to_ascii_lowercase());
-        }
-        label
-    }
 }
 
 #[cfg(test)]

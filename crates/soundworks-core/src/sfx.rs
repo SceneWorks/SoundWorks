@@ -7,15 +7,15 @@ use crate::domain::{
     WatermarkStatus,
 };
 use crate::evaluation::{
-    CommercialUseEvaluation, EvaluationLane, EvaluationStatus, ModelEvaluationCandidate,
-    ModelEvaluationCatalog, ProductEligibility, ProductRuntimePath,
+    EvaluationLane, ModelEvaluationCandidate, ModelEvaluationCatalog, ProductEligibility,
 };
-use crate::manifests::{
-    CapabilityInput, CapabilitySafety, CapabilityWorkflow, ChannelLayout, ModelLicense,
-    ProviderCatalog,
-};
+use crate::manifests::{CapabilityInput, CapabilityWorkflow, ChannelLayout, ProviderCatalog};
 use crate::runtime::RuntimeOverview;
 use crate::storage::{StoragePathAllocator, StoragePathError, StoragePaths};
+use crate::studio_common::{
+    kebab_label, limitations_for_license, limitations_for_safety, SafetyLimitationOptions,
+    StudioInstallStatus, StudioSubmissionPreview,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -78,7 +78,7 @@ impl SfxStudioOverview {
         let provider_scorecards = provider_scorecards(evaluation);
         let variants = variant_previews(&prompt, &controls);
         let comparison = SfxVariantComparison::from_variants(&variants);
-        let submission = SfxSubmissionPreview::build(
+        let submission = sfx_submission_preview(
             &prompt,
             &controls,
             &provider_options,
@@ -273,22 +273,7 @@ impl SfxProviderSelection {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SfxProviderScorecard {
-    pub candidate_id: String,
-    pub name: String,
-    pub provider: String,
-    pub lanes: Vec<EvaluationLane>,
-    pub status: EvaluationStatus,
-    pub product_eligibility: ProductEligibility,
-    pub readiness: SfxProviderReadiness,
-    pub runtime_path: ProductRuntimePath,
-    pub commercial_use: CommercialUseEvaluation,
-    pub recommended: bool,
-    pub blockers: Vec<String>,
-    pub notes: String,
-}
+pub type SfxProviderScorecard = crate::studio_common::ProviderScorecard<SfxProviderReadiness>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -349,126 +334,119 @@ impl SfxVariantComparison {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SfxSubmissionPreview {
-    pub can_submit: bool,
-    pub job: GenerationJob,
-    pub recipe: GenerationRecipe,
-    pub blocking_reasons: Vec<String>,
-    pub warnings: Vec<String>,
-}
+/// UI submission readiness preview (see [`StudioSubmissionPreview`]); the real
+/// gate is `runtime::RuntimeJobStore::enqueue`, not `can_submit` (F-021).
+pub type SfxSubmissionPreview = StudioSubmissionPreview;
 
-impl SfxSubmissionPreview {
-    fn build(
-        prompt: &SfxPrompt,
-        controls: &SfxControls,
-        provider_options: &[SfxProviderOption],
-        selected_provider: &SfxProviderSelection,
-        variants: &[SfxVariantPreview],
-    ) -> Self {
-        let mut blocking_reasons = vec![];
-        let mut warnings = vec![];
-        let selected_option = provider_options.iter().find(|option| {
-            option.provider_id == selected_provider.provider_id
-                && option.model_id == selected_provider.model_id
-                && option.workflow == selected_provider.workflow
-        });
+fn sfx_submission_preview(
+    prompt: &SfxPrompt,
+    controls: &SfxControls,
+    provider_options: &[SfxProviderOption],
+    selected_provider: &SfxProviderSelection,
+    variants: &[SfxVariantPreview],
+) -> StudioSubmissionPreview {
+    let mut blocking_reasons = vec![];
+    let mut warnings = vec![];
+    let selected_option = provider_options.iter().find(|option| {
+        option.provider_id == selected_provider.provider_id
+            && option.model_id == selected_provider.model_id
+            && option.workflow == selected_provider.workflow
+    });
 
-        if prompt.text.trim().is_empty() {
-            blocking_reasons.push("Prompt is empty.".to_string());
-        }
+    if prompt.text.trim().is_empty() {
+        blocking_reasons.push("Prompt is empty.".to_string());
+    }
 
-        if selected_option.is_none() || !selected_provider.accepted {
-            blocking_reasons.push(selected_provider.blocker.clone().unwrap_or_else(|| {
+    if selected_option.is_none() || !selected_provider.accepted {
+        blocking_reasons.push(
+            selected_provider.blocker.clone().unwrap_or_else(|| {
                 "Selected provider cannot currently accept SFX jobs.".to_string()
-            }));
+            }),
+        );
+    }
+
+    if let Some(option) = selected_option {
+        if let Some(min_duration_ms) = option.min_duration_ms {
+            if controls.duration_ms < min_duration_ms {
+                blocking_reasons.push(format!(
+                    "{} requires at least {} ms.",
+                    option.display_name, min_duration_ms
+                ));
+            }
         }
 
-        if let Some(option) = selected_option {
-            if let Some(min_duration_ms) = option.min_duration_ms {
-                if controls.duration_ms < min_duration_ms {
-                    blocking_reasons.push(format!(
-                        "{} requires at least {} ms.",
-                        option.display_name, min_duration_ms
-                    ));
-                }
+        if let Some(max_duration_ms) = option.max_duration_ms {
+            if controls.duration_ms > max_duration_ms {
+                blocking_reasons.push(format!(
+                    "{} supports up to {} ms; current request is {} ms.",
+                    option.display_name, max_duration_ms, controls.duration_ms
+                ));
             }
+        }
 
-            if let Some(max_duration_ms) = option.max_duration_ms {
-                if controls.duration_ms > max_duration_ms {
-                    blocking_reasons.push(format!(
-                        "{} supports up to {} ms; current request is {} ms.",
-                        option.display_name, max_duration_ms, controls.duration_ms
-                    ));
-                }
-            }
-
-            if prompt.reference_audio_asset_id.is_some() && !option.supports_reference_audio {
-                warnings.push(
+        if prompt.reference_audio_asset_id.is_some() && !option.supports_reference_audio {
+            warnings.push(
                     "Reference audio is stored with the recipe but the selected provider treats it as context only."
                         .to_string(),
                 );
-            }
+        }
 
-            if controls.loopable && !option.supports_looping {
-                warnings.push(
+        if controls.loopable && !option.supports_looping {
+            warnings.push(
                     "Loopability will be inspected with post-processing because the provider has no native loop control."
                         .to_string(),
                 );
-            }
-
-            if !option.commercial_use_allowed {
-                warnings
-                    .push("Selected provider requires license review before export.".to_string());
-            }
         }
 
-        if controls.trim_silence {
-            warnings.push("Post-processing will trim leading and trailing silence.".to_string());
+        if !option.commercial_use_allowed {
+            warnings.push("Selected provider requires license review before export.".to_string());
         }
+    }
 
-        let can_submit = blocking_reasons.is_empty();
-        let recipe = generation_recipe(prompt, controls, selected_provider, variants);
+    if controls.trim_silence {
+        warnings.push("Post-processing will trim leading and trailing silence.".to_string());
+    }
 
-        Self {
-            can_submit,
-            job: GenerationJob {
-                id: "job-sfx-studio-reference".to_string(),
-                recipe_id: recipe.id.clone(),
-                kind: JobKind::GenerateAudio,
-                status: if can_submit {
-                    JobStatus::Queued
-                } else {
-                    JobStatus::Failed
-                },
-                progress: Some(JobProgress {
-                    percent: if can_submit { 0.0 } else { 100.0 },
-                    message: Some(if can_submit {
-                        "Ready to queue SFX and ambience generation.".to_string()
-                    } else {
-                        "SFX submission blocked by validation.".to_string()
-                    }),
-                }),
-                output_version_ids: if can_submit {
-                    variants
-                        .iter()
-                        .filter(|variant| variant.selected_for_save)
-                        .map(|variant| format!("version-{}-a", variant.id))
-                        .collect()
-                } else {
-                    vec![]
-                },
-                error: if can_submit {
-                    None
-                } else {
-                    Some(blocking_reasons.join(" "))
-                },
+    let can_submit = blocking_reasons.is_empty();
+    let recipe = generation_recipe(prompt, controls, selected_provider, variants);
+
+    StudioSubmissionPreview {
+        can_submit,
+        job: GenerationJob {
+            id: "job-sfx-studio-reference".to_string(),
+            recipe_id: recipe.id.clone(),
+            kind: JobKind::GenerateAudio,
+            status: if can_submit {
+                JobStatus::Queued
+            } else {
+                JobStatus::Failed
             },
-            recipe,
-            blocking_reasons,
-            warnings,
-        }
+            progress: Some(JobProgress {
+                percent: if can_submit { 0.0 } else { 100.0 },
+                message: Some(if can_submit {
+                    "Ready to queue SFX and ambience generation.".to_string()
+                } else {
+                    "SFX submission blocked by validation.".to_string()
+                }),
+            }),
+            output_version_ids: if can_submit {
+                variants
+                    .iter()
+                    .filter(|variant| variant.selected_for_save)
+                    .map(|variant| format!("version-{}-a", variant.id))
+                    .collect()
+            } else {
+                vec![]
+            },
+            error: if can_submit {
+                None
+            } else {
+                Some(blocking_reasons.join(" "))
+            },
+        },
+        recipe,
+        blocking_reasons,
+        warnings,
     }
 }
 
@@ -576,7 +554,14 @@ fn provider_options(
                 }
 
                 limitations.extend(limitations_for_license(model.requirements.license));
-                limitations.extend(limitations_for_safety(&capability.safety));
+                limitations.extend(limitations_for_safety(
+                    &capability.safety,
+                    SafetyLimitationOptions {
+                        check_voice_consent: false,
+                        check_commercial_use: true,
+                        check_provenance_sidecar: false,
+                    },
+                ));
 
                 let output_asset_kind = capability
                     .outputs
@@ -592,7 +577,7 @@ fn provider_options(
                     display_name: format!("{} / {}", provider.name, model.name),
                     workflow: capability.workflow,
                     runtime: model.runtime,
-                    install_status: format!("{:?}", model.install.status).to_case_label(),
+                    install_status: kebab_label(&model.install.status),
                     runnable: state.map_or(false, |state| {
                         matches!(
                             state.availability,
@@ -645,37 +630,6 @@ fn supported_controls(capability: &crate::manifests::ModelCapability) -> Vec<Sfx
     }
 
     controls
-}
-
-fn limitations_for_license(license: ModelLicense) -> Vec<String> {
-    match license {
-        ModelLicense::Open | ModelLicense::CommercialAllowed | ModelLicense::ProviderTerms => {
-            vec![]
-        }
-        ModelLicense::NonCommercial => {
-            vec!["Noncommercial license requires SoundWorks compatibility review.".to_string()]
-        }
-        ModelLicense::Unknown => {
-            vec!["License must be reviewed before production use.".to_string()]
-        }
-    }
-}
-
-fn limitations_for_safety(safety: &CapabilitySafety) -> Vec<String> {
-    let mut limitations = vec![];
-
-    if !safety.commercial_use_allowed {
-        limitations.push("Model use terms require review before export.".to_string());
-    }
-
-    if !safety.disallowed_uses.is_empty() {
-        limitations.push(format!(
-            "Disallowed uses: {}.",
-            safety.disallowed_uses.join(", ")
-        ));
-    }
-
-    limitations
 }
 
 fn provider_scorecards(evaluation: &ModelEvaluationCatalog) -> Vec<SfxProviderScorecard> {
@@ -841,7 +795,7 @@ fn generation_recipe(
         request: RecipeRequest::Sfx(SfxRecipe {
             prompt: prompt.text.clone(),
             negative_prompt: Some(prompt.negative_prompt.clone()),
-            category: Some(format!("{:?}", prompt.category).to_case_label()),
+            category: Some(kebab_label(&prompt.category)),
             target_duration_ms: Some(controls.duration_ms),
             loopable: controls.loopable,
         }),
@@ -1061,38 +1015,6 @@ fn validation_checks() -> Vec<SfxValidationCheck> {
                 .to_string(),
         },
     ]
-}
-
-trait StudioInstallStatus {
-    fn is_runnable_for_studio(&self) -> bool;
-}
-
-impl StudioInstallStatus for crate::manifests::ModelInstall {
-    fn is_runnable_for_studio(&self) -> bool {
-        matches!(
-            self.status,
-            crate::manifests::ModelInstallStatus::Installed
-                | crate::manifests::ModelInstallStatus::Packaged
-                | crate::manifests::ModelInstallStatus::External
-        )
-    }
-}
-
-trait CaseLabel {
-    fn to_case_label(self) -> String;
-}
-
-impl CaseLabel for String {
-    fn to_case_label(self) -> String {
-        let mut label = String::new();
-        for (index, character) in self.chars().enumerate() {
-            if index > 0 && character.is_uppercase() {
-                label.push('-');
-            }
-            label.push(character.to_ascii_lowercase());
-        }
-        label
-    }
 }
 
 #[cfg(test)]

@@ -7,11 +7,12 @@ use crate::domain::{
     VoiceProfile, VoiceUse, WatermarkStatus,
 };
 use crate::evaluation::{
-    CommercialUseEvaluation, EvaluationLane, EvaluationStatus, ModelEvaluationCandidate,
-    ModelEvaluationCatalog, ProductEligibility, ProductRuntimePath,
+    EvaluationLane, ModelEvaluationCandidate, ModelEvaluationCatalog, ProductEligibility,
+    ProductRuntimePath,
 };
 use crate::manifests::CapabilityWorkflow;
 use crate::storage::{StoragePathAllocator, StoragePathError, StoragePaths};
+use crate::studio_common::StudioSubmissionPreview;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -49,11 +50,8 @@ impl VoiceLabOverview {
         let reference_clips = reference_clips();
         let conversion_source = VoiceConversionSource::reference();
         let provider_scorecards = provider_scorecards(catalog);
-        let selected_conversion = VoiceConversionPreview::build(
-            &conversion_source,
-            &voice_profiles[0],
-            &provider_scorecards,
-        );
+        let selected_conversion =
+            voice_conversion_preview(&conversion_source, &voice_profiles[0], &provider_scorecards);
         let saved_output = saved_output(&selected_conversion, allocator)?;
 
         Ok(Self {
@@ -144,22 +142,7 @@ impl VoiceConversionSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VoiceProviderScorecard {
-    pub candidate_id: String,
-    pub name: String,
-    pub provider: String,
-    pub lanes: Vec<EvaluationLane>,
-    pub status: EvaluationStatus,
-    pub product_eligibility: ProductEligibility,
-    pub readiness: VoiceProviderReadiness,
-    pub runtime_path: ProductRuntimePath,
-    pub commercial_use: CommercialUseEvaluation,
-    pub recommended: bool,
-    pub blockers: Vec<String>,
-    pub notes: String,
-}
+pub type VoiceProviderScorecard = crate::studio_common::ProviderScorecard<VoiceProviderReadiness>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -171,117 +154,107 @@ pub enum VoiceProviderReadiness {
     Unsuitable,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VoiceConversionPreview {
-    pub can_submit: bool,
-    pub job: GenerationJob,
-    pub recipe: GenerationRecipe,
-    pub blocking_reasons: Vec<String>,
-    pub warnings: Vec<String>,
-}
+/// UI contract-preview of a voice conversion submission, not the authoritative
+/// safety gate (F-021).
+pub type VoiceConversionPreview = StudioSubmissionPreview;
 
-impl VoiceConversionPreview {
-    fn build(
-        source: &VoiceConversionSource,
-        target_profile: &VoiceLabProfile,
-        scorecards: &[VoiceProviderScorecard],
-    ) -> Self {
-        let selected_provider = scorecards
-            .iter()
-            .find(|scorecard| scorecard.candidate_id == "rvc");
-        let mut blocking_reasons = vec![];
-        let mut warnings = vec![];
+fn voice_conversion_preview(
+    source: &VoiceConversionSource,
+    target_profile: &VoiceLabProfile,
+    scorecards: &[VoiceProviderScorecard],
+) -> StudioSubmissionPreview {
+    let selected_provider = scorecards
+        .iter()
+        .find(|scorecard| scorecard.candidate_id == "rvc");
+    let mut blocking_reasons = vec![];
+    let mut warnings = vec![];
 
-        if source.asset_id.trim().is_empty() {
-            blocking_reasons.push("Source audio is required for voice conversion.".to_string());
-        }
+    if source.asset_id.trim().is_empty() {
+        blocking_reasons.push("Source audio is required for voice conversion.".to_string());
+    }
 
-        if target_profile.profile.consent != VoiceConsentStatus::ExplicitConsentRecorded {
-            blocking_reasons.push(
-                "Voice conversion requires explicit consent for the target voice profile."
-                    .to_string(),
-            );
-        }
+    if target_profile.profile.consent != VoiceConsentStatus::ExplicitConsentRecorded {
+        blocking_reasons.push(
+            "Voice conversion requires explicit consent for the target voice profile.".to_string(),
+        );
+    }
 
-        if !target_profile
-            .profile
-            .allowed_uses
-            .contains(&VoiceUse::VoiceConversion)
-        {
-            blocking_reasons
-                .push("Target voice profile is not approved for voice conversion.".to_string());
-        }
+    if !target_profile
+        .profile
+        .allowed_uses
+        .contains(&VoiceUse::VoiceConversion)
+    {
+        blocking_reasons
+            .push("Target voice profile is not approved for voice conversion.".to_string());
+    }
 
-        match selected_provider {
-            Some(provider) => {
-                if matches!(
-                    provider.readiness,
-                    VoiceProviderReadiness::Blocked
-                        | VoiceProviderReadiness::ResearchOnly
-                        | VoiceProviderReadiness::Unsuitable
-                ) {
-                    blocking_reasons.push(format!(
-                        "{} is not product-runnable for conversion.",
-                        provider.name
-                    ));
-                }
+    match selected_provider {
+        Some(provider) => {
+            if matches!(
+                provider.readiness,
+                VoiceProviderReadiness::Blocked
+                    | VoiceProviderReadiness::ResearchOnly
+                    | VoiceProviderReadiness::Unsuitable
+            ) {
+                blocking_reasons.push(format!(
+                    "{} is not product-runnable for conversion.",
+                    provider.name
+                ));
+            }
 
-                if provider.readiness == VoiceProviderReadiness::NeedsRuntimePort {
-                    warnings.push(
+            if provider.readiness == VoiceProviderReadiness::NeedsRuntimePort {
+                warnings.push(
                         "RVC is represented as a gated provider spike until a packaged runtime port exists."
                             .to_string(),
                     );
-                }
-            }
-            None => {
-                blocking_reasons
-                    .push("No RVC voice conversion provider is registered.".to_string());
             }
         }
+        None => {
+            blocking_reasons.push("No RVC voice conversion provider is registered.".to_string());
+        }
+    }
 
-        warnings.push(
+    warnings.push(
             "Converted output keeps the source timing and is saved as a Voice clip with recipe provenance."
                 .to_string(),
         );
 
-        let can_submit = blocking_reasons.is_empty();
-        let recipe = conversion_recipe(source, target_profile, selected_provider);
+    let can_submit = blocking_reasons.is_empty();
+    let recipe = conversion_recipe(source, target_profile, selected_provider);
 
-        Self {
-            can_submit,
-            job: GenerationJob {
-                id: "job-voice-lab-conversion-reference".to_string(),
-                recipe_id: recipe.id.clone(),
-                kind: JobKind::GenerateAudio,
-                status: if can_submit {
-                    JobStatus::Queued
-                } else {
-                    JobStatus::Failed
-                },
-                progress: Some(JobProgress {
-                    percent: if can_submit { 0.0 } else { 100.0 },
-                    message: Some(if can_submit {
-                        "Ready to queue speech-to-speech voice conversion.".to_string()
-                    } else {
-                        "Voice conversion blocked by safety validation.".to_string()
-                    }),
-                }),
-                output_version_ids: if can_submit {
-                    vec!["version-voice-lab-conversion-reference-a".to_string()]
-                } else {
-                    vec![]
-                },
-                error: if can_submit {
-                    None
-                } else {
-                    Some(blocking_reasons.join(" "))
-                },
+    StudioSubmissionPreview {
+        can_submit,
+        job: GenerationJob {
+            id: "job-voice-lab-conversion-reference".to_string(),
+            recipe_id: recipe.id.clone(),
+            kind: JobKind::GenerateAudio,
+            status: if can_submit {
+                JobStatus::Queued
+            } else {
+                JobStatus::Failed
             },
-            recipe,
-            blocking_reasons,
-            warnings,
-        }
+            progress: Some(JobProgress {
+                percent: if can_submit { 0.0 } else { 100.0 },
+                message: Some(if can_submit {
+                    "Ready to queue speech-to-speech voice conversion.".to_string()
+                } else {
+                    "Voice conversion blocked by safety validation.".to_string()
+                }),
+            }),
+            output_version_ids: if can_submit {
+                vec!["version-voice-lab-conversion-reference-a".to_string()]
+            } else {
+                vec![]
+            },
+            error: if can_submit {
+                None
+            } else {
+                Some(blocking_reasons.join(" "))
+            },
+        },
+        recipe,
+        blocking_reasons,
+        warnings,
     }
 }
 
@@ -898,7 +871,7 @@ mod tests {
             .filter(|scorecard| scorecard.candidate_id != "rvc")
             .collect();
 
-        let preview = super::VoiceConversionPreview::build(&source, &profiles[0], &scorecards);
+        let preview = super::voice_conversion_preview(&source, &profiles[0], &scorecards);
 
         assert!(!preview.can_submit);
         assert!(preview

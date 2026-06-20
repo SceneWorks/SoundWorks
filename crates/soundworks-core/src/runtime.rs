@@ -842,10 +842,10 @@ pub struct RuntimeJobSnapshot {
     pub retry_count: u8,
     pub created_at: String,
     pub updated_at: String,
+    /// Store-relative job record directory (e.g. `jobs/<id>`). Absolute paths are
+    /// derived on demand from the store root via `sanitized_join`, so payloads no
+    /// longer carry the user's home directory or redundant derivable paths (F-030).
     pub record_root: String,
-    pub recipe_path: String,
-    pub model_metadata_path: String,
-    pub events_path: String,
     pub log_tail: Vec<String>,
     pub artifacts: Vec<RuntimeJobArtifact>,
     pub actionable_error: Option<ActionableRuntimeError>,
@@ -1232,7 +1232,7 @@ impl RuntimeJobStore {
         )?;
 
         let mut job = RuntimeJobSnapshot {
-            id: job_id,
+            id: job_id.clone(),
             kind: request.kind,
             status: JobStatus::Queued,
             provider_id: request.provider_id.clone(),
@@ -1247,10 +1247,7 @@ impl RuntimeJobStore {
             retry_count: 0,
             created_at: created_at.clone(),
             updated_at: created_at,
-            record_root: record_root.display().to_string(),
-            recipe_path: record_root.join("recipe.json").display().to_string(),
-            model_metadata_path: record_root.join("model.json").display().to_string(),
-            events_path: record_root.join("events.jsonl").display().to_string(),
+            record_root: format!("jobs/{job_id}"),
             log_tail: vec!["persisted job record".to_string()],
             artifacts: vec![],
             actionable_error: None,
@@ -1479,7 +1476,7 @@ impl RuntimeJobStore {
         job: &mut RuntimeJobSnapshot,
         request: &RuntimeJobRequest,
     ) -> io::Result<()> {
-        let record_root = PathBuf::from(&job.record_root);
+        let record_root = sanitized_join(&self.root, &["jobs", &job.id])?;
         let audio_path = record_root.join("artifacts").join("runtime-smoke.wav");
         write_smoke_wav(&audio_path)?;
         let manifest_path = record_root.join("output-manifest.json");
@@ -1649,7 +1646,7 @@ impl RuntimeJobStore {
             return Ok(());
         }
 
-        let record_root = PathBuf::from(&job.record_root);
+        let record_root = sanitized_join(&self.root, &["jobs", &job.id])?;
         let audio_path = record_root.join("artifacts").join("kokoro-tts.wav");
         write_pcm16_wav(&audio_path, &samples, 24_000)?;
         let duration_ms = samples.len() as u64 * 1000 / 24_000;
@@ -1790,7 +1787,7 @@ impl RuntimeJobStore {
             return Ok(());
         }
         let stats = audio_stats(&samples);
-        let record_root = PathBuf::from(&job.record_root);
+        let record_root = sanitized_join(&self.root, &["jobs", &job.id])?;
         let audio_path = record_root.join("artifacts").join("native-sfx.wav");
         write_pcm16_wav_channels(&audio_path, &samples, sample_rate, channels)?;
         let frame_count = samples.len() as u64 / channels as u64;
@@ -1962,7 +1959,7 @@ impl RuntimeJobStore {
             return Ok(());
         }
         let stats = audio_stats(&samples);
-        let record_root = PathBuf::from(&job.record_root);
+        let record_root = sanitized_join(&self.root, &["jobs", &job.id])?;
         let audio_path = record_root.join("artifacts").join(match request.workflow {
             CapabilityWorkflow::InstrumentSample => "native-sample.wav",
             _ => "native-loop.wav",
@@ -2035,7 +2032,7 @@ impl RuntimeJobStore {
     }
 
     fn write_error_report(&self, job: &mut RuntimeJobSnapshot) -> io::Result<()> {
-        let path = PathBuf::from(&job.record_root).join("error.json");
+        let path = sanitized_join(&self.root, &["jobs", &job.id, "error.json"])?;
         write_json(
             &path,
             &serde_json::json!({
@@ -2066,7 +2063,10 @@ impl RuntimeJobStore {
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&job.events_path)?;
+            .open(sanitized_join(
+                &self.root,
+                &["jobs", &job.id, "events.jsonl"],
+            )?)?;
         writeln!(
             file,
             "{}",
@@ -2869,9 +2869,10 @@ mod tests {
 
         assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
         assert_eq!(job.adapter, ProviderAdapterKind::NativeRust);
-        assert!(PathBuf::from(&job.recipe_path).is_file());
-        assert!(PathBuf::from(&job.model_metadata_path).is_file());
-        assert!(PathBuf::from(&job.events_path).is_file());
+        let job_record_root = store.root().join(&job.record_root);
+        assert!(job_record_root.join("recipe.json").is_file());
+        assert!(job_record_root.join("model.json").is_file());
+        assert!(job_record_root.join("events.jsonl").is_file());
         assert!(job.artifacts.iter().any(|artifact| {
             artifact.kind == RuntimeArtifactKind::AudioPreview
                 && artifact.bytes > 44

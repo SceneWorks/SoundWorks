@@ -15,7 +15,7 @@ use crate::workspace::WorkspaceOverview;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -189,6 +189,17 @@ impl ProjectLibraryStore {
     }
 
     pub fn workspace_overview(&self) -> io::Result<WorkspaceOverview> {
+        let library = self.asset_library_overview(None)?;
+        self.workspace_overview_with_library(&library)
+    }
+
+    /// F-018: build the workspace overview from an already-computed asset-library
+    /// overview, so a mutation does not rescan `assets/` and rebuild the fixture
+    /// catalog twice (once for the action result, once inside `workspace_overview`).
+    fn workspace_overview_with_library(
+        &self,
+        library: &AssetLibraryOverview,
+    ) -> io::Result<WorkspaceOverview> {
         let state = self.load_or_seed_workspace()?;
         let projects = self.read_projects()?;
         let active_project = projects
@@ -205,13 +216,12 @@ impl ProjectLibraryStore {
         if recent_projects.is_empty() {
             recent_projects.push(active_project.clone());
         }
-        let library = self.asset_library_overview(None)?;
 
         Ok(WorkspaceOverview::from_library(
             state.workspace,
             active_project,
             recent_projects,
-            &library,
+            library,
         ))
     }
 
@@ -1000,7 +1010,7 @@ impl ProjectLibraryStore {
         message: String,
     ) -> io::Result<ProjectLibraryActionResult> {
         let asset_library = self.asset_library_overview(selected_item_id.as_deref())?;
-        let workspace = self.workspace_overview()?;
+        let workspace = self.workspace_overview_with_library(&asset_library)?;
         let selected_item = asset_library.selected_item.clone();
         Ok(ProjectLibraryActionResult {
             workspace,
@@ -1017,6 +1027,9 @@ impl ProjectLibraryStore {
         }
         fs::create_dir_all(self.root.join("projects"))?;
         fs::create_dir_all(self.root.join("assets"))?;
+        // F-017: persist the default project on first run so imported assets can be
+        // linked to it (its active_project_id is otherwise a record with no file).
+        self.write_project(&reference_project())?;
         let state = PersistedWorkspace {
             workspace: Workspace {
                 id: "workspace-local".to_string(),
@@ -1039,19 +1052,22 @@ impl ProjectLibraryStore {
     }
 
     fn read_projects(&self) -> io::Result<Vec<Project>> {
+        // F-017/F-018: prefer the persisted copy of each project. The demo project is
+        // injected only as a fallback when nothing is on disk, so an updated
+        // project-demo/project.json (e.g. with linked assets) is never shadowed by the
+        // in-memory reference.
         let projects_root = self.root.join("projects");
-        let mut projects = vec![reference_project()];
-        if !projects_root.exists() {
-            return Ok(projects);
-        }
-        for entry in fs::read_dir(projects_root)? {
-            let path = entry?.path().join("project.json");
-            if path.is_file() {
-                let project: Project = read_json(path)?;
-                if !projects.iter().any(|existing| existing.id == project.id) {
-                    projects.push(project);
+        let mut projects: Vec<Project> = vec![];
+        if projects_root.exists() {
+            for entry in fs::read_dir(projects_root)? {
+                let path = entry?.path().join("project.json");
+                if path.is_file() {
+                    projects.push(read_json(path)?);
                 }
             }
+        }
+        if !projects.iter().any(|project| project.id == "project-demo") {
+            projects.push(reference_project());
         }
         Ok(projects)
     }
@@ -1067,9 +1083,9 @@ impl ProjectLibraryStore {
             if !project.asset_ids.iter().any(|id| id == asset_id) {
                 project.asset_ids.push(asset_id.to_string());
             }
-            if project.id != "project-demo" {
-                self.write_project(project)?;
-            }
+            // F-017: always persist the link, including for the default project-demo
+            // (which is now seeded on disk), so imported assets are never orphaned.
+            self.write_project(project)?;
         }
         Ok(())
     }
@@ -1312,12 +1328,34 @@ fn timestamp_string() -> String {
 }
 
 fn write_json(path: impl AsRef<Path>, value: &impl Serialize) -> io::Result<()> {
-    if let Some(parent) = path.as_ref().parent() {
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
     let payload = serde_json::to_vec_pretty(value)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    fs::write(path, payload)
+    write_atomic(path, &payload)
+}
+
+/// F-005: write durably — to a sibling temp file, fsync it, then atomically rename
+/// over the destination, so a crash mid-write can never leave a truncated/corrupt
+/// file. The parent directory is fsynced best-effort so the rename survives a crash.
+fn write_atomic(path: &Path, payload: &[u8]) -> io::Result<()> {
+    let mut temp_path = path.as_os_str().to_os_string();
+    temp_path.push(".tmp");
+    let temp_path = PathBuf::from(temp_path);
+    {
+        let mut file = fs::File::create(&temp_path)?;
+        file.write_all(payload)?;
+        file.sync_all()?;
+    }
+    fs::rename(&temp_path, path)?;
+    if let Some(parent) = path.parent() {
+        if let Ok(dir) = fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
+    Ok(())
 }
 
 fn read_json<T: DeserializeOwned>(path: impl AsRef<Path>) -> io::Result<T> {
@@ -1392,6 +1430,25 @@ struct PcmStats {
     true_peak_dbfs: f32,
 }
 
+/// Read a little-endian u16 at `at`, returning InvalidData (not a panic) when the
+/// slice runs past the end of an untrusted buffer.
+fn read_u16_le(bytes: &[u8], at: usize) -> io::Result<u16> {
+    bytes
+        .get(at..at + 2)
+        .and_then(|slice| <[u8; 2]>::try_from(slice).ok())
+        .map(u16::from_le_bytes)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "truncated WAV chunk field"))
+}
+
+/// Read a little-endian u32 at `at`, returning InvalidData on truncation.
+fn read_u32_le(bytes: &[u8], at: usize) -> io::Result<u32> {
+    bytes
+        .get(at..at + 4)
+        .and_then(|slice| <[u8; 4]>::try_from(slice).ok())
+        .map(u32::from_le_bytes)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "truncated WAV chunk field"))
+}
+
 fn read_pcm16_wav(path: &Path) -> io::Result<Pcm16Wav> {
     let bytes = fs::read(path)?;
     if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
@@ -1401,6 +1458,10 @@ fn read_pcm16_wav(path: &Path) -> io::Result<Pcm16Wav> {
         ));
     }
 
+    // F-016: every multi-byte read goes through read_u16_le/read_u32_le (checked),
+    // chunk advancement saturates, and the fmt guard requires the declared body to
+    // actually be present, so a crafted/truncated WAV returns InvalidData instead of
+    // panicking the command thread on an out-of-range slice.
     let mut cursor = 12usize;
     let mut channels = None;
     let mut sample_rate = None;
@@ -1408,50 +1469,34 @@ fn read_pcm16_wav(path: &Path) -> io::Result<Pcm16Wav> {
     let mut data_range = None;
     while cursor + 8 <= bytes.len() {
         let id = &bytes[cursor..cursor + 4];
-        let size = u32::from_le_bytes(
-            bytes[cursor + 4..cursor + 8]
-                .try_into()
-                .expect("slice length"),
-        ) as usize;
+        let size = read_u32_le(&bytes, cursor + 4)? as usize;
         let chunk_start = cursor + 8;
         let chunk_end = chunk_start.saturating_add(size).min(bytes.len());
         if id == b"fmt " {
-            if size < 16 || chunk_end > bytes.len() {
+            // The declared size may exceed the bytes actually present; require the
+            // full 16-byte PCM fmt body before reading any field.
+            if size < 16 || chunk_start + 16 > bytes.len() {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "invalid fmt chunk",
                 ));
             }
-            let audio_format = u16::from_le_bytes(
-                bytes[chunk_start..chunk_start + 2]
-                    .try_into()
-                    .expect("slice length"),
-            );
+            let audio_format = read_u16_le(&bytes, chunk_start)?;
             if audio_format != 1 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "only PCM WAV files are supported",
                 ));
             }
-            channels = Some(u16::from_le_bytes(
-                bytes[chunk_start + 2..chunk_start + 4]
-                    .try_into()
-                    .expect("slice length"),
-            ));
-            sample_rate = Some(u32::from_le_bytes(
-                bytes[chunk_start + 4..chunk_start + 8]
-                    .try_into()
-                    .expect("slice length"),
-            ));
-            bits_per_sample = Some(u16::from_le_bytes(
-                bytes[chunk_start + 14..chunk_start + 16]
-                    .try_into()
-                    .expect("slice length"),
-            ));
+            channels = Some(read_u16_le(&bytes, chunk_start + 2)?);
+            sample_rate = Some(read_u32_le(&bytes, chunk_start + 4)?);
+            bits_per_sample = Some(read_u16_le(&bytes, chunk_start + 14)?);
         } else if id == b"data" {
             data_range = Some((chunk_start, chunk_end));
         }
-        cursor = chunk_start + size + (size % 2);
+        // Advance past the chunk body plus RIFF word-alignment padding, saturating so
+        // a huge declared size can never wrap the cursor and loop forever.
+        cursor = chunk_start.saturating_add(size).saturating_add(size % 2);
     }
 
     let channels = channels.ok_or_else(|| {
@@ -1460,6 +1505,12 @@ fn read_pcm16_wav(path: &Path) -> io::Result<Pcm16Wav> {
             "WAV fmt chunk is missing channels",
         )
     })?;
+    if channels == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "WAV channel count cannot be zero",
+        ));
+    }
     let sample_rate = sample_rate.ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -1474,9 +1525,12 @@ fn read_pcm16_wav(path: &Path) -> io::Result<Pcm16Wav> {
     }
     let (data_start, data_end) = data_range
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "WAV data chunk is missing"))?;
-    let mut samples = Vec::with_capacity((data_end - data_start) / 2);
-    for chunk in bytes[data_start..data_end].chunks_exact(2) {
-        samples.push(i16::from_le_bytes(chunk.try_into().expect("slice length")));
+    let data = bytes
+        .get(data_start..data_end)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "WAV data chunk is truncated"))?;
+    let mut samples = Vec::with_capacity(data.len() / 2);
+    for chunk in data.chunks_exact(2) {
+        samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
     }
 
     Ok(Pcm16Wav {
@@ -1675,6 +1729,99 @@ mod tests {
         assert_eq!(
             blocked.unwrap_err().kind(),
             std::io::ErrorKind::PermissionDenied
+        );
+    }
+
+    #[test]
+    fn imported_asset_is_linked_to_the_default_project() {
+        // F-017: an artifact imported into the out-of-the-box workspace must be linked
+        // to the seeded project-demo, not orphaned.
+        let store = ProjectLibraryStore::new(temp_root("orphan-link"));
+        let runtime_root = temp_root("orphan-link-runtime");
+        let runtime_store = RuntimeJobStore::new(&runtime_root);
+        let job_id = seed_runtime_job(&runtime_root);
+        let imported = store
+            .import_runtime_artifact_from_store(
+                ImportRuntimeArtifactRequest {
+                    job_id,
+                    project_id: None,
+                    name: None,
+                    scope: None,
+                    tags: vec![],
+                },
+                &runtime_store,
+            )
+            .expect("runtime artifact imported");
+        let asset_id = imported.asset_library.selected_item.item.id.clone();
+
+        let workspace = store.workspace_overview().expect("workspace overview");
+        assert_eq!(workspace.active_project.project.id, "project-demo");
+        assert!(
+            workspace
+                .active_project
+                .project
+                .asset_ids
+                .contains(&asset_id),
+            "imported asset must be linked to project-demo, not orphaned"
+        );
+    }
+
+    #[test]
+    fn writes_leave_no_temp_files_behind() {
+        // F-005: the atomic temp+rename writer must not leave .tmp files on success.
+        let store = ProjectLibraryStore::new(temp_root("atomic-write"));
+        store
+            .create_project(CreateProjectRequest {
+                name: "Atomic".to_string(),
+            })
+            .expect("project created");
+
+        fn collect_tmp(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+            if let Ok(entries) = fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        collect_tmp(&path, out);
+                    } else if path.extension().is_some_and(|ext| ext == "tmp") {
+                        out.push(path);
+                    }
+                }
+            }
+        }
+        let mut leftovers = vec![];
+        collect_tmp(store.root(), &mut leftovers);
+        assert!(
+            leftovers.is_empty(),
+            "no .tmp files should remain after atomic writes: {leftovers:?}"
+        );
+    }
+
+    #[test]
+    fn wav_parser_rejects_truncated_fmt_chunk_without_panicking() {
+        // F-016: a fmt chunk that declares a 16-byte body but ends early must return
+        // InvalidData, not panic on an out-of-range slice.
+        let dir = temp_root("wav-malformed");
+        fs::create_dir_all(&dir).expect("create dir");
+        let path = dir.join("bad.wav");
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&36u32.to_le_bytes());
+        bytes.extend_from_slice(b"WAVE");
+        // A preceding JUNK chunk advances the cursor so the fmt chunk lands near EOF.
+        bytes.extend_from_slice(b"JUNK");
+        bytes.extend_from_slice(&12u32.to_le_bytes());
+        bytes.extend_from_slice(&[0u8; 12]);
+        // fmt chunk declares size 16 but only 4 body bytes are present before EOF.
+        bytes.extend_from_slice(b"fmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&[1u8, 0, 1, 0]);
+        assert_eq!(bytes.len(), 44);
+        fs::write(&path, &bytes).expect("write malformed wav");
+
+        let result = super::read_pcm16_wav(&path);
+        assert!(
+            result.is_err(),
+            "a truncated fmt chunk must error, not panic"
         );
     }
 

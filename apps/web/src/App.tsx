@@ -29,7 +29,7 @@ import {
   Waves,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fallbackOverview,
   fallbackAssetLibrary,
@@ -77,6 +77,7 @@ import {
   loadVoiceLabOverview,
   loadWorkspaceOverview,
   revalidateModelCandidate,
+  isTauri,
 } from "./tauri";
 import type {
   AppOverview,
@@ -397,113 +398,104 @@ export function App() {
     useState<RightsSafetyOverview>(fallbackRightsSafety);
   const [videoToAudio, setVideoToAudio] =
     useState<VideoToAudioOverview>(fallbackVideoToAudio);
+  const [dataError, setDataError] = useState<string | null>(null);
 
+  const webPreview = !isTauri();
+  const mountedRef = useRef(true);
+  const loadedViewsRef = useRef<Set<ActiveView>>(new Set());
+
+  // Apply an overview load to component state, surfacing real (desktop) command
+  // failures instead of silently keeping stale fixtures (F-008).
+  function applyLoad<T>(promise: Promise<T>, apply: (value: T) => void) {
+    promise
+      .then((value) => {
+        if (mountedRef.current) {
+          apply(value);
+        }
+      })
+      .catch((error) => {
+        if (mountedRef.current) {
+          setDataError(String(error));
+        }
+      });
+  }
+
+  // Eager loads: only the data the persistent chrome (header, queue chip,
+  // studio grid, generation gating) needs regardless of the active view.
   useEffect(() => {
-    let active = true;
-
-    loadAppOverview().then((nextOverview) => {
-      if (active) {
-        setOverview(nextOverview);
-      }
-    });
-
-    loadRuntimeOverview().then((nextRuntime) => {
-      if (active) {
-        setRuntime(nextRuntime);
-      }
-    });
-
-    loadModelManagerOverview().then((nextModelManager) => {
-      if (active) {
-        setModelManager(nextModelManager);
-        setModelManagerOperation(
-          visibleModelManagerOperation(nextModelManager.operations),
-        );
-      }
-    });
-
-    loadWorkspaceOverview().then((nextWorkspace) => {
-      if (active) {
-        setWorkspace(nextWorkspace);
-      }
-    });
-
-    loadAssetLibraryOverview().then((nextAssetLibrary) => {
-      if (active) {
-        setAssetLibrary(nextAssetLibrary);
-      }
-    });
-
-    loadExportWorkflowOverview().then((nextExportWorkflow) => {
-      if (active) {
-        setExportWorkflow(nextExportWorkflow);
-      }
-    });
-
-    loadCompositionEditorOverview().then((nextCompositionEditor) => {
-      if (active) {
-        setCompositionEditor(nextCompositionEditor);
-      }
-    });
-
-    loadMvpValidationOverview().then((nextMvpValidation) => {
-      if (active) {
-        setMvpValidation(nextMvpValidation);
-      }
-    });
-
-    loadTtsStudioOverview().then((nextTtsStudio) => {
-      if (active) {
-        setTtsStudio(nextTtsStudio);
-      }
-    });
-
-    loadVoiceLabOverview().then((nextVoiceLab) => {
-      if (active) {
-        setVoiceLab(nextVoiceLab);
-      }
-    });
-
-    loadSfxStudioOverview().then((nextSfxStudio) => {
-      if (active) {
-        setSfxStudio(nextSfxStudio);
-      }
-    });
-
-    loadSamplesStudioOverview().then((nextSamplesStudio) => {
-      if (active) {
-        setSamplesStudio(nextSamplesStudio);
-      }
-    });
-
-    loadSongStudioOverview().then((nextSongStudio) => {
-      if (active) {
-        setSongStudio(nextSongStudio);
-      }
-    });
-
-    loadReviewWorkspaceOverview().then((nextReviewWorkspace) => {
-      if (active) {
-        setReviewWorkspace(nextReviewWorkspace);
-      }
-    });
-
-    loadRightsSafetyOverview().then((nextRightsSafety) => {
-      if (active) {
-        setRightsSafety(nextRightsSafety);
-      }
-    });
-
-    loadVideoToAudioOverview().then((nextVideoToAudio) => {
-      if (active) {
-        setVideoToAudio(nextVideoToAudio);
-      }
-    });
+    mountedRef.current = true;
+    applyLoad(loadAppOverview(), setOverview);
+    applyLoad(loadRuntimeOverview(), setRuntime);
+    applyLoad(loadWorkspaceOverview(), setWorkspace);
 
     return () => {
-      active = false;
+      mountedRef.current = false;
     };
   }, []);
+
+  // Lazy loads: each view's heavier overview is fetched on first navigation and
+  // cached, instead of firing all 16 loaders on mount (F-011).
+  useEffect(() => {
+    const loaded = loadedViewsRef.current;
+    if (loaded.has(activeView)) {
+      return;
+    }
+    loaded.add(activeView);
+
+    const loadAssetLibrary = () =>
+      applyLoad(loadAssetLibraryOverview(), setAssetLibrary);
+
+    switch (activeView) {
+      case "library":
+        loadAssetLibrary();
+        break;
+      case "multitrack":
+        applyLoad(loadCompositionEditorOverview(), setCompositionEditor);
+        break;
+      case "tts":
+        applyLoad(loadTtsStudioOverview(), setTtsStudio);
+        break;
+      case "voice":
+        applyLoad(loadVoiceLabOverview(), setVoiceLab);
+        break;
+      case "sfx":
+        applyLoad(loadSfxStudioOverview(), setSfxStudio);
+        break;
+      case "video-audio":
+        applyLoad(loadVideoToAudioOverview(), setVideoToAudio);
+        break;
+      case "samples":
+        applyLoad(loadSamplesStudioOverview(), setSamplesStudio);
+        break;
+      case "song":
+        applyLoad(loadSongStudioOverview(), setSongStudio);
+        break;
+      case "review":
+        applyLoad(loadReviewWorkspaceOverview(), setReviewWorkspace);
+        loadAssetLibrary();
+        break;
+      case "export":
+        applyLoad(loadExportWorkflowOverview(), setExportWorkflow);
+        loadAssetLibrary();
+        break;
+      case "rights":
+        applyLoad(loadRightsSafetyOverview(), setRightsSafety);
+        break;
+      case "models":
+        applyLoad(loadModelManagerOverview(), (nextModelManager) => {
+          setModelManager(nextModelManager);
+          setModelManagerOperation(
+            visibleModelManagerOperation(nextModelManager.operations),
+          );
+        });
+        break;
+      case "validation":
+        applyLoad(loadMvpValidationOverview(), setMvpValidation);
+        break;
+      default:
+        break;
+    }
+  }, [activeView]);
 
   function runModelManagerAction(
     candidateId: string,
@@ -913,6 +905,21 @@ export function App() {
       </aside>
 
       <section className="workspace" aria-label="Workspace">
+        {webPreview ? (
+          <div className="preview-banner" role="status">
+            <CircleAlert aria-hidden="true" size={16} />
+            <span>
+              Web preview — data is simulated. Launch the SoundWorks desktop
+              shell for live local library data and audio generation.
+            </span>
+          </div>
+        ) : null}
+        {dataError ? (
+          <div className="preview-banner preview-banner-error" role="alert">
+            <CircleAlert aria-hidden="true" size={16} />
+            <span>Some data could not be loaded: {dataError}</span>
+          </div>
+        ) : null}
         <header className="topbar">
           <div className="topbar-title">
             <p className="eyebrow">Local workspace</p>

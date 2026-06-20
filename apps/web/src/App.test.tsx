@@ -34,6 +34,14 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("signals web-preview mock mode when not running in the Tauri shell", () => {
+    render(<App />);
+
+    const banner = screen.getByRole("status");
+    expect(banner).toHaveTextContent(/Web preview/i);
+    expect(banner).toHaveTextContent(/data is simulated/i);
+  });
+
   it("changes active screens from the grouped left nav", async () => {
     render(<App />);
 

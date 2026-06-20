@@ -63,8 +63,9 @@ export interface AppContextValue {
   videoToAudio: VideoToAudioOverview;
   libraryPlayback: LibraryPlayback | null;
 
-  // Action status strings
+  // Action status strings (+ the one setter a screen drives directly)
   libraryActionStatus: string;
+  setLibraryActionStatus: (status: string) => void;
   reviewActionStatus: string;
   exportActionStatus: string;
 

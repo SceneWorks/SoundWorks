@@ -578,11 +578,8 @@ impl ModelRuntimeState {
         } else {
             RuntimeHealth::Blocked
         };
-        let selected = inventory
-            .devices
-            .iter()
-            .find(|device| device.available)
-            .map(|device| device.accelerator);
+        let device = first_available_device(inventory);
+        let selected = device.map(|device| device.accelerator);
         let mut reasons = candidate.blockers.clone();
         if candidate.product_eligibility == ProductEligibility::ResearchOnly {
             reasons.push("Research-only model cannot be product-enabled.".to_string());
@@ -612,11 +609,7 @@ impl ModelRuntimeState {
                 supported: true,
                 selected_accelerator: selected,
                 min_memory_mb: None,
-                available_memory_mb: inventory
-                    .devices
-                    .iter()
-                    .find(|device| device.available)
-                    .and_then(|device| device.memory_mb),
+                available_memory_mb: device.and_then(|device| device.memory_mb),
                 requires_network: false,
                 reasons: vec![],
             },
@@ -625,43 +618,43 @@ impl ModelRuntimeState {
         }
     }
 
-    fn native_procedural_sfx(inventory: &DeviceInventory) -> Self {
-        let selected = inventory
-            .devices
-            .iter()
-            .find(|device| device.available)
-            .map(|device| device.accelerator);
+    /// Build the shared `ModelRuntimeState` for a built-in native model. The two
+    /// native constructors differ only in id/name/package/evidence/workflows; the
+    /// runtime, availability, cache, and accelerator compatibility are identical.
+    fn native_state(
+        model_id: String,
+        model_name: &str,
+        package_id: &str,
+        evidence: &str,
+        workflows: Vec<CapabilityWorkflow>,
+        inventory: &DeviceInventory,
+    ) -> Self {
+        let device = first_available_device(inventory);
         Self {
             provider_id: "soundworks-native".to_string(),
-            model_id: NativeModel::ProceduralSfx.model_id().to_string(),
-            model_name: "SoundWorks native procedural SFX".to_string(),
+            model_id,
+            model_name: model_name.to_string(),
             runtime: ModelRuntime::Local,
             execution_strategy: ExecutionStrategy::NativeRust,
-            workflows: vec![CapabilityWorkflow::Sfx, CapabilityWorkflow::Ambience],
+            workflows,
             availability: RuntimeAvailability::Installed,
             install_status: ModelInstallStatus::Installed,
             cache: ModelCacheState {
                 cache_path: None,
-                package_id: Some("soundworks-native-procedural-sfx".to_string()),
+                package_id: Some(package_id.to_string()),
                 status: CacheStatus::Ready,
                 expected_size_mb: Some(1),
                 disk_usage_mb: Some(1),
                 verified: true,
-                evidence:
-                    "built into the Rust runtime; no Python, model cache, or network call required"
-                        .to_string(),
+                evidence: evidence.to_string(),
                 license: LicenseAcceptanceState::Accepted,
                 warmup: WarmupStatus::Cold,
             },
             compatibility: RuntimeCompatibility {
                 supported: true,
-                selected_accelerator: selected,
+                selected_accelerator: device.map(|device| device.accelerator),
                 min_memory_mb: None,
-                available_memory_mb: inventory
-                    .devices
-                    .iter()
-                    .find(|device| device.available)
-                    .and_then(|device| device.memory_mb),
+                available_memory_mb: device.and_then(|device| device.memory_mb),
                 requires_network: false,
                 reasons: vec![],
             },
@@ -670,52 +663,29 @@ impl ModelRuntimeState {
         }
     }
 
+    fn native_procedural_sfx(inventory: &DeviceInventory) -> Self {
+        Self::native_state(
+            NativeModel::ProceduralSfx.model_id().to_string(),
+            "SoundWorks native procedural SFX",
+            "soundworks-native-procedural-sfx",
+            "built into the Rust runtime; no Python, model cache, or network call required",
+            vec![CapabilityWorkflow::Sfx, CapabilityWorkflow::Ambience],
+            inventory,
+        )
+    }
+
     fn native_procedural_music(inventory: &DeviceInventory) -> Self {
-        let selected = inventory
-            .devices
-            .iter()
-            .find(|device| device.available)
-            .map(|device| device.accelerator);
-        Self {
-            provider_id: "soundworks-native".to_string(),
-            model_id: NativeModel::ProceduralMusic.model_id().to_string(),
-            model_name: "SoundWorks native procedural samples and loops".to_string(),
-            runtime: ModelRuntime::Local,
-            execution_strategy: ExecutionStrategy::NativeRust,
-            workflows: vec![
+        Self::native_state(
+            NativeModel::ProceduralMusic.model_id().to_string(),
+            "SoundWorks native procedural samples and loops",
+            "soundworks-native-procedural-music",
+            "built into the Rust runtime; generates procedural one-shots and tempo-aligned loops without Python, model cache, or network calls",
+            vec![
                 CapabilityWorkflow::InstrumentSample,
                 CapabilityWorkflow::Loop,
             ],
-            availability: RuntimeAvailability::Installed,
-            install_status: ModelInstallStatus::Installed,
-            cache: ModelCacheState {
-                cache_path: None,
-                package_id: Some("soundworks-native-procedural-music".to_string()),
-                status: CacheStatus::Ready,
-                expected_size_mb: Some(1),
-                disk_usage_mb: Some(1),
-                verified: true,
-                evidence:
-                    "built into the Rust runtime; generates procedural one-shots and tempo-aligned loops without Python, model cache, or network calls"
-                        .to_string(),
-                license: LicenseAcceptanceState::Accepted,
-                warmup: WarmupStatus::Cold,
-            },
-            compatibility: RuntimeCompatibility {
-                supported: true,
-                selected_accelerator: selected,
-                min_memory_mb: None,
-                available_memory_mb: inventory
-                    .devices
-                    .iter()
-                    .find(|device| device.available)
-                    .and_then(|device| device.memory_mb),
-                requires_network: false,
-                reasons: vec![],
-            },
-            health: RuntimeHealth::Ready,
-            reasons: vec![],
-        }
+            inventory,
+        )
     }
 }
 
@@ -1681,7 +1651,7 @@ impl RuntimeJobStore {
 
         let record_root = PathBuf::from(&job.record_root);
         let audio_path = record_root.join("artifacts").join("kokoro-tts.wav");
-        write_pcm_f32_wav(&audio_path, &samples, 24_000)?;
+        write_pcm16_wav(&audio_path, &samples, 24_000)?;
         let duration_ms = samples.len() as u64 * 1000 / 24_000;
         let manifest_path = record_root.join("output-manifest.json");
         write_json(
@@ -1822,7 +1792,7 @@ impl RuntimeJobStore {
         let stats = audio_stats(&samples);
         let record_root = PathBuf::from(&job.record_root);
         let audio_path = record_root.join("artifacts").join("native-sfx.wav");
-        write_pcm_f32_wav_channels(&audio_path, &samples, sample_rate, channels)?;
+        write_pcm16_wav_channels(&audio_path, &samples, sample_rate, channels)?;
         let frame_count = samples.len() as u64 / channels as u64;
         let loop_start_sample = loopable.then_some(sample_rate as u64 / 2);
         let loop_end_sample =
@@ -1997,7 +1967,7 @@ impl RuntimeJobStore {
             CapabilityWorkflow::InstrumentSample => "native-sample.wav",
             _ => "native-loop.wav",
         });
-        write_pcm_f32_wav_channels(&audio_path, &samples, sample_rate, channels)?;
+        write_pcm16_wav_channels(&audio_path, &samples, sample_rate, channels)?;
         let frame_count = samples.len() as u64 / channels as u64;
         let loop_start_sample = loopable.then_some(0);
         let loop_end_sample = loopable.then_some(frame_count);
@@ -2673,40 +2643,66 @@ fn lcg(seed: u32) -> u32 {
 
 fn write_smoke_wav(path: &Path) -> io::Result<()> {
     let sample_rate = 16_000u32;
-    let samples = sample_rate / 4;
-    let data_bytes = samples * 2;
-    let mut bytes = Vec::with_capacity(44 + data_bytes as usize);
-    bytes.extend_from_slice(b"RIFF");
-    bytes.extend_from_slice(&(36 + data_bytes).to_le_bytes());
-    bytes.extend_from_slice(b"WAVEfmt ");
-    bytes.extend_from_slice(&16u32.to_le_bytes());
-    bytes.extend_from_slice(&1u16.to_le_bytes());
-    bytes.extend_from_slice(&1u16.to_le_bytes());
-    bytes.extend_from_slice(&sample_rate.to_le_bytes());
-    bytes.extend_from_slice(&(sample_rate * 2).to_le_bytes());
-    bytes.extend_from_slice(&2u16.to_le_bytes());
-    bytes.extend_from_slice(&16u16.to_le_bytes());
-    bytes.extend_from_slice(b"data");
-    bytes.extend_from_slice(&data_bytes.to_le_bytes());
-    for index in 0..samples {
-        let phase = (index as f32 / sample_rate as f32) * 440.0 * std::f32::consts::TAU;
-        let sample = (phase.sin() * i16::MAX as f32 * 0.18) as i16;
-        bytes.extend_from_slice(&sample.to_le_bytes());
-    }
-    fs::write(path, bytes)
+    let sample_count = sample_rate / 4;
+    let samples: Vec<i16> = (0..sample_count)
+        .map(|index| {
+            let phase = (index as f32 / sample_rate as f32) * 440.0 * std::f32::consts::TAU;
+            (phase.sin() * i16::MAX as f32 * 0.18) as i16
+        })
+        .collect();
+    encode_pcm16_wav(path, sample_rate, 1, &samples)
 }
 
-fn write_pcm_f32_wav(path: &Path, samples: &[f32], sample_rate: u32) -> io::Result<()> {
-    write_pcm_f32_wav_channels(path, samples, sample_rate, 1)
+fn write_pcm16_wav(path: &Path, samples: &[f32], sample_rate: u32) -> io::Result<()> {
+    write_pcm16_wav_channels(path, samples, sample_rate, 1)
 }
 
-fn write_pcm_f32_wav_channels(
+fn write_pcm16_wav_channels(
     path: &Path,
     samples: &[f32],
     sample_rate: u32,
     channels: u16,
 ) -> io::Result<()> {
-    let data_bytes = samples.len() as u32 * 2;
+    let pcm: Vec<i16> = samples
+        .iter()
+        .map(|sample| (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+        .collect();
+    encode_pcm16_wav(path, sample_rate, channels, &pcm)
+}
+
+/// Encode interleaved 16-bit PCM `samples` into a canonical RIFF/WAVE file
+/// (format tag 1, 16-bit). Chunk sizes are computed in `u64` and validated to
+/// fit the `u32` wire fields, so an oversized buffer returns an error instead of
+/// silently truncating into a corrupt header; `samples` must also be a whole
+/// number of frames for `channels`.
+fn encode_pcm16_wav(
+    path: &Path,
+    sample_rate: u32,
+    channels: u16,
+    samples: &[i16],
+) -> io::Result<()> {
+    if channels == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "wav channel count must be non-zero",
+        ));
+    }
+    if !samples.len().is_multiple_of(usize::from(channels)) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "sample buffer is not a whole number of frames",
+        ));
+    }
+    let data_bytes = (samples.len() as u64)
+        .checked_mul(2)
+        .filter(|&bytes| 36 + bytes <= u32::MAX as u64)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "wav payload exceeds the u32 RIFF chunk size",
+            )
+        })?;
+    let data_bytes = data_bytes as u32;
     let mut bytes = Vec::with_capacity(44 + data_bytes as usize);
     bytes.extend_from_slice(b"RIFF");
     bytes.extend_from_slice(&(36 + data_bytes).to_le_bytes());
@@ -2721,11 +2717,15 @@ fn write_pcm_f32_wav_channels(
     bytes.extend_from_slice(b"data");
     bytes.extend_from_slice(&data_bytes.to_le_bytes());
     for sample in samples {
-        let clamped = sample.clamp(-1.0, 1.0);
-        let pcm = (clamped * i16::MAX as f32) as i16;
-        bytes.extend_from_slice(&pcm.to_le_bytes());
+        bytes.extend_from_slice(&sample.to_le_bytes());
     }
     fs::write(path, bytes)
+}
+
+/// First powered-on device in the inventory, used to pick the runtime
+/// accelerator and report available memory for native model state.
+fn first_available_device(inventory: &DeviceInventory) -> Option<&DeviceReport> {
+    inventory.devices.iter().find(|device| device.available)
 }
 
 #[cfg(test)]
@@ -3795,5 +3795,44 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
         root
+    }
+
+    #[test]
+    fn encode_pcm16_wav_writes_canonical_header_and_rejects_partial_frames() {
+        let root = temp_runtime_root("encode-pcm16");
+        fs::create_dir_all(&root).expect("create temp root");
+        let path = root.join("frames.wav");
+
+        // Two stereo frames -> 44-byte header + 4 samples * 2 bytes of payload.
+        super::encode_pcm16_wav(&path, 48_000, 2, &[1, -1, 32_767, -32_768])
+            .expect("encode stereo pcm16");
+        let bytes = fs::read(&path).expect("read encoded wav");
+        assert_eq!(bytes.len(), 44 + 4 * 2);
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(u32::from_le_bytes(bytes[4..8].try_into().unwrap()), 36 + 8);
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert_eq!(&bytes[12..16], b"fmt ");
+        assert_eq!(u32::from_le_bytes(bytes[16..20].try_into().unwrap()), 16);
+        assert_eq!(u16::from_le_bytes(bytes[20..22].try_into().unwrap()), 1); // PCM tag
+        assert_eq!(u16::from_le_bytes(bytes[22..24].try_into().unwrap()), 2); // channels
+        assert_eq!(
+            u32::from_le_bytes(bytes[24..28].try_into().unwrap()),
+            48_000
+        );
+        assert_eq!(
+            u32::from_le_bytes(bytes[28..32].try_into().unwrap()),
+            48_000 * 2 * 2 // byte rate = rate * channels * bytes-per-sample
+        );
+        assert_eq!(u16::from_le_bytes(bytes[32..34].try_into().unwrap()), 4); // block align
+        assert_eq!(u16::from_le_bytes(bytes[34..36].try_into().unwrap()), 16); // bits per sample
+        assert_eq!(&bytes[36..40], b"data");
+        assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().unwrap()), 8); // data size
+
+        // A buffer that is not a whole number of frames is rejected, not truncated.
+        let partial =
+            super::write_pcm16_wav_channels(&root.join("partial.wav"), &[0.0, 0.0, 0.0], 48_000, 2);
+        assert!(partial.is_err());
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

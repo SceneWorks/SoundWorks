@@ -31,7 +31,7 @@ export function SongScreen() {
     libraryPlayback,
     previewLibraryItem,
     overview,
-    setActiveView,
+    openModelsFor,
   } = useAppContext();
 
   const editedRef = useRef(false);
@@ -130,7 +130,7 @@ export function SongScreen() {
       <ModelAvailabilityGate
         installed={Boolean(songRuntimeModel)}
         label="song"
-        onOpenModelManager={() => setActiveView("models")}
+        onOpenModelManager={() => openModelsFor("song")}
       />
 
       <MainSurface className="studio-compose" ariaLabel="Compose song">

@@ -685,6 +685,35 @@ textarea.field-input {
   width: 96px;
 }
 
+/* UX-S8: Models search row + copy-able command hint. */
+.models-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.models-search .field-input {
+  border: none;
+  background: transparent;
+  flex: 1 1 auto;
+}
+
+.command-hint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.command-hint-row code {
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
 /* UX-S7: first-run onboarding card + workspace project-name input. */
 .onboarding-card {
   display: grid;

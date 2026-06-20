@@ -37,7 +37,7 @@ export function VideoToAudioScreen() {
     libraryPlayback,
     previewLibraryItem,
     overview,
-    setActiveView,
+    openModelsFor,
   } = useAppContext();
 
   const editedRef = useRef(false);
@@ -146,7 +146,7 @@ export function VideoToAudioScreen() {
       <ModelAvailabilityGate
         installed={Boolean(videoRuntimeModel)}
         label="video-to-audio"
-        onOpenModelManager={() => setActiveView("models")}
+        onOpenModelManager={() => openModelsFor("video-to-audio")}
       />
 
       <MainSurface className="studio-compose" ariaLabel="Direct video audio">

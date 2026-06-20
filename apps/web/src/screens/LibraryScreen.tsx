@@ -5,8 +5,11 @@
 // Screen-specific layout/list classes (asset-library-panel, library-layout,
 // library-item, collection-grid, etc.) and every handler, guard, and data
 // binding are preserved verbatim.
+import { useState } from "react";
 import { CircleCheck, Play, Search, ShieldCheck } from "lucide-react";
 import {
+  ConfirmDialog,
+  EmptyPanel,
   FeedbackLine,
   HeroStat,
   MainSurface,
@@ -20,6 +23,7 @@ import {
   statusLabel,
   toLibraryMutationAction,
 } from "../viewModel";
+import type { LibraryMutationAction } from "../types";
 import { useAppContext } from "./context";
 
 export function LibraryScreen() {
@@ -35,6 +39,44 @@ export function LibraryScreen() {
     previewLibraryItem,
   } = useAppContext();
 
+  // UX-S2: client-side search over the loaded items + a confirm gate for the
+  // destructive lifecycle actions (reject/archive).
+  const [query, setQuery] = useState("");
+  const [pendingAction, setPendingAction] = useState<{
+    action: LibraryMutationAction;
+    label: string;
+  } | null>(null);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleItems = normalizedQuery
+    ? assetLibrary.items.filter((item) =>
+        [item.name, item.itemTypeLabel, ...item.tags, ...item.generatedTags]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery),
+      )
+    : assetLibrary.items;
+  const hasAssets = assetLibrary.items.length > 0;
+
+  function runLifecycleAction(action: {
+    id: string;
+    label: string;
+    destructive: boolean;
+  }) {
+    const mutation = toLibraryMutationAction(action.id);
+    if (!mutation) {
+      setLibraryActionStatus(
+        actionFeedback.error(`Unknown library action "${action.id}".`),
+      );
+      return;
+    }
+    if (action.destructive) {
+      setPendingAction({ action: mutation, label: action.label });
+      return;
+    }
+    mutateSelectedLibraryItem(mutation);
+  }
+
   return (
     <section className="asset-library-panel" aria-label="Asset Library">
       <SurfaceHeader
@@ -44,7 +86,14 @@ export function LibraryScreen() {
           <>
             <div className="library-search" role="search">
               <Search aria-hidden="true" size={18} />
-              <span>{assetLibrary.selectedFilter.searchText}</span>
+              <input
+                type="search"
+                className="library-search-input"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search assets by name or tag…"
+                aria-label="Search assets"
+              />
             </div>
             <button
               className="secondary-action"
@@ -99,14 +148,25 @@ export function LibraryScreen() {
             <strong>{facet.label}</strong>
             <div>
               {facet.options.slice(0, 3).map((option) => (
-                <span
+                <button
+                  type="button"
                   className={
-                    option.selected ? "filter-chip selected" : "filter-chip"
+                    query.trim().toLowerCase() === option.label.toLowerCase()
+                      ? "filter-chip selected"
+                      : "filter-chip"
                   }
                   key={option.id}
+                  onClick={() =>
+                    setQuery((current) =>
+                      current.trim().toLowerCase() === option.label.toLowerCase()
+                        ? ""
+                        : option.label,
+                    )
+                  }
+                  title={`Filter by ${option.label}`}
                 >
                   {option.label} {option.count}
-                </span>
+                </button>
               ))}
             </div>
           </section>
@@ -115,7 +175,17 @@ export function LibraryScreen() {
 
       <div className="library-layout">
         <div className="library-item-list" aria-label="Library assets">
-          {assetLibrary.items.map((item) => (
+          {!hasAssets ? (
+            <EmptyPanel>
+              No assets yet. Generate audio in a studio or import a runtime
+              artifact, and it will appear here.
+            </EmptyPanel>
+          ) : visibleItems.length === 0 ? (
+            <EmptyPanel compact>
+              No assets match “{query.trim()}”.
+            </EmptyPanel>
+          ) : null}
+          {visibleItems.map((item) => (
             <article
               className={
                 item.id === assetLibrary.selectedItem?.item.id
@@ -268,20 +338,14 @@ export function LibraryScreen() {
           <div className="lifecycle-actions">
             {assetLibrary.lifecycleActions.map((action) => (
               <button
-                className="secondary-action"
+                className={
+                  action.destructive
+                    ? "secondary-action is-destructive"
+                    : "secondary-action"
+                }
                 key={action.id}
-                onClick={() => {
-                  const mutation = toLibraryMutationAction(action.id);
-                  if (!mutation) {
-                    setLibraryActionStatus(
-                      actionFeedback.error(
-                        `Unknown library action "${action.id}".`,
-                      ),
-                    );
-                    return;
-                  }
-                  mutateSelectedLibraryItem(mutation);
-                }}
+                disabled={!assetLibrary.selectedItem}
+                onClick={() => runLifecycleAction(action)}
                 type="button"
               >
                 {action.label}
@@ -305,6 +369,22 @@ export function LibraryScreen() {
           </ol>
         </MainSurface>
       </div>
+
+      <ConfirmDialog
+        open={pendingAction !== null}
+        title={`${pendingAction?.label ?? "Confirm"}?`}
+        message={`${pendingAction?.label ?? "This action"} will be applied to ${
+          assetLibrary.selectedItem?.item.name ?? "the selected asset"
+        }. This cannot be undone from here.`}
+        confirmLabel={pendingAction?.label ?? "Confirm"}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          if (pendingAction) {
+            mutateSelectedLibraryItem(pendingAction.action);
+          }
+          setPendingAction(null);
+        }}
+      />
     </section>
   );
 }

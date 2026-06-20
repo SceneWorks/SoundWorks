@@ -9,6 +9,40 @@ use soundworks_core::{
     SfxStudioOverview, SongStudioOverview, TtsStudioOverview, VideoToAudioOverview,
     VoiceLabOverview, WorkspaceOverview,
 };
+use std::sync::Mutex;
+
+/// Shared, Tauri-managed application state. The write lock serializes every
+/// store-mutating command (F-005), preventing the lost-update / TOCTOU race on the
+/// shared `workspace.json` that concurrent Tauri commands could otherwise cause.
+/// This managed struct is also the intended home for Phase 4's cancellation-token
+/// registry (kept here rather than a global static so the registry has a natural home).
+pub struct AppState {
+    write_lock: Mutex<()>,
+}
+
+impl AppState {
+    pub fn new() -> Self {
+        Self {
+            write_lock: Mutex::new(()),
+        }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Acquire the write lock. A poisoned lock only means a prior command panicked
+/// mid-operation; atomic writes keep the on-disk state consistent, so recover the
+/// guard and continue rather than propagating the poison.
+fn lock_writes(state: &AppState) -> std::sync::MutexGuard<'_, ()> {
+    state
+        .write_lock
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
+}
 
 #[tauri::command]
 fn get_app_overview() -> AppOverview {
@@ -32,27 +66,37 @@ fn get_asset_library_overview() -> AssetLibraryOverview {
 
 #[tauri::command]
 fn create_soundworks_project(
+    state: tauri::State<AppState>,
     request: CreateProjectRequest,
 ) -> Result<ProjectLibraryActionResult, String> {
+    let _guard = lock_writes(&state);
     create_project(request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn open_soundworks_project(project_id: String) -> Result<ProjectLibraryActionResult, String> {
+fn open_soundworks_project(
+    state: tauri::State<AppState>,
+    project_id: String,
+) -> Result<ProjectLibraryActionResult, String> {
+    let _guard = lock_writes(&state);
     open_project(project_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 fn import_runtime_artifact_to_library(
+    state: tauri::State<AppState>,
     request: ImportRuntimeArtifactRequest,
 ) -> Result<ProjectLibraryActionResult, String> {
+    let _guard = lock_writes(&state);
     import_runtime_artifact(request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 fn mutate_library_item(
+    state: tauri::State<AppState>,
     request: LibraryMutationRequest,
 ) -> Result<ProjectLibraryActionResult, String> {
+    let _guard = lock_writes(&state);
     mutate_item(request).map_err(|error| error.to_string())
 }
 
@@ -62,14 +106,20 @@ fn get_library_playback(item_id: String) -> Result<LibraryPlayback, String> {
 }
 
 #[tauri::command]
-fn save_review_edit(request: SaveReviewEditRequest) -> Result<ReviewEditResult, String> {
+fn save_review_edit(
+    state: tauri::State<AppState>,
+    request: SaveReviewEditRequest,
+) -> Result<ReviewEditResult, String> {
+    let _guard = lock_writes(&state);
     review_edit(request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 fn export_library_item(
+    state: tauri::State<AppState>,
     request: ExportLibraryItemRequest,
 ) -> Result<ExportLibraryItemResult, String> {
+    let _guard = lock_writes(&state);
     export_item(request).map_err(|error| error.to_string())
 }
 
@@ -89,17 +139,29 @@ fn get_runtime_overview() -> RuntimeOverview {
 }
 
 #[tauri::command]
-fn enqueue_runtime_job(request: RuntimeJobRequest) -> Result<RuntimeJobSnapshot, String> {
+fn enqueue_runtime_job(
+    state: tauri::State<AppState>,
+    request: RuntimeJobRequest,
+) -> Result<RuntimeJobSnapshot, String> {
+    let _guard = lock_writes(&state);
     enqueue_job(request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn cancel_runtime_job(job_id: String) -> Result<Option<RuntimeJobSnapshot>, String> {
+fn cancel_runtime_job(
+    state: tauri::State<AppState>,
+    job_id: String,
+) -> Result<Option<RuntimeJobSnapshot>, String> {
+    let _guard = lock_writes(&state);
     cancel_job(job_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn retry_runtime_job(job_id: String) -> Result<Option<RuntimeJobSnapshot>, String> {
+fn retry_runtime_job(
+    state: tauri::State<AppState>,
+    job_id: String,
+) -> Result<Option<RuntimeJobSnapshot>, String> {
+    let _guard = lock_writes(&state);
     retry_job(job_id).map_err(|error| error.to_string())
 }
 
@@ -343,6 +405,7 @@ pub fn video_to_audio_overview() -> VideoToAudioOverview {
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             get_app_overview,
             get_provider_catalog,

@@ -2066,13 +2066,27 @@ fn artifact(
 }
 
 fn write_json(path: impl AsRef<Path>, value: &impl Serialize) -> io::Result<()> {
-    if let Some(parent) = path.as_ref().parent() {
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(
-        path,
-        serde_json::to_vec_pretty(value).map_err(io::Error::other)?,
-    )
+    let payload = serde_json::to_vec_pretty(value).map_err(io::Error::other)?;
+    // F-005: durable write — temp file + fsync + atomic rename (mirrors project_library).
+    let mut temp_path = path.as_os_str().to_os_string();
+    temp_path.push(".tmp");
+    let temp_path = PathBuf::from(temp_path);
+    {
+        let mut file = fs::File::create(&temp_path)?;
+        file.write_all(&payload)?;
+        file.sync_all()?;
+    }
+    fs::rename(&temp_path, path)?;
+    if let Some(parent) = path.parent() {
+        if let Ok(dir) = fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
+    Ok(())
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: impl AsRef<Path>) -> io::Result<T> {

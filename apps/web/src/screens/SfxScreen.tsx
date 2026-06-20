@@ -30,7 +30,7 @@ export function SfxScreen() {
     previewLibraryItem,
     overview,
     sfxCandidateFocus,
-    setActiveView,
+    openModelsFor,
   } = useAppContext();
 
   const editedRef = useRef(false);
@@ -116,7 +116,7 @@ export function SfxScreen() {
       <ModelAvailabilityGate
         installed={Boolean(sfxRuntimeModel)}
         label="SFX"
-        onOpenModelManager={() => setActiveView("models")}
+        onOpenModelManager={() => openModelsFor("sfx")}
       />
 
       <MainSurface className="studio-compose" ariaLabel="Compose sound effect">

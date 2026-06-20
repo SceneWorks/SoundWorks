@@ -369,6 +369,9 @@ export function App() {
   const [videoToAudio, setVideoToAudio] =
     useState<VideoToAudioOverview>(fallbackVideoToAudio);
   const [dataError, setDataError] = useState<string | null>(null);
+  // UX-14: when a studio's availability gate deep-links to Models, this carries
+  // the lane to pre-filter the model grid; ModelsScreen consumes + clears it.
+  const [modelFocus, setModelFocus] = useState<string | null>(null);
 
   // DR-01: theme + accent. Each change updates state instantly and persists the
   // single changed field to the durable store (fire-and-forget; localStorage is
@@ -561,6 +564,11 @@ export function App() {
     }, 1500);
     return () => clearInterval(interval);
   }, [activeView, runtime.jobs]);
+
+  function openModelsFor(focus: string) {
+    setModelFocus(focus);
+    setActiveView("models");
+  }
 
   function runModelManagerAction(
     candidateId: string,
@@ -1239,6 +1247,9 @@ export function App() {
     retryRuntimeOperation,
     recordVoiceProfileConsent,
     renderComposition,
+    modelFocus,
+    openModelsFor,
+    clearModelFocus: () => setModelFocus(null),
   };
 
   return (

@@ -117,6 +117,10 @@ export interface AppContextValue {
     consent: VoiceConsentStatus,
   ) => void;
   renderComposition: (mutedTrackIds?: string[]) => void;
+  // UX-14: deep-link from a studio gate to the Models grid, pre-filtered.
+  modelFocus: string | null;
+  openModelsFor: (focus: string) => void;
+  clearModelFocus: () => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

@@ -10,6 +10,8 @@
 // - Provider coverage + evaluation scorecard moved to Settings (DR-02f); lane
 //   readiness + validation checks moved into a Diagnostics disclosure (off the
 //   main surface).
+import { useEffect, useState } from "react";
+import { Copy, Search } from "lucide-react";
 import {
   ModelCard,
   ModelGrid,
@@ -130,7 +132,21 @@ function CandidateCard({
           <span>
             Manual install required — SoundWorks has no in-app downloader yet.
           </span>
-          <code>{candidate.downloadPlan.commandHint}</code>
+          <div className="command-hint-row">
+            <code>{candidate.downloadPlan.commandHint}</code>
+            <button
+              type="button"
+              className="icon-action"
+              title="Copy install command"
+              onClick={() => {
+                void navigator.clipboard?.writeText(
+                  candidate.downloadPlan.commandHint,
+                );
+              }}
+            >
+              <Copy aria-hidden="true" size={14} />
+            </button>
+          </div>
           {candidate.downloadPlan.requiresLicenseAcceptance ? (
             <small>Requires accepting the model license first.</small>
           ) : null}
@@ -154,14 +170,45 @@ function CandidateCard({
 }
 
 export function ModelsScreen() {
-  const { modelManager, modelManagerOperation, runModelManagerAction } =
-    useAppContext();
+  const {
+    modelManager,
+    modelManagerOperation,
+    runModelManagerAction,
+    modelFocus,
+    clearModelFocus,
+  } = useAppContext();
+
+  const [query, setQuery] = useState("");
+  // UX-14: a studio deep-link pre-filters the grid to its lane, then clears the
+  // one-shot focus so manual edits aren't overwritten.
+  useEffect(() => {
+    if (modelFocus) {
+      setQuery(modelFocus);
+      clearModelFocus();
+    }
+  }, [modelFocus, clearModelFocus]);
 
   const recommendedIds = new Set(
     modelManager.laneReadiness.map((lane) => lane.recommendedCandidateId),
   );
   const laneOrder = modelManager.laneReadiness.map((lane) => lane.lane);
-  const groups = groupByLane(laneOrder, modelManager.candidates);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredCandidates = normalizedQuery
+    ? modelManager.candidates.filter((candidate) =>
+        [
+          candidate.name,
+          candidate.provider,
+          candidate.candidateId,
+          candidate.licenseLabel,
+          ...candidate.lanes,
+          ...candidate.lanes.map(workflowLabel),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery),
+      )
+    : modelManager.candidates;
+  const groups = groupByLane(laneOrder, filteredCandidates);
   const revalidate = (candidateId: string) =>
     runModelManagerAction(candidateId, "revalidate");
 
@@ -224,6 +271,22 @@ export function ModelsScreen() {
             </button>
           }
         />
+      ) : null}
+
+      <div className="models-search" role="search">
+        <Search aria-hidden="true" size={18} />
+        <input
+          type="search"
+          className="field-input"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search models by name, provider, or lane…"
+          aria-label="Search models"
+        />
+      </div>
+
+      {groups.length === 0 ? (
+        <p className="field-hint">No models match “{query.trim()}”.</p>
       ) : null}
 
       {groups.map(({ lane, candidates }) => {

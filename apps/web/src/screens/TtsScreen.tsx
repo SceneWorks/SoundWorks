@@ -41,7 +41,7 @@ export function TtsScreen() {
     libraryPlayback,
     previewLibraryItem,
     overview,
-    setActiveView,
+    openModelsFor,
   } = useAppContext();
 
   const defaultPrompt = ttsStudio.script.segments
@@ -125,7 +125,7 @@ export function TtsScreen() {
       <ModelAvailabilityGate
         installed={Boolean(ttsRuntimeModel)}
         label="TTS"
-        onOpenModelManager={() => setActiveView("models")}
+        onOpenModelManager={() => openModelsFor("tts")}
       />
 
       <MainSurface className="studio-compose" ariaLabel="Compose speech">

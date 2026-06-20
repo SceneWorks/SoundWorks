@@ -32,7 +32,7 @@ export function VoiceLabScreen() {
     libraryPlayback,
     previewLibraryItem,
     overview,
-    setActiveView,
+    openModelsFor,
   } = useAppContext();
 
   const request = voiceLab.selectedConversion.recipe.request;
@@ -122,7 +122,7 @@ export function VoiceLabScreen() {
       <ModelAvailabilityGate
         installed={Boolean(voiceRuntimeModel)}
         label="voice conversion"
-        onOpenModelManager={() => setActiveView("models")}
+        onOpenModelManager={() => openModelsFor("voice-conversion")}
       />
 
       <MainSurface className="studio-compose" ariaLabel="Conversion setup">

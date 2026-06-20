@@ -10,6 +10,7 @@ import {
   MainSurface,
   SectionHeading,
   SurfaceHeader,
+  ModelAvailabilityGate,
 } from "../components";
 import { formatDuration, statusLabel, workflowLabel } from "../viewModel";
 import { useAppContext } from "./context";
@@ -21,6 +22,7 @@ export function VoiceLabScreen() {
     voiceCandidateFocus,
     runRuntimeJob,
     overview,
+    setActiveView,
   } = useAppContext();
 
   return (
@@ -69,6 +71,12 @@ export function VoiceLabScreen() {
             />
           </>
         }
+      />
+
+      <ModelAvailabilityGate
+        installed={Boolean(voiceRuntimeModel)}
+        label="voice conversion"
+        onOpenModelManager={() => setActiveView("models")}
       />
 
       <div className="voice-mode-grid" aria-label="Voice modes">

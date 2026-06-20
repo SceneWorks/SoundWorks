@@ -3912,3 +3912,30 @@ h1 {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--gap-3);
 }
+
+/* DR-03: studio model-availability offer (replaces a dead "Blocked" control). */
+.model-availability-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklch, var(--warm) 45%, var(--border));
+  background: var(--warm-soft);
+}
+
+.model-availability-gate__copy {
+  display: grid;
+  gap: 2px;
+}
+
+.model-availability-gate__copy strong {
+  font-size: 14px;
+}
+
+.model-availability-gate__copy span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}

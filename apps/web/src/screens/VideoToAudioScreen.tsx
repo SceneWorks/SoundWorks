@@ -10,6 +10,7 @@ import {
   MainSurface,
   SectionHeading,
   SurfaceHeader,
+  ModelAvailabilityGate,
 } from "../components";
 import { formatDuration, statusLabel } from "../viewModel";
 import { useAppContext } from "./context";
@@ -21,6 +22,7 @@ export function VideoToAudioScreen() {
     videoCandidateFocus,
     runRuntimeJob,
     overview,
+    setActiveView,
   } = useAppContext();
 
   return (
@@ -74,6 +76,12 @@ export function VideoToAudioScreen() {
             />
           </>
         }
+      />
+
+      <ModelAvailabilityGate
+        installed={Boolean(videoRuntimeModel)}
+        label="video-to-audio"
+        onOpenModelManager={() => setActiveView("models")}
       />
 
       <div className="video-layout">

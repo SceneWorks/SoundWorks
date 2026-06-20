@@ -10,6 +10,7 @@ import {
   MainSurface,
   SectionHeading,
   SurfaceHeader,
+  ModelAvailabilityGate,
 } from "../components";
 import { formatDuration, statusLabel, workflowLabel } from "../viewModel";
 import { useAppContext } from "./context";
@@ -21,6 +22,7 @@ export function SfxScreen() {
     runRuntimeJob,
     overview,
     sfxCandidateFocus,
+    setActiveView,
   } = useAppContext();
 
   return (
@@ -70,6 +72,12 @@ export function SfxScreen() {
             />
           </>
         }
+      />
+
+      <ModelAvailabilityGate
+        installed={Boolean(sfxRuntimeModel)}
+        label="SFX"
+        onOpenModelManager={() => setActiveView("models")}
       />
 
       <div className="sfx-layout">

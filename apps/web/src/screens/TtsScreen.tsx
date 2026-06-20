@@ -8,6 +8,7 @@ import { CircleCheck, Play, ShieldCheck } from "lucide-react";
 import {
   HeroStat,
   MainSurface,
+  ModelAvailabilityGate,
   SectionHeading,
   SurfaceHeader,
 } from "../components";
@@ -15,8 +16,14 @@ import { formatDuration, statusLabel } from "../viewModel";
 import { useAppContext } from "./context";
 
 export function TtsScreen() {
-  const { ttsStudio, ttsRuntimeModel, runRuntimeJob, runtimeOperation, overview } =
-    useAppContext();
+  const {
+    ttsStudio,
+    ttsRuntimeModel,
+    runRuntimeJob,
+    runtimeOperation,
+    overview,
+    setActiveView,
+  } = useAppContext();
 
   return (
     <section className="tts-studio-panel" aria-label="TTS Studio">
@@ -81,6 +88,12 @@ export function TtsScreen() {
             />
           </>
         }
+      />
+
+      <ModelAvailabilityGate
+        installed={Boolean(ttsRuntimeModel)}
+        label="TTS"
+        onOpenModelManager={() => setActiveView("models")}
       />
 
       <div className="tts-layout">

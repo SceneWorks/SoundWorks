@@ -1245,12 +1245,15 @@ fn library_item_from_asset(
 /// library. Off by default so shipped builds show only persisted records; set
 /// `SOUNDWORKS_DEMO_LIBRARY=1` (or `true`) for demos, screenshots, and walkthroughs.
 fn demo_library_enabled() -> bool {
-    std::env::var("SOUNDWORKS_DEMO_LIBRARY")
+    let env_enabled = std::env::var("SOUNDWORKS_DEMO_LIBRARY")
         .map(|value| {
             let value = value.trim();
             value == "1" || value.eq_ignore_ascii_case("true")
         })
-        .unwrap_or(false)
+        .unwrap_or(false);
+    // UX-15: the env var still works for CI/screenshots, but a durable user
+    // preference (Settings demo toggle) enables it too.
+    env_enabled || crate::ui_preferences::UiPreferencesStore::default().load().demo == Some(true)
 }
 
 fn reference_project() -> Project {

@@ -685,6 +685,68 @@ textarea.field-input {
   width: 96px;
 }
 
+/* UX-S9: Settings real-preferences controls. */
+.settings-prefs {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-field-label {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 140px;
+}
+
+.settings-value {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.settings-toggle {
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.accent-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.accent-swatch.selected {
+  border-color: var(--text);
+  outline: 2px solid var(--surface);
+  outline-offset: -4px;
+}
+
+.accent-swatch:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.settings-advanced > summary {
+  cursor: pointer;
+}
+
 /* UX-S8: Models search row + copy-able command hint. */
 .models-search {
   display: flex;

@@ -386,6 +386,10 @@ export function App() {
     setAccent(next);
     void saveUiPreferences({ accent: next });
   };
+  // UX-15: durable demo-library toggle (F-009 as a preference). Seeded from the
+  // store on launch; changing it persists + reloads the library so fixtures
+  // appear/disappear immediately.
+  const [demoMode, setDemoMode] = useState(false);
 
   const webPreview = !isTauri();
   const mountedRef = useRef(true);
@@ -469,6 +473,9 @@ export function App() {
         }
         if (isAccentId(prefs.accent)) {
           setAccent(prefs.accent);
+        }
+        if (typeof prefs.demo === "boolean") {
+          setDemoMode(prefs.demo);
         }
       })
       .catch(() => {});
@@ -568,6 +575,22 @@ export function App() {
   function openModelsFor(focus: string) {
     setModelFocus(focus);
     setActiveView("models");
+  }
+
+  function changeDemoMode(next: boolean) {
+    setDemoMode(next);
+    void saveUiPreferences({ demo: next });
+    // Reflect immediately: the demo flag gates the fixture catalog in the
+    // library/workspace overviews, so reload them.
+    loadedViewsRef.current.delete("library");
+    applyLoad(loadAssetLibraryOverview(), setAssetLibrary);
+    applyLoad(loadWorkspaceOverview(), setWorkspace);
+    refreshOverviewSummary();
+    setLibraryActionStatus(
+      actionFeedback.success(
+        next ? "Demo library enabled." : "Demo library disabled.",
+      ),
+    );
   }
 
   function runModelManagerAction(
@@ -1250,6 +1273,8 @@ export function App() {
     modelFocus,
     openModelsFor,
     clearModelFocus: () => setModelFocus(null),
+    demoMode,
+    changeDemoMode,
   };
 
   return (

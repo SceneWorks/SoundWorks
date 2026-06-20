@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import {
+  ConfirmDialog,
   EmptyPanel,
   FeedbackLine,
   GenerationPanel,
@@ -210,5 +211,37 @@ describe("shared component grammar", () => {
     expect(screen.getByRole("alert").textContent).toContain("Adapter failed");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledWith("job-1");
+  });
+
+  it("ConfirmDialog renders only when open and routes confirm/cancel", () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const { rerender } = render(
+      <ConfirmDialog
+        open={false}
+        title="Reject?"
+        message="This cannot be undone."
+        confirmLabel="Reject"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    rerender(
+      <ConfirmDialog
+        open
+        title="Reject?"
+        message="This cannot be undone."
+        confirmLabel="Reject"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

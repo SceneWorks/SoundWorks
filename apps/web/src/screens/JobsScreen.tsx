@@ -2,6 +2,7 @@
 // rebuilt on the shared grammar (MainSurface + SectionHeading) in place of the
 // bespoke .panel / .panel-heading wrappers. Cancel/Retry wiring + gating and all
 // data bindings are preserved verbatim.
+import { useState } from "react";
 import {
   CircleAlert,
   CircleCheck,
@@ -9,13 +10,31 @@ import {
   HardDrive,
   PackageCheck,
 } from "lucide-react";
-import { MainSurface, SectionHeading } from "../components";
+import { MainSurface, SectionHeading, SegmentedControl } from "../components";
 import { formatMb, statusLabel } from "../viewModel";
 import { useAppContext } from "./context";
+
+type JobFilter = "all" | "active" | "succeeded" | "failed";
+
+const JOB_FILTERS: ReadonlyArray<{ value: JobFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "succeeded", label: "Succeeded" },
+  { value: "failed", label: "Failed" },
+];
 
 export function JobsScreen() {
   const { runtime, cancelRuntimeOperation, retryRuntimeOperation } =
     useAppContext();
+  const [filter, setFilter] = useState<JobFilter>("all");
+
+  const visibleJobs = runtime.jobs.filter((job) => {
+    if (filter === "all") return true;
+    if (filter === "active")
+      return job.status === "queued" || job.status === "running";
+    if (filter === "succeeded") return job.status === "succeeded";
+    return job.status === "failed" || job.status === "cancelled";
+  });
 
   return (
     <section className="system-grid" aria-label="Runtime jobs">
@@ -85,7 +104,16 @@ export function JobsScreen() {
           </div>
 
           <div className="runtime-stack">
-            <h3>Jobs</h3>
+            <div className="runtime-jobs-head">
+              <h3>Jobs</h3>
+              <SegmentedControl
+                ariaLabel="Filter jobs by status"
+                compact
+                value={filter}
+                onChange={setFilter}
+                options={JOB_FILTERS}
+              />
+            </div>
             <ol className="runtime-list">
               {runtime.jobs.length === 0 ? (
                 <li>
@@ -93,13 +121,21 @@ export function JobsScreen() {
                   <div>
                     <strong>No runtime jobs</strong>
                     <small>
-                      Fixture/demo actions are blocked until provider execution
-                      is wired.
+                      Queue a generation from any studio and it will appear here
+                      with live progress.
                     </small>
                   </div>
                 </li>
+              ) : visibleJobs.length === 0 ? (
+                <li>
+                  <span className="runtime-dot unavailable" />
+                  <div>
+                    <strong>No {filter} jobs</strong>
+                    <small>Adjust the filter to see other jobs.</small>
+                  </div>
+                </li>
               ) : null}
-              {runtime.jobs.map((job) => (
+              {visibleJobs.map((job) => (
                 <li key={job.id}>
                   <span className={`runtime-dot ${job.status}`} />
                   <div>
@@ -109,14 +145,30 @@ export function JobsScreen() {
                       {Math.round(job.progress?.percent ?? 0)}% /{" "}
                       {statusLabel(job.cancellation)}
                     </small>
+                    {job.progress?.message ? (
+                      <em>{job.progress.message}</em>
+                    ) : null}
                     <em>{job.recordRoot}</em>
-                    {job.artifacts[0] ? (
-                      <em>
-                        {job.artifacts[0].summary}: {job.artifacts[0].path}
-                      </em>
+                    {job.artifacts.length > 0 ? (
+                      <ul className="runtime-artifacts">
+                        {job.artifacts.map((artifact, index) => (
+                          <li key={index}>
+                            {artifact.summary}: <code>{artifact.path}</code>
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                     {job.actionableError ? (
-                      <em>{job.actionableError.recovery}</em>
+                      <em className="runtime-job-error">
+                        {job.actionableError.summary}:{" "}
+                        {job.actionableError.recovery}
+                      </em>
+                    ) : null}
+                    {job.logTail.length > 0 ? (
+                      <details className="runtime-log">
+                        <summary>Log ({job.logTail.length})</summary>
+                        <pre>{job.logTail.join("\n")}</pre>
+                      </details>
                     ) : null}
                     <div className="runtime-job-actions">
                       <button

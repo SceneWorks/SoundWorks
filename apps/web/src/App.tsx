@@ -599,15 +599,35 @@ export function App() {
     refreshOverviewSummary();
   }
 
-  function createProject() {
-    setLibraryActionStatus(actionFeedback.pending("Creating project…"));
-    createSoundWorksProject({
-      name: `SoundWorks Recovery ${new Date().toLocaleTimeString()}`,
-    })
-      .then(applyProjectLibraryResult)
+  function createProject(name?: string) {
+    const projectName =
+      name?.trim() ||
+      `SoundWorks Recovery ${new Date().toLocaleTimeString()}`;
+    setLibraryActionStatus(
+      actionFeedback.pending(`Creating ${projectName}…`),
+    );
+    createSoundWorksProject({ name: projectName })
+      .then((result) => {
+        applyProjectLibraryResult(result);
+        setActiveView("workspace");
+      })
       .catch((error) => {
         setLibraryActionStatus(
           actionFeedback.error(`Create project unavailable: ${String(error)}`),
+        );
+      });
+  }
+
+  function openProject(projectId: string) {
+    setLibraryActionStatus(actionFeedback.pending("Opening project…"));
+    openSoundWorksProject(projectId)
+      .then((result) => {
+        applyProjectLibraryResult(result);
+        setActiveView("workspace");
+      })
+      .catch((error) => {
+        setLibraryActionStatus(
+          actionFeedback.error(`Open project unavailable: ${String(error)}`),
         );
       });
   }
@@ -1207,6 +1227,7 @@ export function App() {
     latestImportableRuntimeJob,
     runModelManagerAction,
     createProject,
+    openProject,
     openRecentProject,
     importLatestRuntimeArtifact,
     mutateSelectedLibraryItem,
@@ -1261,7 +1282,7 @@ export function App() {
 
       <section className="workspace" aria-label="Workspace">
         {webPreview ? (
-          <div className="preview-banner" role="status">
+          <div className="preview-banner" role="status" aria-label="Preview mode">
             <CircleAlert aria-hidden="true" size={16} />
             <span>
               Web preview — data is simulated. Launch the SoundWorks desktop

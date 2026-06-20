@@ -2,14 +2,17 @@
 // on the shared component grammar (SurfaceHeader + HeroStat, MainSurface,
 // SectionHeading, StatusBadge) instead of the bespoke project-workspace-panel /
 // subpanel-heading classes. This is the template the other screens follow.
+import { useState } from "react";
 import {
   CircleCheck,
   FolderOpen,
   FolderPlus,
+  Rocket,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import {
+  FeedbackLine,
   HeroStat,
   MainSurface,
   SectionHeading,
@@ -19,12 +22,84 @@ import {
 import { statusLabel, studioIconById, studioViewById } from "../viewModel";
 import { useAppContext } from "./context";
 
+const ONBOARDING_KEY = "soundworks-onboarding-dismissed";
+
 export function WorkspaceScreen() {
-  const { workspace, overview, createProject, openRecentProject, setActiveView } =
-    useAppContext();
+  const {
+    workspace,
+    overview,
+    createProject,
+    openProject,
+    openRecentProject,
+    setActiveView,
+    libraryActionStatus,
+  } = useAppContext();
+
+  const [newName, setNewName] = useState("");
+  const firstRun = workspace.recentProjects.length === 0;
+  const [guideOpen, setGuideOpen] = useState(() => {
+    if (!firstRun) {
+      return false;
+    }
+    try {
+      return localStorage.getItem(ONBOARDING_KEY) !== "1";
+    } catch {
+      return true;
+    }
+  });
+  const dismissGuide = () => {
+    setGuideOpen(false);
+    try {
+      localStorage.setItem(ONBOARDING_KEY, "1");
+    } catch {
+      // ignore (private mode)
+    }
+  };
+  const trimmedName = newName.trim();
 
   return (
     <>
+      {guideOpen ? (
+        <MainSurface className="onboarding-card" ariaLabel="Getting started">
+          <SectionHeading
+            eyebrow="Welcome to SoundWorks"
+            title="Generate, review, and hand off audio for your video projects"
+          />
+          <p>
+            Start by creating a project, then generate speech, SFX, samples, or a
+            mixdown in the studios. Generation needs a model — check the Models
+            page to see what is installed.
+          </p>
+          <div className="onboarding-actions">
+            <button
+              type="button"
+              className="primary-action"
+              onClick={() => {
+                createProject(trimmedName || undefined);
+                dismissGuide();
+              }}
+            >
+              <FolderPlus aria-hidden="true" size={18} />
+              <span>Create your first project</span>
+            </button>
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={() => setActiveView("models")}
+            >
+              Check model readiness
+            </button>
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={dismissGuide}
+            >
+              Dismiss
+            </button>
+          </div>
+        </MainSurface>
+      ) : null}
+
       <MainSurface
         className="workspace-overview"
         ariaLabel="Project workspace"
@@ -34,10 +109,30 @@ export function WorkspaceScreen() {
           title={workspace.activeProject.project.name}
           actions={
             <>
+              <input
+                className="field-input workspace-name-input"
+                type="text"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+                placeholder="New project name…"
+                aria-label="New project name"
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    overview.workspace.canCreateProject
+                  ) {
+                    createProject(trimmedName || undefined);
+                    setNewName("");
+                  }
+                }}
+              />
               <button
                 className="primary-action workspace-action"
                 disabled={!overview.workspace.canCreateProject}
-                onClick={createProject}
+                onClick={() => {
+                  createProject(trimmedName || undefined);
+                  setNewName("");
+                }}
                 title="Create SoundWorks project"
                 type="button"
               >
@@ -48,10 +143,18 @@ export function WorkspaceScreen() {
                 className="secondary-icon-action"
                 disabled={!overview.workspace.canOpenProject}
                 onClick={openRecentProject}
-                title="Open SoundWorks project"
+                title="Open most recent SoundWorks project"
                 type="button"
               >
                 <FolderOpen aria-hidden="true" size={18} />
+              </button>
+              <button
+                className="secondary-icon-action"
+                onClick={() => setGuideOpen(true)}
+                title="Show the getting-started guide"
+                type="button"
+              >
+                <Rocket aria-hidden="true" size={18} />
               </button>
             </>
           }
@@ -77,8 +180,15 @@ export function WorkspaceScreen() {
           }
         />
 
+        <FeedbackLine feedback={libraryActionStatus} />
+
         <div className="workspace-layout">
           <section className="workspace-projects" aria-label="Recent projects">
+            {workspace.recentProjects.length === 0 ? (
+              <p className="field-hint">
+                No projects yet — name one above and Create to get started.
+              </p>
+            ) : null}
             {workspace.recentProjects.map((project) => (
               <article
                 className={
@@ -102,6 +212,15 @@ export function WorkspaceScreen() {
                   <span>{project.compositionCount} composition</span>
                   <span>{project.linkedGlobalAssetCount} global link</span>
                 </div>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  disabled={project.status === "active"}
+                  onClick={() => openProject(project.project.id)}
+                  title={`Open ${project.project.name}`}
+                >
+                  {project.status === "active" ? "Current" : "Open"}
+                </button>
               </article>
             ))}
           </section>

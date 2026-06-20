@@ -584,8 +584,13 @@ export function App() {
   }
 
   function mutateSelectedLibraryItem(action: LibraryMutationAction) {
+    const detail = assetLibrary.selectedItem;
+    if (!detail) {
+      setLibraryActionStatus("Select a library item first.");
+      return;
+    }
     mutateLibraryItem({
-      itemId: assetLibrary.selectedItem.item.id,
+      itemId: detail.item.id,
       action,
       tag: action === "add-tag" ? "reviewed" : null,
     })
@@ -613,13 +618,18 @@ export function App() {
 
   function saveSelectedReviewEdit() {
     const selection = reviewWorkspace.transport.selection;
-    const itemId = assetLibrary.selectedItem.item.id;
+    const detail = assetLibrary.selectedItem;
+    if (!detail) {
+      setReviewActionStatus("Select a library item first.");
+      return;
+    }
+    const itemId = detail.item.id;
     saveReviewEdit({
       itemId,
       startMs: selection?.startMs ?? 0,
       endMs:
         selection?.endMs ??
-        assetLibrary.selectedItem.item.durationMs ??
+        detail.item.durationMs ??
         reviewWorkspace.transport.durationMs,
       fadeInMs: 60,
       fadeOutMs: 120,
@@ -630,7 +640,9 @@ export function App() {
         setReviewActionStatus(
           `Saved ${result.versionId} from real audio at ${result.editedPath}.`,
         );
-        previewLibraryItem(result.library.selectedItem.item.id);
+        if (result.library.selectedItem) {
+          previewLibraryItem(result.library.selectedItem.item.id);
+        }
         loadReviewWorkspaceOverview().then(setReviewWorkspace);
       })
       .catch((error) => {
@@ -639,7 +651,12 @@ export function App() {
   }
 
   function exportSelectedLibraryItem() {
-    const itemId = assetLibrary.selectedItem.item.id;
+    const detail = assetLibrary.selectedItem;
+    if (!detail) {
+      setExportActionStatus("Select a library item first.");
+      return;
+    }
+    const itemId = detail.item.id;
     exportLibraryItem({
       itemId,
       presetId: exportWorkflow.selectedExport.presetId,
@@ -1256,7 +1273,7 @@ export function App() {
                 {assetLibrary.items.map((item) => (
                   <article
                     className={
-                      item.id === assetLibrary.selectedItem.item.id
+                      item.id === assetLibrary.selectedItem?.item.id
                         ? "library-item selected"
                         : "library-item"
                     }
@@ -1303,6 +1320,7 @@ export function App() {
                 ))}
               </div>
 
+              {assetLibrary.selectedItem ? (
               <div className="library-detail" aria-label="Asset detail">
                 <section className="tts-subpanel">
                   <div className="subpanel-heading">
@@ -1361,6 +1379,19 @@ export function App() {
                   </ol>
                 </section>
               </div>
+              ) : (
+                <div className="library-detail" aria-label="Asset detail">
+                  <section className="tts-subpanel">
+                    <div className="subpanel-heading">
+                      <h3>No asset selected</h3>
+                    </div>
+                    <p>
+                      This library has no saved assets yet. Generate audio in a
+                      studio or import a runtime artifact to populate it.
+                    </p>
+                  </section>
+                </div>
+              )}
             </div>
 
             <div className="library-bottom-grid">
@@ -3689,9 +3720,12 @@ export function App() {
                   <div className="review-transport-topline">
                     <button
                       className="icon-control"
-                      onClick={() =>
-                        previewLibraryItem(assetLibrary.selectedItem.item.id)
-                      }
+                      disabled={!assetLibrary.selectedItem}
+                      onClick={() => {
+                        if (assetLibrary.selectedItem) {
+                          previewLibraryItem(assetLibrary.selectedItem.item.id);
+                        }
+                      }}
                       type="button"
                       title="Play or pause preview"
                     >

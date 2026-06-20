@@ -3034,11 +3034,17 @@ mod tests {
             )
             .expect("generated speech imports into the project library");
         assert_eq!(
-            saved.asset_library.selected_item.item.item_type,
+            saved
+                .asset_library
+                .selected_item
+                .as_ref()
+                .unwrap()
+                .item
+                .item_type,
             crate::asset_library::LibraryItemType::VoiceClip
         );
         let playback = library
-            .playback_for_item(&saved.asset_library.selected_item.item.id)
+            .playback_for_item(&saved.asset_library.selected_item.as_ref().unwrap().item.id)
             .expect("playback check works");
         assert!(playback.playable);
     }
@@ -3096,12 +3102,20 @@ mod tests {
             )
             .expect("generated SFX imports into the project library");
         assert_eq!(
-            saved.asset_library.selected_item.item.item_type,
+            saved
+                .asset_library
+                .selected_item
+                .as_ref()
+                .unwrap()
+                .item
+                .item_type,
             crate::asset_library::LibraryItemType::Sfx
         );
         let technical = &saved
             .asset_library
             .selected_item
+            .as_ref()
+            .unwrap()
             .item
             .current_version
             .as_ref()
@@ -3114,7 +3128,7 @@ mod tests {
         assert!(technical.loudness_lufs.is_some());
 
         let playback = library
-            .playback_for_item(&saved.asset_library.selected_item.item.id)
+            .playback_for_item(&saved.asset_library.selected_item.as_ref().unwrap().item.id)
             .expect("playback check works");
         assert!(playback.playable);
     }
@@ -3186,12 +3200,20 @@ mod tests {
             )
             .expect("generated loop imports into the project library");
         assert_eq!(
-            saved.asset_library.selected_item.item.item_type,
+            saved
+                .asset_library
+                .selected_item
+                .as_ref()
+                .unwrap()
+                .item
+                .item_type,
             crate::asset_library::LibraryItemType::Loop
         );
         let technical = &saved
             .asset_library
             .selected_item
+            .as_ref()
+            .unwrap()
             .item
             .current_version
             .as_ref()
@@ -3205,7 +3227,7 @@ mod tests {
         assert!(technical.loudness_lufs.is_some());
 
         let playback = library
-            .playback_for_item(&saved.asset_library.selected_item.item.id)
+            .playback_for_item(&saved.asset_library.selected_item.as_ref().unwrap().item.id)
             .expect("playback check works");
         assert!(playback.playable);
     }
@@ -3265,12 +3287,20 @@ mod tests {
             )
             .expect("generated sample imports into the project library");
         assert_eq!(
-            saved.asset_library.selected_item.item.item_type,
+            saved
+                .asset_library
+                .selected_item
+                .as_ref()
+                .unwrap()
+                .item
+                .item_type,
             crate::asset_library::LibraryItemType::InstrumentSample
         );
         assert!(saved
             .asset_library
             .selected_item
+            .as_ref()
+            .unwrap()
             .item
             .current_version
             .as_ref()

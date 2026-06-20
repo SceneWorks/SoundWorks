@@ -124,8 +124,8 @@ pub struct AssetLibrarySummary {
     pub favorite_count: usize,
     pub rejected_count: usize,
     pub archived_count: usize,
-    pub selected_item_id: String,
-    pub selected_item_type: LibraryItemType,
+    pub selected_item_id: Option<String>,
+    pub selected_item_type: Option<LibraryItemType>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -766,8 +766,14 @@ impl AssetLibrarySummary {
             favorite_count: overview.items.iter().filter(|item| item.favorite).count(),
             rejected_count: overview.items.iter().filter(|item| item.rejected).count(),
             archived_count: overview.items.iter().filter(|item| item.archived).count(),
-            selected_item_id: overview.selected_item.item.id.clone(),
-            selected_item_type: overview.selected_item.item.item_type,
+            selected_item_id: overview
+                .selected_item
+                .as_ref()
+                .map(|detail| detail.item.id.clone()),
+            selected_item_type: overview
+                .selected_item
+                .as_ref()
+                .map(|detail| detail.item.item_type),
         }
     }
 }

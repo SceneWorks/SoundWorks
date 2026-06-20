@@ -512,34 +512,66 @@ mod tests {
         assert_eq!(catalog.model_count(), 4);
     }
 
+    /// F-009: point the library/runtime commands at an isolated, empty temp root
+    /// so the production (persisted-only) path is deterministic and never reads the
+    /// developer's real SoundWorks library. Set once for the whole test binary.
+    fn isolated_library() {
+        use std::sync::OnceLock;
+        static INIT: OnceLock<()> = OnceLock::new();
+        INIT.get_or_init(|| {
+            let dir = std::env::temp_dir()
+                .join(format!("soundworks-desktop-test-{}", std::process::id()));
+            let _ = std::fs::create_dir_all(&dir);
+            std::env::set_var("SOUNDWORKS_LIBRARY_ROOT", &dir);
+            std::env::set_var("SOUNDWORKS_RUNTIME_ROOT", dir.join("runtime"));
+        });
+    }
+
     #[test]
     fn asset_library_command_returns_searchable_library() {
+        isolated_library();
         let library = asset_library_overview();
 
+        // Production default merges no fixtures: the empty library has no selection
+        // but still exposes the full filter contract and the standard scopes.
         assert_eq!(library.schema_version, 1);
         assert_eq!(library.filters.supported_item_types.len(), 13);
+        assert!(library.selected_item.is_none());
         assert!(library
-            .filters
-            .facets
+            .scopes
             .iter()
-            .any(|facet| facet.id == "lifecycle"));
-        assert_eq!(library.selected_item.item.id, "asset-loop-001");
+            .any(|scope| scope.id == "project-demo"));
+        assert!(library
+            .scopes
+            .iter()
+            .any(|scope| scope.id == "global-library"));
     }
 
     #[test]
     fn workspace_command_returns_project_and_global_library_state() {
+        isolated_library();
         let workspace = workspace_overview();
 
+        // Production default: the seeded demo project exists, but the library
+        // contains only persisted assets (none in a fresh root).
         assert_eq!(workspace.schema_version, 1);
         assert_eq!(workspace.active_project.project.id, "project-demo");
         assert_eq!(workspace.global_library.id, "global-library");
-        assert_eq!(workspace.project_assets.len(), 10);
-        assert_eq!(workspace.global_assets.len(), 3);
+        assert!(workspace.project_assets.is_empty());
+        assert!(workspace.global_assets.is_empty());
         assert!(workspace.source_picker.allows_global_sources);
-        assert!(workspace
-            .transfer_actions
-            .iter()
-            .any(|action| action.id == "promote-loop-to-global"));
+    }
+
+    #[test]
+    fn demo_flag_restores_the_fixture_catalog() {
+        // F-009: with the opt-in demo flag set, the fabricated catalog returns for
+        // demos/screenshots. Asserted on the core builder so it is independent of
+        // process-global env state.
+        let demo =
+            soundworks_core::AssetLibraryOverview::reference_with_persisted_items(vec![], None)
+                .expect("demo library builds");
+        assert!(demo.selected_item.is_some());
+        assert!(demo.items.iter().any(|item| item.id == "asset-loop-001"));
     }
 
     #[test]

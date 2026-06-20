@@ -226,8 +226,8 @@ export type AssetLibrarySummary = {
   favoriteCount: number;
   rejectedCount: number;
   archivedCount: number;
-  selectedItemId: string;
-  selectedItemType: LibraryItemType;
+  selectedItemId: string | null;
+  selectedItemType: LibraryItemType | null;
 };
 
 export type ExportSourceKind =
@@ -614,7 +614,7 @@ export type AssetLibraryOverview = {
     versionCount: number;
     sourcePickerTargets: string[];
     notes: string[];
-  };
+  } | null;
   collections: Array<{
     collection: {
       id: string;
@@ -672,12 +672,12 @@ export type LibraryMutationRequest = {
   tag?: string | null;
 };
 
-export type LibraryItemDetail = AssetLibraryOverview["selectedItem"];
+export type LibraryItemDetail = NonNullable<AssetLibraryOverview["selectedItem"]>;
 
 export type ProjectLibraryActionResult = {
   workspace: WorkspaceOverview;
   assetLibrary: AssetLibraryOverview;
-  selectedItem: LibraryItemDetail;
+  selectedItem: LibraryItemDetail | null;
   message: string;
 };
 

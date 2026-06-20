@@ -11,7 +11,9 @@ import {
   Save,
   SlidersHorizontal,
 } from "lucide-react";
+import { useState } from "react";
 import {
+  ConfirmDialog,
   FeedbackLine,
   HeroStat,
   MainSurface,
@@ -30,8 +32,13 @@ export function ReviewScreen() {
     libraryPlayback,
     reviewActionStatus,
     saveSelectedReviewEdit,
+    mutateSelectedLibraryItem,
     previewLibraryItem,
   } = useAppContext();
+
+  const [pendingReject, setPendingReject] = useState(false);
+  const hasSelection = Boolean(assetLibrary.selectedItem);
+  const selectedName = assetLibrary.selectedItem?.item.name ?? "the asset";
 
   return (
     <section className="review-workspace-panel" aria-label="Waveform Review">
@@ -39,20 +46,40 @@ export function ReviewScreen() {
         eyebrow="Waveform Review"
         title={reviewWorkspace.selectedAsset.asset.name}
         actions={
-          <button
-            className="primary-action review-action"
-            disabled={!reviewWorkspace.editSubmission.canSave}
-            onClick={saveSelectedReviewEdit}
-            type="button"
-            title="Save edited audio version"
-          >
-            <Save aria-hidden="true" size={18} />
-            <span>
-              {reviewWorkspace.editSubmission.canSave
-                ? "Save version"
-                : "Blocked"}
-            </span>
-          </button>
+          <>
+            <button
+              className="secondary-action"
+              disabled={!hasSelection}
+              onClick={() => mutateSelectedLibraryItem("favorite")}
+              type="button"
+              title="Approve (favorite) the selected asset"
+            >
+              Approve
+            </button>
+            <button
+              className="secondary-action is-destructive"
+              disabled={!hasSelection}
+              onClick={() => setPendingReject(true)}
+              type="button"
+              title="Reject the selected asset"
+            >
+              Reject
+            </button>
+            <button
+              className="primary-action review-action"
+              disabled={!reviewWorkspace.editSubmission.canSave}
+              onClick={saveSelectedReviewEdit}
+              type="button"
+              title="Save edited audio version"
+            >
+              <Save aria-hidden="true" size={18} />
+              <span>
+                {reviewWorkspace.editSubmission.canSave
+                  ? "Save version"
+                  : "Blocked"}
+              </span>
+            </button>
+          </>
         }
         stats={
           <>
@@ -169,6 +196,10 @@ export function ReviewScreen() {
             ))}
           </div>
 
+          <small className="field-hint">
+            Edit actions below are a preview of the editing contract; the active
+            edit applies through Save version.
+          </small>
           <div
             className="edit-action-grid"
             aria-label="Lightweight edit actions"
@@ -205,13 +236,19 @@ export function ReviewScreen() {
                 <article key={side.versionId}>
                   <strong>{side.label}</strong>
                   <small>{side.versionId}</small>
-                  <p>
-                    {formatDuration(side.durationMs)} / {side.loudnessLufs} LUFS
-                    / {side.truePeakDbfs} dBTP
+                  <p
+                    title="Approximate — BS.1770 integrated loudness / true peak measured over the cached waveform"
+                  >
+                    {formatDuration(side.durationMs)} / ~{side.loudnessLufs} LUFS
+                    / ~{side.truePeakDbfs} dBTP
                   </p>
                 </article>
               ))}
             </div>
+            <small className="field-hint">
+              Loudness and true-peak are approximate (BS.1770 over the cached
+              waveform).
+            </small>
             <div className="comparison-metrics">
               <span>
                 {reviewWorkspace.versionComparison.metrics.durationDeltaMs}
@@ -291,6 +328,18 @@ export function ReviewScreen() {
           ))}
         </ol>
       </div>
+
+      <ConfirmDialog
+        open={pendingReject}
+        title="Reject this asset?"
+        message={`Reject ${selectedName}? It will be marked rejected in the library.`}
+        confirmLabel="Reject"
+        onCancel={() => setPendingReject(false)}
+        onConfirm={() => {
+          mutateSelectedLibraryItem("reject");
+          setPendingReject(false);
+        }}
+      />
     </section>
   );
 }

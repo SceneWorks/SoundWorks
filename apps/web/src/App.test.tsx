@@ -106,9 +106,12 @@ describe("App", () => {
     ).toBeGreaterThan(0);
 
     fireEvent.click(navButton("Models"));
-    expect(await screen.findByTitle("Install Kokoro 82M")).toBeDisabled();
+    // Kokoro is missing-cache in the reference fixtures, so its install control is
+    // enabled (the cache can be downloaded); the failed-operation surface stays
+    // visible for revalidate/install QA.
+    expect(await screen.findByTitle("Install Kokoro 82M")).toBeEnabled();
     expect(
-      screen.getByText("MOSS-SoundEffect install failed cache verification."),
+      screen.getByText("Kokoro install failed cache verification."),
     ).toBeInTheDocument();
 
     fireEvent.click(navButton("Jobs"));

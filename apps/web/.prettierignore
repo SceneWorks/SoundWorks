@@ -1,3 +1,6 @@
 dist/
 coverage/
 node_modules/
+# Generated from Rust reference fixtures (F-012); must stay byte-identical to the
+# `gen_web_fixtures` output, so do not reformat. Regenerate via `npm run gen:fixtures`.
+src/appData.generated.json

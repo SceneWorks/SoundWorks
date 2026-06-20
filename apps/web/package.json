@@ -10,7 +10,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "format": "prettier --check ."
+    "format": "prettier --check .",
+    "gen:fixtures": "cargo run -p soundworks-core --bin gen_web_fixtures -- src/appData.generated.json"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

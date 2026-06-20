@@ -170,9 +170,6 @@ function fallbackRuntimeJob(request: RuntimeJobRequest): RuntimeJobSnapshot {
     createdAt: now,
     updatedAt: now,
     recordRoot: "web-fallback",
-    recipePath: "web-fallback/recipe.json",
-    modelMetadataPath: "web-fallback/model.json",
-    eventsPath: "web-fallback/events.jsonl",
     logTail: ["Tauri runtime command unavailable"],
     artifacts: [],
     actionableError: {

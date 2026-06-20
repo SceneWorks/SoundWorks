@@ -105,9 +105,6 @@ export type RuntimeJobSnapshot = {
   createdAt: string;
   updatedAt: string;
   recordRoot: string;
-  recipePath: string;
-  modelMetadataPath: string;
-  eventsPath: string;
   logTail: string[];
   artifacts: RuntimeJobArtifact[];
   actionableError?: {

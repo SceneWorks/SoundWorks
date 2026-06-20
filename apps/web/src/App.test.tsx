@@ -151,14 +151,22 @@ describe("App", () => {
     // Previously-dead Generate/Convert buttons are now real buttons, gated on
     // an installed runtime model (none in preview, so they read Blocked).
     fireEvent.click(navButton("Voice Lab"));
-    const convert = await screen.findByTitle("Queue voice conversion");
+    const convert = await screen.findByRole("button", { name: "Blocked" });
     expect(convert.tagName).toBe("BUTTON");
     expect(convert).toBeDisabled();
+    expect(convert).toHaveAttribute(
+      "title",
+      "Install a voice-conversion model to generate.",
+    );
     // DR-03: with no installed model (web preview), the studio shows an
     // actionable availability gate instead of leaving only a dead Blocked button.
     expect(
       screen.getByRole("button", { name: "Open Model Manager" }),
     ).toBeInTheDocument();
+    // UX-08: consent capture is available per voice profile.
+    expect(
+      screen.getAllByRole("button", { name: "Record consent" }).length,
+    ).toBeGreaterThan(0);
 
     // UX-S1b: Video + Song are honestly gated (no model in preview) and the
     // generate button now carries the disabled-reason as its tooltip.

@@ -685,6 +685,14 @@ textarea.field-input {
   width: 96px;
 }
 
+/* UX-S1c: per-profile consent capture buttons. */
+.voice-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
 .primary-action {
   display: inline-grid;
   grid-template-columns: 18px minmax(0, auto);

@@ -20,6 +20,7 @@ import type {
   RuntimeJobSnapshot,
   RuntimeOverview,
   SamplesStudioOverview,
+  VoiceConsentStatus,
   SfxStudioOverview,
   SongStudioOverview,
   TtsStudioOverview,
@@ -107,6 +108,10 @@ export interface AppContextValue {
   ) => void;
   cancelRuntimeOperation: (jobId: string) => void;
   retryRuntimeOperation: (jobId: string) => void;
+  recordVoiceProfileConsent: (
+    profileId: string,
+    consent: VoiceConsentStatus,
+  ) => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

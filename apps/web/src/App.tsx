@@ -55,6 +55,7 @@ import {
   openSoundWorksProject,
   retryRuntimeJob,
   saveReviewEdit,
+  setVoiceProfileConsent,
   loadModelManagerOverview,
   loadMvpValidationOverview,
   loadRightsSafetyOverview,
@@ -125,6 +126,7 @@ import type {
   SfxStudioOverview,
   TtsStudioOverview,
   VideoToAudioOverview,
+  VoiceConsentStatus,
   VoiceLabOverview,
   WorkspaceOverview,
 } from "./types";
@@ -943,6 +945,26 @@ export function App() {
     });
   }
 
+  // UX-08: record consent for a voice profile (the F-003 write path). The updated
+  // overview reflects the new consent, so the studio's gate/badge updates and a
+  // subsequent conversion is admitted.
+  function recordVoiceProfileConsent(
+    profileId: string,
+    consent: VoiceConsentStatus,
+  ) {
+    setVoiceProfileConsent(profileId, consent)
+      .then((next) => {
+        if (mountedRef.current) {
+          setVoiceLab(next);
+        }
+      })
+      .catch((error) => {
+        if (mountedRef.current) {
+          setDataError(`Recording consent unavailable: ${String(error)}`);
+        }
+      });
+  }
+
   const scaffoldedLayerCount = useMemo(
     () =>
       overview.architecture.layers.filter(
@@ -1102,6 +1124,7 @@ export function App() {
     runRuntimeJob,
     cancelRuntimeOperation,
     retryRuntimeOperation,
+    recordVoiceProfileConsent,
   };
 
   return (

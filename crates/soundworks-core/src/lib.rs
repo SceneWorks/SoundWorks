@@ -22,6 +22,7 @@ pub mod studio_common;
 pub mod tts;
 pub mod ui_preferences;
 pub mod video_to_audio;
+pub mod voice_consent;
 pub mod voice_lab;
 pub mod web_fixtures;
 pub mod workspace;
@@ -47,6 +48,7 @@ pub use studio_common::*;
 pub use tts::*;
 pub use ui_preferences::*;
 pub use video_to_audio::*;
+pub use voice_consent::*;
 pub use voice_lab::*;
 pub use workspace::*;
 

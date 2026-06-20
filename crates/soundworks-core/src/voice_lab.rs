@@ -350,10 +350,30 @@ fn candidate_ids_for(scorecards: &[VoiceProviderScorecard], lane: EvaluationLane
 /// the source. Returns `None` for an unknown profile id, which callers treat as
 /// "no recorded consent" (blocked).
 pub fn profile_consent(profile_id: &str) -> Option<VoiceConsentStatus> {
+    // UX-08: a user-recorded consent override (persisted by VoiceConsentStore)
+    // wins over the fixture catalog, so recording consent in the UI genuinely
+    // unblocks admission. Falls back to the reference catalog for fixture
+    // profiles with no override.
+    if let Some(status) = crate::voice_consent::VoiceConsentStore::default().consent_for(profile_id)
+    {
+        return Some(status);
+    }
     reference_profiles()
         .into_iter()
         .find(|entry| entry.profile.id == profile_id)
         .map(|entry| entry.profile.consent)
+}
+
+/// Apply persisted consent overrides (UX-08) to a profile list. The overview
+/// builders produce profiles from the fixture catalog; the desktop command layer
+/// calls this so the displayed consent reflects what the user recorded.
+pub fn apply_consent_overrides(profiles: &mut [VoiceLabProfile]) {
+    let records = crate::voice_consent::VoiceConsentStore::default().load();
+    for profile in profiles.iter_mut() {
+        if let Some(status) = records.profiles.get(&profile.profile.id) {
+            profile.profile.consent = *status;
+        }
+    }
 }
 
 fn reference_profiles() -> Vec<VoiceLabProfile> {

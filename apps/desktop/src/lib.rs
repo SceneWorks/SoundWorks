@@ -7,7 +7,8 @@ use soundworks_core::{
     ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeEngine, RuntimeJobArtifact,
     RuntimeJobRequest, RuntimeJobSnapshot, RuntimeJobStore, RuntimeOverview, SamplesStudioOverview,
     SaveReviewEditRequest, SfxStudioOverview, SongStudioOverview, TtsStudioOverview, UiPreferences,
-    UiPreferencesStore, VideoToAudioOverview, VoiceLabOverview, WorkspaceOverview,
+    UiPreferencesStore, VideoToAudioOverview, VoiceConsentStatus, VoiceConsentStore,
+    VoiceLabOverview, WorkspaceOverview,
 };
 use std::sync::{Arc, Mutex};
 
@@ -176,6 +177,16 @@ fn get_runtime_job_artifacts(job_id: String) -> Result<Vec<RuntimeJobArtifact>, 
 #[tauri::command]
 fn get_runtime_job(job_id: String) -> Result<Option<RuntimeJobSnapshot>, String> {
     runtime_job(job_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn set_voice_profile_consent(
+    state: tauri::State<AppState>,
+    profile_id: String,
+    consent: VoiceConsentStatus,
+) -> Result<VoiceLabOverview, String> {
+    let _guard = lock_writes(&state);
+    record_voice_profile_consent(profile_id, consent).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -410,6 +421,14 @@ pub fn runtime_job(job_id: String) -> std::io::Result<Option<RuntimeJobSnapshot>
     RuntimeJobStore::default().job(&job_id)
 }
 
+pub fn record_voice_profile_consent(
+    profile_id: String,
+    consent: VoiceConsentStatus,
+) -> std::io::Result<VoiceLabOverview> {
+    VoiceConsentStore::default().record(&profile_id, consent)?;
+    Ok(voice_lab_overview())
+}
+
 pub fn model_evaluation_catalog() -> ModelEvaluationCatalog {
     ModelEvaluationCatalog::reference()
 }
@@ -435,7 +454,11 @@ pub fn tts_studio_overview() -> TtsStudioOverview {
 }
 
 pub fn voice_lab_overview() -> VoiceLabOverview {
-    VoiceLabOverview::reference().expect("reference Voice Lab is valid")
+    let mut overview = VoiceLabOverview::reference().expect("reference Voice Lab is valid");
+    // UX-08: reflect user-recorded consent overrides in the displayed profiles so
+    // the studio shows what was recorded (and matches what F-003 admission reads).
+    soundworks_core::apply_consent_overrides(&mut overview.voice_profiles);
+    overview
 }
 
 pub fn sfx_studio_overview() -> SfxStudioOverview {
@@ -492,6 +515,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             retry_runtime_job,
             get_runtime_job_artifacts,
             get_runtime_job,
+            set_voice_profile_consent,
             get_model_evaluation_catalog,
             get_model_manager_overview,
             install_model_candidate,
@@ -522,11 +546,13 @@ mod tests {
     use super::{
         app_overview, asset_library_overview, composition_editor_overview,
         export_workflow_overview, install_candidate, model_evaluation_catalog,
-        model_manager_overview, mvp_validation_overview, provider_catalog, revalidate_candidate,
-        review_workspace_overview, rights_safety_overview, runtime_job, runtime_overview,
-        samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
-        video_to_audio_overview, voice_lab_overview, workspace_overview,
+        model_manager_overview, mvp_validation_overview, provider_catalog,
+        record_voice_profile_consent, revalidate_candidate, review_workspace_overview,
+        rights_safety_overview, runtime_job, runtime_overview, samples_studio_overview,
+        sfx_studio_overview, song_studio_overview, tts_studio_overview, video_to_audio_overview,
+        voice_lab_overview, workspace_overview,
     };
+    use soundworks_core::VoiceConsentStatus;
 
     #[test]
     fn app_overview_command_returns_soundworks() {
@@ -671,6 +697,44 @@ mod tests {
             .validation_checks
             .iter()
             .any(|check| check.id == "runtime.job_store"));
+    }
+
+    #[test]
+    fn record_voice_profile_consent_overrides_displayed_profile() {
+        // UX-08: isolate the consent store to a temp root so recording consent
+        // never touches the developer's real app-support directory.
+        let dir =
+            std::env::temp_dir().join(format!("soundworks-consent-cmd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("SOUNDWORKS_VOICE_CONSENT_ROOT", &dir);
+
+        // The archival fixture profile starts as RequiresReview.
+        let before = voice_lab_overview();
+        let archival = before
+            .voice_profiles
+            .iter()
+            .find(|profile| profile.profile.id == "voice-profile-archival")
+            .expect("archival profile present");
+        assert_eq!(archival.profile.consent, VoiceConsentStatus::RequiresReview);
+
+        // Recording explicit consent returns an overview reflecting the override.
+        let after = record_voice_profile_consent(
+            "voice-profile-archival".to_string(),
+            VoiceConsentStatus::ExplicitConsentRecorded,
+        )
+        .expect("record consent");
+        let archival_after = after
+            .voice_profiles
+            .iter()
+            .find(|profile| profile.profile.id == "voice-profile-archival")
+            .expect("archival profile present");
+        assert_eq!(
+            archival_after.profile.consent,
+            VoiceConsentStatus::ExplicitConsentRecorded
+        );
+
+        std::env::remove_var("SOUNDWORKS_VOICE_CONSENT_ROOT");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

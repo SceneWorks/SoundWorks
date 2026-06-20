@@ -46,6 +46,7 @@ import type {
   TtsStudioOverview,
   UiPreferences,
   VideoToAudioOverview,
+  VoiceConsentStatus,
   VoiceLabOverview,
   WorkspaceOverview,
 } from "./types";
@@ -393,6 +394,29 @@ export async function loadTtsStudioOverview(): Promise<TtsStudioOverview> {
 
 export async function loadVoiceLabOverview(): Promise<VoiceLabOverview> {
   return readOverview("get_voice_lab_overview", fallbackVoiceLab);
+}
+
+// UX-08: record consent for a persisted voice profile (the F-003 write path).
+// Web preview has no backend, so it optimistically reflects the override on the
+// fixture overview.
+export async function setVoiceProfileConsent(
+  profileId: string,
+  consent: VoiceConsentStatus,
+): Promise<VoiceLabOverview> {
+  if (!isTauri()) {
+    return {
+      ...fallbackVoiceLab,
+      voiceProfiles: fallbackVoiceLab.voiceProfiles.map((profile) =>
+        profile.profile.id === profileId
+          ? { ...profile, profile: { ...profile.profile, consent } }
+          : profile,
+      ),
+    };
+  }
+  return await invoke<VoiceLabOverview>("set_voice_profile_consent", {
+    profileId,
+    consent,
+  });
 }
 
 export async function loadSfxStudioOverview(): Promise<SfxStudioOverview> {

@@ -6,6 +6,7 @@ pub mod domain;
 pub mod evaluation;
 pub mod export_workflow;
 pub mod fixtures;
+pub mod loudness;
 pub mod manifests;
 pub mod model_manager;
 pub mod mvp_validation;

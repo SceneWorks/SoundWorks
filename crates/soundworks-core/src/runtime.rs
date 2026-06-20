@@ -1,5 +1,6 @@
 use crate::domain::{JobKind, JobProgress, JobStatus, ModelRuntime, VoiceConsentStatus};
 use crate::evaluation::{EvaluationLane, ProductEligibility, ProductRuntimePath};
+use crate::loudness;
 use crate::manifests::{
     CapabilityWorkflow, DeviceAccelerator, ModelInstallStatus, ModelManifest, ProviderCatalog,
 };
@@ -1786,7 +1787,7 @@ impl RuntimeJobStore {
             mark_cancelled(job);
             return Ok(());
         }
-        let stats = audio_stats(&samples);
+        let stats = loudness::analyze_f32(&samples, sample_rate, channels);
         let record_root = sanitized_join(&self.root, &["jobs", &job.id])?;
         let audio_path = record_root.join("artifacts").join("native-sfx.wav");
         write_pcm16_wav_channels(&audio_path, &samples, sample_rate, channels)?;
@@ -1958,7 +1959,7 @@ impl RuntimeJobStore {
             mark_cancelled(job);
             return Ok(());
         }
-        let stats = audio_stats(&samples);
+        let stats = loudness::analyze_f32(&samples, sample_rate, channels);
         let record_root = sanitized_join(&self.root, &["jobs", &job.id])?;
         let audio_path = record_root.join("artifacts").join(match request.workflow {
             CapabilityWorkflow::InstrumentSample => "native-sample.wav",
@@ -2425,12 +2426,6 @@ fn timestamp_string() -> String {
     timestamp_millis().to_string()
 }
 
-#[derive(Debug, Clone, Copy)]
-struct AudioStats {
-    loudness_lufs: f32,
-    true_peak_dbfs: f32,
-}
-
 fn synthesize_native_sfx(
     prompt: &str,
     workflow: CapabilityWorkflow,
@@ -2611,23 +2606,6 @@ fn key_frequency(musical_key: &str) -> f32 {
         "A#" | "BB" => 58.27,
         "B" | "B1" => 61.74,
         _ => 55.00,
-    }
-}
-
-fn audio_stats(samples: &[f32]) -> AudioStats {
-    let mut sum_squares = 0.0f32;
-    let mut peak = 0.0f32;
-    for sample in samples {
-        sum_squares += sample * sample;
-        peak = peak.max(sample.abs());
-    }
-    let rms = (sum_squares / samples.len().max(1) as f32)
-        .sqrt()
-        .max(0.000_001);
-    let peak = peak.max(0.000_001);
-    AudioStats {
-        loudness_lufs: 20.0 * rms.log10(),
-        true_peak_dbfs: 20.0 * peak.log10(),
     }
 }
 

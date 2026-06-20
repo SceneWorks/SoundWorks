@@ -685,6 +685,13 @@ textarea.field-input {
   width: 96px;
 }
 
+/* UX-10: an engaged/toggled secondary action (e.g. a muted track). */
+.secondary-action.is-active {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
 /* UX-S1c: per-profile consent capture buttons. */
 .voice-consent-actions {
   display: flex;

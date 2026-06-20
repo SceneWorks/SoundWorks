@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod asset_library;
 pub mod composition_editor;
+pub mod composition_mixdown;
 pub mod domain;
 pub mod evaluation;
 pub mod export_workflow;
@@ -29,6 +30,7 @@ pub mod workspace;
 
 pub use asset_library::*;
 pub use composition_editor::*;
+pub use composition_mixdown::*;
 pub use domain::*;
 pub use evaluation::*;
 pub use export_workflow::*;

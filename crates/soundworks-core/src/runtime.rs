@@ -6,6 +6,7 @@ use crate::manifests::{
 use crate::model_manager::{
     CandidateInstallState, ModelCandidateInstallState, ModelManagerOverview,
 };
+use crate::storage::sanitized_join;
 use kokoro_en::{KokoroTts, Voice};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,6 +14,7 @@ use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const RUNTIME_SCHEMA_VERSION: u32 = 2;
@@ -976,11 +978,12 @@ impl RuntimeJobStore {
         request: RuntimeJobRequest,
     ) -> io::Result<RuntimeJobSnapshot> {
         let job_id = format!(
-            "job-{}-{}",
+            "job-{}-{}-{}",
             request.workflow_id_fragment(),
-            timestamp_millis()
+            timestamp_millis(),
+            next_job_sequence()
         );
-        let record_root = self.root.join("jobs").join(&job_id);
+        let record_root = sanitized_join(&self.root, &["jobs", &job_id])?;
         fs::create_dir_all(record_root.join("artifacts"))?;
         let created_at = timestamp_string();
         let adapter = adapter_for_model(overview, &request);
@@ -1083,7 +1086,10 @@ impl RuntimeJobStore {
         let Some(job) = self.read_job(job_id)? else {
             return Ok(None);
         };
-        let request: RuntimeJobRequest = read_json(Path::new(&job.recipe_path))?;
+        // F-004 (second-order): do not trust the persisted recipe_path string;
+        // recompute it from the validated job id under the store root.
+        let recipe_path = sanitized_join(&self.root, &["jobs", &job.id, "recipe.json"])?;
+        let request: RuntimeJobRequest = read_json(&recipe_path)?;
         let mut retried = self.enqueue(overview, request)?;
         retried.retry_count = job.retry_count.saturating_add(1);
         retried.log_tail.push(format!("retry of {}", job.id));
@@ -1114,7 +1120,10 @@ impl RuntimeJobStore {
     }
 
     fn read_job(&self, job_id: &str) -> io::Result<Option<RuntimeJobSnapshot>> {
-        let path = self.root.join("jobs").join(job_id).join("job.json");
+        // F-004: validate the caller-supplied job_id before joining it into a path.
+        // cancel/retry/artifacts all funnel through read_job, so this one guard
+        // closes the read-traversal across the whole job store.
+        let path = sanitized_join(&self.root, &["jobs", job_id, "job.json"])?;
         if path.is_file() {
             Ok(Some(read_json(path)?))
         } else {
@@ -1735,7 +1744,10 @@ impl RuntimeJobStore {
     }
 
     fn write_job(&self, job: &RuntimeJobSnapshot) -> io::Result<()> {
-        write_json(PathBuf::from(&job.record_root).join("job.json"), job)
+        // F-002/F-030: recompute the write target from the validated job id rather
+        // than trusting the persisted (possibly stale/untrusted) record_root string.
+        let path = sanitized_join(&self.root, &["jobs", &job.id, "job.json"])?;
+        write_json(path, job)
     }
 
     fn append_event(&self, job: &RuntimeJobSnapshot, event: &str, message: &str) -> io::Result<()> {
@@ -1987,6 +1999,14 @@ fn timestamp_millis() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_millis())
+}
+
+/// F-035: process-wide monotonic counter appended to job ids so two jobs enqueued
+/// in the same millisecond (or under a faulted clock reporting 0) never collide and
+/// overwrite each other's job directory.
+fn next_job_sequence() -> u64 {
+    static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    JOB_SEQUENCE.fetch_add(1, Ordering::Relaxed)
 }
 
 fn timestamp_string() -> String {
@@ -2418,6 +2438,34 @@ mod tests {
             .expect("read jobs")
             .iter()
             .any(|stored| stored.id == job.id));
+    }
+
+    #[test]
+    fn runtime_job_store_rejects_traversal_job_id() {
+        // F-004: cancel/retry/artifacts all funnel through read_job, which now runs
+        // the caller-supplied job_id through sanitized_join. A traversal id must be
+        // rejected (Err), while a valid-but-missing id resolves to Ok(None).
+        let store = RuntimeJobStore::new(temp_runtime_root("traversal"));
+        let overview = installed_overview(&store);
+        for malicious in ["../../etc/passwd", "..", "jobs/../escape", "with space", ""] {
+            assert!(
+                store.cancel(malicious).is_err(),
+                "cancel must reject job_id {malicious:?}"
+            );
+            assert!(
+                store.artifacts(malicious).is_err(),
+                "artifacts must reject job_id {malicious:?}"
+            );
+            assert!(
+                store.retry(&overview, malicious).is_err(),
+                "retry must reject job_id {malicious:?}"
+            );
+        }
+        // A clean id that does not exist is not an error, just absent.
+        assert!(store
+            .cancel("job-tts-0-0")
+            .expect("clean id resolves")
+            .is_none());
     }
 
     #[test]

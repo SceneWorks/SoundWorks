@@ -10,12 +10,14 @@ use crate::domain::{
 };
 use crate::manifests::CapabilityWorkflow;
 use crate::runtime::{RuntimeArtifactKind, RuntimeJobStore};
+use crate::storage::sanitized_join;
 use crate::workspace::WorkspaceOverview;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
@@ -232,8 +234,13 @@ impl ProjectLibraryStore {
         request: CreateProjectRequest,
     ) -> io::Result<ProjectLibraryActionResult> {
         let name = non_empty_or(request.name, "Untitled SoundWorks Project");
-        let project_id = format!("project-{}-{}", slug(&name), timestamp_millis());
-        let project_root = self.root.join("projects").join(&project_id);
+        let project_id = format!(
+            "project-{}-{}-{}",
+            slug(&name),
+            timestamp_millis(),
+            next_id_sequence()
+        );
+        let project_root = sanitized_join(&self.root, &["projects", &project_id])?;
         fs::create_dir_all(&project_root)?;
 
         let project = Project {
@@ -357,12 +364,13 @@ impl ProjectLibraryStore {
         };
         let kind = kind_for_workflow(job.workflow);
         let asset_id = format!(
-            "asset-{}-{}",
+            "asset-{}-{}-{}",
             workflow_fragment(job.workflow),
-            timestamp_millis()
+            timestamp_millis(),
+            next_id_sequence()
         );
         let version_id = format!("version-{}-a", asset_id.trim_start_matches("asset-"));
-        let asset_root = self.asset_version_root(&scope, kind, &asset_id, &version_id);
+        let asset_root = self.asset_version_root(&scope, kind, &asset_id, &version_id)?;
         fs::create_dir_all(asset_root.join("metadata"))?;
         fs::create_dir_all(asset_root.join("previews"))?;
         let media_path = asset_root.join("media.wav");
@@ -542,16 +550,15 @@ impl ProjectLibraryStore {
                         .as_ref()
                         .map(|version| version.file.storage_path.clone()),
                     metadata_sidecar_path: self
-                        .asset_record_path(&request.item_id)
+                        .asset_record_path(&request.item_id)?
                         .display()
                         .to_string(),
-                    provenance_sidecar_path: self
-                        .root
-                        .join("assets")
-                        .join(&request.item_id)
-                        .join("recipe-provenance.json")
-                        .display()
-                        .to_string(),
+                    provenance_sidecar_path: sanitized_join(
+                        &self.root,
+                        &["assets", &request.item_id, "recipe-provenance.json"],
+                    )?
+                    .display()
+                    .to_string(),
                     item,
                     updated_at: timestamp_string(),
                 }
@@ -585,7 +592,9 @@ impl ProjectLibraryStore {
             }
         }
         record.updated_at = timestamp_string();
-        write_json(&record.metadata_sidecar_path, &record)?;
+        // F-002: never write to the persisted (and potentially untrusted) absolute
+        // `metadata_sidecar_path` string. write_asset_record recomputes the target
+        // from the validated item id under the store root.
         self.write_asset_record(&record)?;
 
         self.action_result(
@@ -695,7 +704,7 @@ impl ProjectLibraryStore {
             asset.kind,
             &request.item_id,
             &version_id,
-        );
+        )?;
         fs::create_dir_all(asset_root.join("metadata"))?;
         let edited_path = asset_root.join("media.wav");
         write_pcm16_wav(&edited_path, wav.sample_rate, wav.channels, &samples)?;
@@ -792,7 +801,8 @@ impl ProjectLibraryStore {
                 "nonDestructive": true,
             }),
         )?;
-        write_json(&record.metadata_sidecar_path, &record)?;
+        // F-002: write only through write_asset_record (recomputed, validated path);
+        // do not trust the persisted absolute `metadata_sidecar_path` for writes.
         self.write_asset_record(&record)?;
 
         let library = self.action_result(
@@ -835,8 +845,13 @@ impl ProjectLibraryStore {
             ));
         }
         let source_audio = read_pcm16_wav(&source_path)?;
-        let export_id = format!("export-{}-{}", request.item_id, timestamp_millis());
-        let output_root = self.root.join("exports").join(&export_id);
+        let export_id = format!(
+            "export-{}-{}-{}",
+            request.item_id,
+            timestamp_millis(),
+            next_id_sequence()
+        );
+        let output_root = sanitized_join(&self.root, &["exports", &export_id])?;
         fs::create_dir_all(&output_root)?;
 
         let requested_formats = if request.formats.is_empty() {
@@ -1037,11 +1052,7 @@ impl ProjectLibraryStore {
     }
 
     fn write_project(&self, project: &Project) -> io::Result<()> {
-        let path = self
-            .root
-            .join("projects")
-            .join(&project.id)
-            .join("project.json");
+        let path = sanitized_join(&self.root, &["projects", &project.id, "project.json"])?;
         write_json(path, project)
     }
 
@@ -1074,7 +1085,7 @@ impl ProjectLibraryStore {
     }
 
     fn read_asset_record(&self, item_id: &str) -> io::Result<Option<PersistedAssetRecord>> {
-        let path = self.asset_record_path(item_id);
+        let path = self.asset_record_path(item_id)?;
         if path.is_file() {
             Ok(Some(read_json(path)?))
         } else {
@@ -1083,14 +1094,11 @@ impl ProjectLibraryStore {
     }
 
     fn write_asset_record(&self, record: &PersistedAssetRecord) -> io::Result<()> {
-        write_json(self.asset_record_path(&record.item.id), record)
+        write_json(self.asset_record_path(&record.item.id)?, record)
     }
 
-    fn asset_record_path(&self, item_id: &str) -> PathBuf {
-        self.root
-            .join("assets")
-            .join(item_id)
-            .join("asset-record.json")
+    fn asset_record_path(&self, item_id: &str) -> io::Result<PathBuf> {
+        sanitized_join(&self.root, &["assets", item_id, "asset-record.json"])
     }
 
     fn asset_version_root(
@@ -1099,15 +1107,17 @@ impl ProjectLibraryStore {
         kind: AudioAssetKind,
         asset_id: &str,
         version_id: &str,
-    ) -> PathBuf {
-        let scope_path = match scope {
-            LibraryScope::GlobalLibrary => self.root.join("global"),
-            LibraryScope::Project { project_id } => self.root.join("projects").join(project_id),
-        };
-        scope_path
-            .join(kind.storage_dir())
-            .join(asset_id)
-            .join(version_id)
+    ) -> io::Result<PathBuf> {
+        let kind_dir = kind.storage_dir();
+        match scope {
+            LibraryScope::GlobalLibrary => {
+                sanitized_join(&self.root, &["global", kind_dir, asset_id, version_id])
+            }
+            LibraryScope::Project { project_id } => sanitized_join(
+                &self.root,
+                &["projects", project_id, kind_dir, asset_id, version_id],
+            ),
+        }
     }
 }
 
@@ -1282,6 +1292,14 @@ fn timestamp_millis() -> u128 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis())
         .unwrap_or_default()
+}
+
+/// Process-wide monotonic counter appended to generated identifiers so two ids
+/// created in the same millisecond (or under a faulted clock that reports 0) never
+/// collide and clobber each other's on-disk directory.
+fn next_id_sequence() -> u64 {
+    static ID_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    ID_SEQUENCE.fetch_add(1, Ordering::Relaxed)
 }
 
 fn timestamp_string() -> String {
@@ -1557,6 +1575,30 @@ mod tests {
             .open_project(&project_id)
             .expect("project reopened");
         assert_eq!(reopened.workspace.active_project.project.id, project_id);
+    }
+
+    #[test]
+    fn library_mutation_rejects_traversal_item_id() {
+        // F-001: a caller-supplied item_id that escapes the store root must be
+        // rejected before any filesystem join, not fabricated into a write target.
+        let store = ProjectLibraryStore::new(temp_root("traversal"));
+        for malicious in [
+            "../../etc/passwd",
+            "..",
+            "assets/../escape",
+            "with space",
+            "",
+        ] {
+            let result = store.mutate_library_item(LibraryMutationRequest {
+                item_id: malicious.to_string(),
+                action: LibraryMutationAction::Favorite,
+                tag: None,
+            });
+            assert!(
+                result.is_err(),
+                "mutate_library_item must reject item_id {malicious:?}"
+            );
+        }
     }
 
     #[test]

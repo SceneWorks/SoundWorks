@@ -5,6 +5,41 @@ use std::collections::BTreeMap;
 
 pub const MODEL_EVALUATION_SCHEMA_VERSION: u32 = 1;
 
+/// Canonical candidate ids the evaluation catalog and model manager must cover
+/// (epic 6148 + recovery SC-6467). Coverage is validated against membership of
+/// this named set rather than a magic count, so adding or renaming a candidate
+/// updates one list instead of several `== 28` literals.
+pub const REQUIRED_CANDIDATE_IDS: &[&str] = &[
+    "stable-audio-3",
+    "ace-step-1-5",
+    "levo-2",
+    "yue",
+    "diffrhythm-2",
+    "khala",
+    "heartmula",
+    "muse-song",
+    "kokoro-82m",
+    "vibevoice",
+    "xtts-v2",
+    "chattts",
+    "fish-speech",
+    "chatterbox",
+    "chatterbox-turbo",
+    "gpt-sovits",
+    "f5-tts",
+    "cosyvoice-2",
+    "openvoice-v2",
+    "rvc",
+    "stable-audio-open-1",
+    "audiocraft-audiogen",
+    "audioldm",
+    "audioldm-2",
+    "audiox",
+    "mmaudio",
+    "thinksound",
+    "moss-soundeffect",
+];
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelEvaluationCatalog {
@@ -1207,37 +1242,7 @@ mod tests {
             .map(|candidate| candidate.id.as_str())
             .collect();
 
-        assert_eq!(ids.len(), 28);
-        for expected in [
-            "stable-audio-3",
-            "ace-step-1-5",
-            "levo-2",
-            "yue",
-            "diffrhythm-2",
-            "khala",
-            "heartmula",
-            "muse-song",
-            "kokoro-82m",
-            "vibevoice",
-            "xtts-v2",
-            "chattts",
-            "fish-speech",
-            "chatterbox",
-            "chatterbox-turbo",
-            "gpt-sovits",
-            "f5-tts",
-            "cosyvoice-2",
-            "openvoice-v2",
-            "rvc",
-            "stable-audio-open-1",
-            "audiocraft-audiogen",
-            "audioldm",
-            "audioldm-2",
-            "audiox",
-            "mmaudio",
-            "thinksound",
-            "moss-soundeffect",
-        ] {
+        for &expected in super::REQUIRED_CANDIDATE_IDS {
             assert!(ids.contains(&expected), "missing {expected}");
         }
     }

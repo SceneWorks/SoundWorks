@@ -875,15 +875,20 @@ fn validation_checks(
     summary: &ModelManagerSummary,
     candidates: &[ModelCandidateInstallState],
 ) -> Vec<ModelManagerValidationCheck> {
+    let covered = crate::evaluation::REQUIRED_CANDIDATE_IDS.iter().all(|id| {
+        candidates
+            .iter()
+            .any(|candidate| candidate.candidate_id == *id)
+    });
     vec![
         ModelManagerValidationCheck {
             id: "model-manager.candidate-coverage".to_string(),
-            passed: summary.candidate_count == 28,
+            passed: covered,
             summary: format!(
                 "Model manager covers {} epic candidate(s).",
                 summary.candidate_count
             ),
-            recovery: (summary.candidate_count != 28).then(|| {
+            recovery: (!covered).then(|| {
                 "Add every candidate named in epic 6148 and recovery SC-6467.".to_string()
             }),
         },

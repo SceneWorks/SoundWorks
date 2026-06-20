@@ -22,6 +22,7 @@ pub mod studio_common;
 pub mod tts;
 pub mod video_to_audio;
 pub mod voice_lab;
+pub mod web_fixtures;
 pub mod workspace;
 
 pub use asset_library::*;

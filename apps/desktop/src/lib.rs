@@ -646,7 +646,15 @@ mod tests {
         let catalog = model_evaluation_catalog();
 
         assert_eq!(catalog.schema_version, 1);
-        assert_eq!(catalog.candidates.len(), 28);
+        for &id in soundworks_core::REQUIRED_CANDIDATE_IDS {
+            assert!(
+                catalog
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.id == id),
+                "missing {id}"
+            );
+        }
         assert!(catalog
             .recommendations
             .iter()
@@ -658,8 +666,19 @@ mod tests {
         let manager = model_manager_overview();
 
         assert_eq!(manager.schema_version, 1);
-        assert_eq!(manager.summary.candidate_count, 28);
-        assert!(manager.summary.verified_installed_count <= 28);
+        for &id in soundworks_core::REQUIRED_CANDIDATE_IDS {
+            assert!(
+                manager
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.candidate_id == id),
+                "missing {id}"
+            );
+        }
+        assert!(
+            manager.summary.verified_installed_count
+                <= soundworks_core::REQUIRED_CANDIDATE_IDS.len()
+        );
         assert!(manager
             .candidates
             .iter()

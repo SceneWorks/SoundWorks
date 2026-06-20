@@ -189,8 +189,7 @@ impl VoiceConversionPreview {
     ) -> Self {
         let selected_provider = scorecards
             .iter()
-            .find(|scorecard| scorecard.candidate_id == "rvc")
-            .expect("RVC voice conversion scorecard exists");
+            .find(|scorecard| scorecard.candidate_id == "rvc");
         let mut blocking_reasons = vec![];
         let mut warnings = vec![];
 
@@ -214,23 +213,31 @@ impl VoiceConversionPreview {
                 .push("Target voice profile is not approved for voice conversion.".to_string());
         }
 
-        if matches!(
-            selected_provider.readiness,
-            VoiceProviderReadiness::Blocked
-                | VoiceProviderReadiness::ResearchOnly
-                | VoiceProviderReadiness::Unsuitable
-        ) {
-            blocking_reasons.push(format!(
-                "{} is not product-runnable for conversion.",
-                selected_provider.name
-            ));
-        }
+        match selected_provider {
+            Some(provider) => {
+                if matches!(
+                    provider.readiness,
+                    VoiceProviderReadiness::Blocked
+                        | VoiceProviderReadiness::ResearchOnly
+                        | VoiceProviderReadiness::Unsuitable
+                ) {
+                    blocking_reasons.push(format!(
+                        "{} is not product-runnable for conversion.",
+                        provider.name
+                    ));
+                }
 
-        if selected_provider.readiness == VoiceProviderReadiness::NeedsRuntimePort {
-            warnings.push(
-                "RVC is represented as a gated provider spike until a packaged runtime port exists."
-                    .to_string(),
-            );
+                if provider.readiness == VoiceProviderReadiness::NeedsRuntimePort {
+                    warnings.push(
+                        "RVC is represented as a gated provider spike until a packaged runtime port exists."
+                            .to_string(),
+                    );
+                }
+            }
+            None => {
+                blocking_reasons
+                    .push("No RVC voice conversion provider is registered.".to_string());
+            }
         }
 
         warnings.push(
@@ -575,21 +582,31 @@ fn scorecard(candidate: &ModelEvaluationCandidate, recommended: bool) -> VoicePr
 fn conversion_recipe(
     source: &VoiceConversionSource,
     target_profile: &VoiceLabProfile,
-    provider: &VoiceProviderScorecard,
+    provider: Option<&VoiceProviderScorecard>,
 ) -> GenerationRecipe {
     let mut parameters = BTreeMap::new();
     parameters.insert("preserveTiming".to_string(), json!(true));
     parameters.insert("mode".to_string(), json!("speech-to-speech"));
 
+    // The conversion provider is the RVC evaluation candidate; if it is ever
+    // absent from the catalog the preview is already blocked, so fall back to a
+    // research-only descriptor instead of panicking.
+    let provider_id = provider
+        .map(|provider| provider.candidate_id.clone())
+        .unwrap_or_else(|| "rvc".to_string());
+    let runtime = provider
+        .map(|provider| runtime_for(provider.runtime_path))
+        .unwrap_or(ModelRuntime::ResearchOnly);
+
     GenerationRecipe {
         id: "recipe-voice-lab-conversion-reference".to_string(),
         workflow: RecipeWorkflow::VoiceConversion,
         provider: ModelDescriptor {
-            provider_id: provider.candidate_id.clone(),
-            model_id: provider.candidate_id.clone(),
+            provider_id: provider_id.clone(),
+            model_id: provider_id,
             model_version: Some("evaluation-candidate".to_string()),
             model_hash: None,
-            runtime: runtime_for(provider.runtime_path),
+            runtime,
         },
         request: RecipeRequest::VoiceConversion(VoiceConversionRecipe {
             source_audio_asset_id: source.asset_id.clone(),
@@ -867,5 +884,26 @@ mod tests {
             .file
             .storage_path
             .contains("/voice-clips/asset-voice-lab-conversion-reference/"));
+    }
+
+    #[test]
+    fn conversion_preview_degrades_without_panicking_when_rvc_is_absent() {
+        // Mirror reference()'s inputs but drop the rvc scorecard entirely, as a
+        // catalog rename would. The preview must block gracefully, not panic (F-032).
+        let catalog = crate::evaluation::ModelEvaluationCatalog::reference();
+        let profiles = super::reference_profiles();
+        let source = super::VoiceConversionSource::reference();
+        let scorecards: Vec<_> = super::provider_scorecards(&catalog)
+            .into_iter()
+            .filter(|scorecard| scorecard.candidate_id != "rvc")
+            .collect();
+
+        let preview = super::VoiceConversionPreview::build(&source, &profiles[0], &scorecards);
+
+        assert!(!preview.can_submit);
+        assert!(preview
+            .blocking_reasons
+            .iter()
+            .any(|reason| reason.contains("No RVC voice conversion provider is registered.")));
     }
 }

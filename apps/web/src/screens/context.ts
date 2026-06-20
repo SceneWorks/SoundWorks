@@ -100,7 +100,10 @@ export interface AppContextValue {
   mutateSelectedLibraryItem: (action: LibraryMutationAction) => void;
   previewLibraryItem: (itemId: string) => void;
   saveSelectedReviewEdit: () => void;
-  exportSelectedLibraryItem: () => void;
+  exportSelectedLibraryItem: (override?: {
+    presetId: string;
+    formats: ExportWorkflowOverview["selectedExport"]["formats"];
+  }) => void;
   runRuntimeJob: (
     workflow: RuntimeJobRequest["workflow"],
     prompt: string,

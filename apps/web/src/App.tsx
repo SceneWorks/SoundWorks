@@ -717,7 +717,10 @@ export function App() {
       });
   }
 
-  function exportSelectedLibraryItem() {
+  function exportSelectedLibraryItem(override?: {
+    presetId: string;
+    formats: ExportWorkflowOverview["selectedExport"]["formats"];
+  }) {
     const detail = assetLibrary.selectedItem;
     if (!detail) {
       setExportActionStatus(
@@ -729,8 +732,8 @@ export function App() {
     setExportActionStatus(actionFeedback.pending("Exporting…"));
     exportLibraryItem({
       itemId,
-      presetId: exportWorkflow.selectedExport.presetId,
-      formats: exportWorkflow.selectedExport.formats,
+      presetId: override?.presetId ?? exportWorkflow.selectedExport.presetId,
+      formats: override?.formats ?? exportWorkflow.selectedExport.formats,
       sceneWorksProjectId:
         exportWorkflow.sceneWorksHandoff.intendedProjectId ?? null,
       sceneWorksVideoAssetId:

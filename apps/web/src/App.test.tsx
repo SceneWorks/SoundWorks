@@ -105,8 +105,10 @@ describe("App", () => {
     expect(screen.getByTitle("Play or pause preview")).toBeEnabled();
 
     fireEvent.click(navButton("Export"));
+    // UX-S4: the export button now opens a confirm summary first; its tooltip
+    // reflects whether export is allowed.
     expect(
-      await screen.findByTitle("Export selected composition"),
+      await screen.findByTitle("Review and export selected composition"),
     ).toBeEnabled();
     expect(
       screen.getAllByText(/sceneworks-handoff\.json/).length,

@@ -3,8 +3,10 @@
 // MainSurface + SectionHeading for the sub-panels) in place of the bespoke
 // export-header / export-metrics / tts-subpanel / subpanel-heading classes.
 // All Export wiring, gating, and data bindings are preserved verbatim.
-import { CircleCheck, ClipboardCheck, Download } from "lucide-react";
+import { useState } from "react";
+import { CircleCheck, ClipboardCheck, Download, ShieldAlert } from "lucide-react";
 import {
+  ConfirmDialog,
   FeedbackLine,
   HeroStat,
   MainSurface,
@@ -20,7 +22,18 @@ export function ExportScreen() {
     exportSelectedLibraryItem,
     exportActionStatus,
     overview,
+    setActiveView,
   } = useAppContext();
+
+  const selected = exportWorkflow.selectedExport;
+  const [presetId, setPresetId] = useState(selected.presetId);
+  const [confirming, setConfirming] = useState(false);
+  const chosenPreset =
+    exportWorkflow.presets.find((preset) => preset.preset.id === presetId) ??
+    exportWorkflow.presets.find(
+      (preset) => preset.preset.id === selected.presetId,
+    );
+  const blockingReasons = selected.blockingReasons ?? [];
 
   return (
     <section className="export-workflow-panel" aria-label="Export Workflow">
@@ -30,15 +43,17 @@ export function ExportScreen() {
         actions={
           <button
             className="primary-action export-action"
-            disabled={!exportWorkflow.selectedExport.canExport}
-            onClick={exportSelectedLibraryItem}
-            title="Export selected composition"
+            disabled={!selected.canExport}
+            onClick={() => setConfirming(true)}
+            title={
+              selected.canExport
+                ? "Review and export selected composition"
+                : "Export is blocked — resolve the rights reasons below"
+            }
             type="button"
           >
             <Download aria-hidden="true" size={18} />
-            <span>
-              {exportWorkflow.selectedExport.canExport ? "Export" : "Blocked"}
-            </span>
+            <span>{selected.canExport ? "Export…" : "Blocked"}</span>
           </button>
         }
         stats={
@@ -67,7 +82,17 @@ export function ExportScreen() {
       <div className="export-layout">
         <div className="export-preset-grid" aria-label="Export presets">
           {exportWorkflow.presets.map((preset) => (
-            <article className="export-preset-card" key={preset.preset.id}>
+            <button
+              type="button"
+              className={
+                preset.preset.id === presetId
+                  ? "export-preset-card selected"
+                  : "export-preset-card"
+              }
+              key={preset.preset.id}
+              onClick={() => setPresetId(preset.preset.id)}
+              aria-pressed={preset.preset.id === presetId}
+            >
               <div className="export-preset-topline">
                 <strong>{preset.preset.name}</strong>
                 <span>{statusLabel(preset.preset.target)}</span>
@@ -80,7 +105,7 @@ export function ExportScreen() {
                 {preset.preset.includeStems ? <span>stems</span> : null}
                 {preset.writesSidecar ? <span>sidecar</span> : null}
               </div>
-            </article>
+            </button>
           ))}
         </div>
 
@@ -106,6 +131,31 @@ export function ExportScreen() {
               ))}
             </ol>
           </MainSurface>
+
+          {blockingReasons.length > 0 ? (
+            <MainSurface className="tts-subpanel export-blocked" ariaLabel="Export blocked">
+              <SectionHeading
+                title="Export blocked"
+                eyebrow={`${blockingReasons.length} reason${blockingReasons.length === 1 ? "" : "s"}`}
+              />
+              <ul className="blocking-reasons">
+                {blockingReasons.map((reason, index) => (
+                  <li key={index}>
+                    <ShieldAlert aria-hidden="true" size={16} />
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => setActiveView("rights")}
+                title="Open Rights & Safety to resolve consent / commercial-use"
+              >
+                Resolve in Rights & Safety
+              </button>
+            </MainSurface>
+          ) : null}
 
           <MainSurface className="tts-subpanel">
             <SectionHeading
@@ -263,6 +313,24 @@ export function ExportScreen() {
           </ol>
         </MainSurface>
       </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title="Export this composition?"
+        message={`Export “${chosenPreset?.preset.name ?? selected.presetId}” (${(
+          chosenPreset?.formats ?? selected.formats
+        ).join(", ")}) for ${selected.sourceId}. ${selected.outputPaths.length} file(s) will be written.`}
+        confirmLabel="Export"
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          exportSelectedLibraryItem(
+            chosenPreset
+              ? { presetId: chosenPreset.preset.id, formats: chosenPreset.formats }
+              : undefined,
+          );
+          setConfirming(false);
+        }}
+      />
     </section>
   );
 }

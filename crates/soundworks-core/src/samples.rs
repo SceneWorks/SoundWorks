@@ -7,15 +7,15 @@ use crate::domain::{
     SourceReferenceType, TechnicalAudioMetadata, VoiceConsentStatus, WatermarkStatus,
 };
 use crate::evaluation::{
-    CommercialUseEvaluation, EvaluationLane, EvaluationStatus, ModelEvaluationCandidate,
-    ModelEvaluationCatalog, ProductEligibility, ProductRuntimePath,
+    EvaluationLane, ModelEvaluationCandidate, ModelEvaluationCatalog, ProductEligibility,
 };
-use crate::manifests::{
-    CapabilityInput, CapabilitySafety, CapabilityWorkflow, ChannelLayout, ModelLicense,
-    ProviderCatalog,
-};
+use crate::manifests::{CapabilityInput, CapabilityWorkflow, ChannelLayout, ProviderCatalog};
 use crate::runtime::RuntimeOverview;
 use crate::storage::{StoragePathAllocator, StoragePathError, StoragePaths};
+use crate::studio_common::{
+    kebab_label, limitations_for_license, limitations_for_safety, SafetyLimitationOptions,
+    StudioInstallStatus,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -269,22 +269,7 @@ impl SampleProviderSelection {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SampleProviderScorecard {
-    pub candidate_id: String,
-    pub name: String,
-    pub provider: String,
-    pub lanes: Vec<EvaluationLane>,
-    pub status: EvaluationStatus,
-    pub product_eligibility: ProductEligibility,
-    pub readiness: SampleProviderReadiness,
-    pub runtime_path: ProductRuntimePath,
-    pub commercial_use: CommercialUseEvaluation,
-    pub recommended: bool,
-    pub blockers: Vec<String>,
-    pub notes: String,
-}
+pub type SampleProviderScorecard = crate::studio_common::ProviderScorecard<SampleProviderReadiness>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -365,6 +350,10 @@ impl SamplePackPreview {
     }
 }
 
+/// UI submission readiness preview (batched: plural jobs/recipes). Like the
+/// shared `StudioSubmissionPreview`, `can_submit`/`blocking_reasons` are a
+/// display contract computed from reference inputs, NOT the authoritative gate —
+/// the real gate is `runtime::RuntimeJobStore::enqueue` (F-021).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SampleSubmissionPreview {
@@ -556,7 +545,14 @@ fn provider_options(
                 }
 
                 limitations.extend(limitations_for_license(model.requirements.license));
-                limitations.extend(limitations_for_safety(&capability.safety));
+                limitations.extend(limitations_for_safety(
+                    &capability.safety,
+                    SafetyLimitationOptions {
+                        check_voice_consent: false,
+                        check_commercial_use: true,
+                        check_provenance_sidecar: false,
+                    },
+                ));
 
                 let output_asset_kind = capability
                     .outputs
@@ -572,7 +568,7 @@ fn provider_options(
                     display_name: format!("{} / {}", provider.name, model.name),
                     workflow: capability.workflow,
                     runtime: model.runtime,
-                    install_status: format!("{:?}", model.install.status).to_case_label(),
+                    install_status: kebab_label(&model.install.status),
                     runnable: state.map_or(false, |state| {
                         matches!(
                             state.availability,
@@ -633,37 +629,6 @@ fn supported_controls(capability: &crate::manifests::ModelCapability) -> Vec<Sam
     }
 
     controls
-}
-
-fn limitations_for_license(license: ModelLicense) -> Vec<String> {
-    match license {
-        ModelLicense::Open | ModelLicense::CommercialAllowed | ModelLicense::ProviderTerms => {
-            vec![]
-        }
-        ModelLicense::NonCommercial => {
-            vec!["Noncommercial license requires SoundWorks compatibility review.".to_string()]
-        }
-        ModelLicense::Unknown => {
-            vec!["License must be reviewed before production use.".to_string()]
-        }
-    }
-}
-
-fn limitations_for_safety(safety: &CapabilitySafety) -> Vec<String> {
-    let mut limitations = vec![];
-
-    if !safety.commercial_use_allowed {
-        limitations.push("Model use terms require review before export.".to_string());
-    }
-
-    if !safety.disallowed_uses.is_empty() {
-        limitations.push(format!(
-            "Disallowed uses: {}.",
-            safety.disallowed_uses.join(", ")
-        ));
-    }
-
-    limitations
 }
 
 fn provider_scorecards(evaluation: &ModelEvaluationCatalog) -> Vec<SampleProviderScorecard> {
@@ -875,7 +840,7 @@ fn generation_recipes(
             provider: provider.descriptor(),
             request: RecipeRequest::InstrumentSample(InstrumentSampleRecipe {
                 prompt: prompt.text.clone(),
-                instrument: Some(format!("{:?}", prompt.instrument_family).to_case_label()),
+                instrument: Some(kebab_label(&prompt.instrument_family)),
                 pitch: Some(controls.musical_key.clone()),
                 velocity: Some(controls.velocity_energy),
                 target_duration_ms: Some(900),
@@ -1141,38 +1106,6 @@ fn qa_checks() -> Vec<SampleQaCheck> {
                 .to_string(),
         },
     ]
-}
-
-trait StudioInstallStatus {
-    fn is_runnable_for_studio(&self) -> bool;
-}
-
-impl StudioInstallStatus for crate::manifests::ModelInstall {
-    fn is_runnable_for_studio(&self) -> bool {
-        matches!(
-            self.status,
-            crate::manifests::ModelInstallStatus::Installed
-                | crate::manifests::ModelInstallStatus::Packaged
-                | crate::manifests::ModelInstallStatus::External
-        )
-    }
-}
-
-trait CaseLabel {
-    fn to_case_label(self) -> String;
-}
-
-impl CaseLabel for String {
-    fn to_case_label(self) -> String {
-        let mut label = String::new();
-        for (index, character) in self.chars().enumerate() {
-            if index > 0 && character.is_uppercase() {
-                label.push('-');
-            }
-            label.push(character.to_ascii_lowercase());
-        }
-        label
-    }
 }
 
 #[cfg(test)]

@@ -214,6 +214,9 @@ impl VideoToAudioProviderSelection {
     }
 }
 
+/// Provider readiness scorecard for video-to-audio (carries an extra `supports`
+/// field, so it keeps its own struct rather than sharing `ProviderScorecard<R>`).
+/// A UI/contract surface summarizing evaluation evidence, not a job gate (F-021).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoToAudioProviderScorecard {
@@ -279,6 +282,9 @@ pub struct VideoAudioSegment {
     pub editable: bool,
 }
 
+/// UI submission readiness preview. `can_submit`/`blocking_reasons` are a
+/// display contract computed from reference inputs, NOT the authoritative gate —
+/// the real gate is `runtime::RuntimeJobStore::enqueue` (F-021).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoToAudioSubmission {

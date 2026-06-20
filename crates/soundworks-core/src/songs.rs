@@ -7,15 +7,15 @@ use crate::domain::{
     VoiceConsentStatus, WatermarkStatus,
 };
 use crate::evaluation::{
-    CommercialUseEvaluation, EvaluationLane, EvaluationStatus, ModelEvaluationCandidate,
-    ModelEvaluationCatalog, ProductEligibility, ProductRuntimePath,
+    EvaluationLane, ModelEvaluationCandidate, ModelEvaluationCatalog, ProductEligibility,
 };
-use crate::manifests::{
-    CapabilityInput, CapabilitySafety, CapabilityWorkflow, ChannelLayout, ModelLicense,
-    ProviderCatalog,
-};
+use crate::manifests::{CapabilityInput, CapabilityWorkflow, ChannelLayout, ProviderCatalog};
 use crate::runtime::RuntimeOverview;
 use crate::storage::{StoragePathAllocator, StoragePathError, StoragePaths};
+use crate::studio_common::{
+    kebab_label, limitations_for_license, limitations_for_safety, SafetyLimitationOptions,
+    StudioInstallStatus, StudioSubmissionPreview,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -74,7 +74,7 @@ impl SongStudioOverview {
         let provider_scorecards = provider_scorecards(evaluation);
         let arrangement = SongArrangementPreview::from_draft(&draft, &controls);
         let variants = variant_previews(&draft, &controls);
-        let submission = SongSubmissionPreview::build(
+        let submission = song_submission_preview(
             &draft,
             &controls,
             &provider_options,
@@ -312,22 +312,7 @@ impl SongProviderSelection {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SongProviderScorecard {
-    pub candidate_id: String,
-    pub name: String,
-    pub provider: String,
-    pub lanes: Vec<EvaluationLane>,
-    pub status: EvaluationStatus,
-    pub product_eligibility: ProductEligibility,
-    pub readiness: SongProviderReadiness,
-    pub runtime_path: ProductRuntimePath,
-    pub commercial_use: CommercialUseEvaluation,
-    pub recommended: bool,
-    pub blockers: Vec<String>,
-    pub notes: String,
-}
+pub type SongProviderScorecard = crate::studio_common::ProviderScorecard<SongProviderReadiness>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -407,124 +392,114 @@ pub struct SongVariantPreview {
     pub selected_for_save: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SongSubmissionPreview {
-    pub can_submit: bool,
-    pub job: GenerationJob,
-    pub recipe: GenerationRecipe,
-    pub blocking_reasons: Vec<String>,
-    pub warnings: Vec<String>,
-}
+/// UI submission readiness preview (see [`StudioSubmissionPreview`]); the real
+/// gate is `runtime::RuntimeJobStore::enqueue`, not `can_submit` (F-021).
+pub type SongSubmissionPreview = StudioSubmissionPreview;
 
-impl SongSubmissionPreview {
-    fn build(
-        draft: &SongDraft,
-        controls: &SongControls,
-        provider_options: &[SongProviderOption],
-        selected_provider: &SongProviderSelection,
-        variants: &[SongVariantPreview],
-    ) -> Self {
-        let mut blocking_reasons = vec![];
-        let mut warnings = vec![];
-        let selected_option = provider_options.iter().find(|option| {
-            option.provider_id == selected_provider.provider_id
-                && option.model_id == selected_provider.model_id
-                && option.workflow == selected_provider.workflow
-        });
+fn song_submission_preview(
+    draft: &SongDraft,
+    controls: &SongControls,
+    provider_options: &[SongProviderOption],
+    selected_provider: &SongProviderSelection,
+    variants: &[SongVariantPreview],
+) -> StudioSubmissionPreview {
+    let mut blocking_reasons = vec![];
+    let mut warnings = vec![];
+    let selected_option = provider_options.iter().find(|option| {
+        option.provider_id == selected_provider.provider_id
+            && option.model_id == selected_provider.model_id
+            && option.workflow == selected_provider.workflow
+    });
 
-        if draft.prompt.trim().is_empty() && draft.lyrics.trim().is_empty() {
-            blocking_reasons.push("Song prompt and lyrics cannot both be empty.".to_string());
-        }
+    if draft.prompt.trim().is_empty() && draft.lyrics.trim().is_empty() {
+        blocking_reasons.push("Song prompt and lyrics cannot both be empty.".to_string());
+    }
 
-        if draft.sections.is_empty() {
-            blocking_reasons.push("Song structure must include at least one section.".to_string());
-        }
+    if draft.sections.is_empty() {
+        blocking_reasons.push("Song structure must include at least one section.".to_string());
+    }
 
-        if selected_option.is_none() || !selected_provider.accepted {
-            blocking_reasons.push(selected_provider.blocker.clone().unwrap_or_else(|| {
-                "Selected provider cannot currently accept complete-song jobs.".to_string()
-            }));
-        }
+    if selected_option.is_none() || !selected_provider.accepted {
+        blocking_reasons.push(selected_provider.blocker.clone().unwrap_or_else(|| {
+            "Selected provider cannot currently accept complete-song jobs.".to_string()
+        }));
+    }
 
-        if let Some(option) = selected_option {
-            if !option.supports_lyrics && !draft.lyrics.trim().is_empty() {
-                warnings.push(
+    if let Some(option) = selected_option {
+        if !option.supports_lyrics && !draft.lyrics.trim().is_empty() {
+            warnings.push(
                     "Lyrics are preserved in the recipe, but the provider may only receive them as prompt context."
                         .to_string(),
                 );
-            }
+        }
 
-            if controls.generate_stems && !option.supports_stems {
-                warnings.push(
+        if controls.generate_stems && !option.supports_stems {
+            warnings.push(
                     "Stem requests will be queued as post-generation separation because the provider does not expose native stems."
                         .to_string(),
                 );
-            }
-
-            if controls.allow_reference_audio
-                && !draft.reference_audio_asset_ids.is_empty()
-                && !option.supports_reference_audio
-            {
-                warnings.push(
-                    "Reference audio is stored with provenance but unavailable as a provider input."
-                        .to_string(),
-                );
-            }
-
-            if !option.commercial_use_allowed {
-                warnings
-                    .push("Selected provider requires license review before export.".to_string());
-            }
         }
 
-        if controls.target_duration_ms > 360_000 {
-            warnings
-                .push("Long songs require runtime memory and cancellation validation.".to_string());
+        if controls.allow_reference_audio
+            && !draft.reference_audio_asset_ids.is_empty()
+            && !option.supports_reference_audio
+        {
+            warnings.push(
+                "Reference audio is stored with provenance but unavailable as a provider input."
+                    .to_string(),
+            );
         }
 
-        let can_submit = blocking_reasons.is_empty();
-        let recipe = generation_recipe(draft, controls, selected_provider, variants);
-        let job = GenerationJob {
-            id: "job-song-studio-reference".to_string(),
-            recipe_id: recipe.id.clone(),
-            kind: JobKind::GenerateAudio,
-            status: if can_submit {
-                JobStatus::Queued
+        if !option.commercial_use_allowed {
+            warnings.push("Selected provider requires license review before export.".to_string());
+        }
+    }
+
+    if controls.target_duration_ms > 360_000 {
+        warnings.push("Long songs require runtime memory and cancellation validation.".to_string());
+    }
+
+    let can_submit = blocking_reasons.is_empty();
+    let recipe = generation_recipe(draft, controls, selected_provider, variants);
+    let job = GenerationJob {
+        id: "job-song-studio-reference".to_string(),
+        recipe_id: recipe.id.clone(),
+        kind: JobKind::GenerateAudio,
+        status: if can_submit {
+            JobStatus::Queued
+        } else {
+            JobStatus::Failed
+        },
+        progress: Some(JobProgress {
+            percent: if can_submit { 0.0 } else { 100.0 },
+            message: Some(if can_submit {
+                "Ready to queue complete-song generation.".to_string()
             } else {
-                JobStatus::Failed
-            },
-            progress: Some(JobProgress {
-                percent: if can_submit { 0.0 } else { 100.0 },
-                message: Some(if can_submit {
-                    "Ready to queue complete-song generation.".to_string()
-                } else {
-                    "Song submission blocked by validation.".to_string()
-                }),
+                "Song submission blocked by validation.".to_string()
             }),
-            output_version_ids: if can_submit {
-                recipe
-                    .output_asset_ids
-                    .iter()
-                    .map(|asset_id| format!("version-{}-a", asset_id.trim_start_matches("asset-")))
-                    .collect()
-            } else {
-                vec![]
-            },
-            error: if can_submit {
-                None
-            } else {
-                Some(blocking_reasons.join(" "))
-            },
-        };
+        }),
+        output_version_ids: if can_submit {
+            recipe
+                .output_asset_ids
+                .iter()
+                .map(|asset_id| format!("version-{}-a", asset_id.trim_start_matches("asset-")))
+                .collect()
+        } else {
+            vec![]
+        },
+        error: if can_submit {
+            None
+        } else {
+            Some(blocking_reasons.join(" "))
+        },
+    };
 
-        Self {
-            can_submit,
-            job,
-            recipe,
-            blocking_reasons,
-            warnings,
-        }
+    StudioSubmissionPreview {
+        can_submit,
+        job,
+        recipe,
+        blocking_reasons,
+        warnings,
     }
 }
 
@@ -598,7 +573,14 @@ fn provider_options(
                 }
 
                 limitations.extend(limitations_for_license(model.requirements.license));
-                limitations.extend(limitations_for_safety(&capability.safety));
+                limitations.extend(limitations_for_safety(
+                    &capability.safety,
+                    SafetyLimitationOptions {
+                        check_voice_consent: false,
+                        check_commercial_use: true,
+                        check_provenance_sidecar: true,
+                    },
+                ));
 
                 options.push(SongProviderOption {
                     provider_id: provider.id.clone(),
@@ -607,7 +589,7 @@ fn provider_options(
                     display_name: format!("{} / {}", provider.name, model.name),
                     workflow: capability.workflow,
                     runtime: model.runtime,
-                    install_status: format!("{:?}", model.install.status).to_case_label(),
+                    install_status: kebab_label(&model.install.status),
                     runnable: state.map_or(false, |state| {
                         matches!(
                             state.availability,
@@ -680,41 +662,6 @@ fn supported_controls(capability: &crate::manifests::ModelCapability) -> Vec<Son
     }
 
     controls
-}
-
-fn limitations_for_license(license: ModelLicense) -> Vec<String> {
-    match license {
-        ModelLicense::Open | ModelLicense::CommercialAllowed | ModelLicense::ProviderTerms => {
-            vec![]
-        }
-        ModelLicense::NonCommercial => {
-            vec!["Noncommercial license requires SoundWorks compatibility review.".to_string()]
-        }
-        ModelLicense::Unknown => {
-            vec!["License must be reviewed before production use.".to_string()]
-        }
-    }
-}
-
-fn limitations_for_safety(safety: &CapabilitySafety) -> Vec<String> {
-    let mut limitations = vec![];
-
-    if !safety.commercial_use_allowed {
-        limitations.push("Model use terms require review before export.".to_string());
-    }
-
-    if !safety.provenance_sidecar {
-        limitations.push("Provider must preserve provenance before export.".to_string());
-    }
-
-    if !safety.disallowed_uses.is_empty() {
-        limitations.push(format!(
-            "Disallowed uses: {}.",
-            safety.disallowed_uses.join(", ")
-        ));
-    }
-
-    limitations
 }
 
 fn provider_scorecards(evaluation: &ModelEvaluationCatalog) -> Vec<SongProviderScorecard> {
@@ -1113,38 +1060,6 @@ fn qa_checks() -> Vec<SongQaCheck> {
                     .to_string(),
         },
     ]
-}
-
-trait StudioInstallStatus {
-    fn is_runnable_for_studio(&self) -> bool;
-}
-
-impl StudioInstallStatus for crate::manifests::ModelInstall {
-    fn is_runnable_for_studio(&self) -> bool {
-        matches!(
-            self.status,
-            crate::manifests::ModelInstallStatus::Installed
-                | crate::manifests::ModelInstallStatus::Packaged
-                | crate::manifests::ModelInstallStatus::External
-        )
-    }
-}
-
-trait CaseLabel {
-    fn to_case_label(self) -> String;
-}
-
-impl CaseLabel for String {
-    fn to_case_label(self) -> String {
-        let mut label = String::new();
-        for (index, character) in self.chars().enumerate() {
-            if index > 0 && character.is_uppercase() {
-                label.push('-');
-            }
-            label.push(character.to_ascii_lowercase());
-        }
-        label
-    }
 }
 
 #[cfg(test)]

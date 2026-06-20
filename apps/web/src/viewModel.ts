@@ -21,6 +21,22 @@ import type {
   RuntimeOverview,
 } from "./types";
 
+// UX-F2: shared action-feedback tri-state. Replaces the bare status strings so
+// screens can distinguish in-flight (pending) from success/error and style them
+// (the FeedbackLine renderer maps each kind to a StatusBadge tone). `idle` is the
+// neutral resting message.
+export type ActionFeedbackKind = "idle" | "pending" | "success" | "error";
+export interface ActionFeedback {
+  kind: ActionFeedbackKind;
+  message: string;
+}
+export const actionFeedback = {
+  idle: (message: string): ActionFeedback => ({ kind: "idle", message }),
+  pending: (message: string): ActionFeedback => ({ kind: "pending", message }),
+  success: (message: string): ActionFeedback => ({ kind: "success", message }),
+  error: (message: string): ActionFeedback => ({ kind: "error", message }),
+};
+
 export type ActiveView =
   | "workspace"
   | "library"

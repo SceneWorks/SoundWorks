@@ -28,7 +28,12 @@ import type {
   WorkspaceOverview,
 } from "../types";
 import type { ThemeMode } from "../accents";
-import type { ActiveView, NavItem, RuntimeModelState } from "../viewModel";
+import type {
+  ActionFeedback,
+  ActiveView,
+  NavItem,
+  RuntimeModelState,
+} from "../viewModel";
 
 export interface AppContextValue {
   // Navigation + theme chrome
@@ -63,11 +68,11 @@ export interface AppContextValue {
   videoToAudio: VideoToAudioOverview;
   libraryPlayback: LibraryPlayback | null;
 
-  // Action status strings (+ the one setter a screen drives directly)
-  libraryActionStatus: string;
-  setLibraryActionStatus: (status: string) => void;
-  reviewActionStatus: string;
-  exportActionStatus: string;
+  // Action feedback tri-state (+ the one setter a screen drives directly)
+  libraryActionStatus: ActionFeedback;
+  setLibraryActionStatus: (status: ActionFeedback) => void;
+  reviewActionStatus: ActionFeedback;
+  exportActionStatus: ActionFeedback;
 
   // Derived
   scaffoldedLayerCount: number;

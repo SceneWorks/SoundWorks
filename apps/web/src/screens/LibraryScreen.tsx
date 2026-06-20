@@ -7,12 +7,15 @@
 // binding are preserved verbatim.
 import { CircleCheck, Play, Search, ShieldCheck } from "lucide-react";
 import {
+  FeedbackLine,
   HeroStat,
   MainSurface,
+  PlaybackControl,
   SectionHeading,
   SurfaceHeader,
 } from "../components";
 import {
+  actionFeedback,
   formatDuration,
   statusLabel,
   toLibraryMutationAction,
@@ -72,14 +75,11 @@ export function LibraryScreen() {
           </>
         }
       />
-      <p className="action-status">{libraryActionStatus}</p>
-      {libraryPlayback?.playable && libraryPlayback.path ? (
-        <audio
-          className="library-audio-preview"
-          controls
-          src={libraryPlayback.path}
-        />
-      ) : null}
+      <FeedbackLine feedback={libraryActionStatus} />
+      <PlaybackControl
+        playback={libraryPlayback}
+        className="library-audio-preview"
+      />
 
       <div className="library-scope-row" aria-label="Library scopes">
         {assetLibrary.scopes.map((scope) => (
@@ -274,7 +274,9 @@ export function LibraryScreen() {
                   const mutation = toLibraryMutationAction(action.id);
                   if (!mutation) {
                     setLibraryActionStatus(
-                      `Unknown library action "${action.id}".`,
+                      actionFeedback.error(
+                        `Unknown library action "${action.id}".`,
+                      ),
                     );
                     return;
                   }

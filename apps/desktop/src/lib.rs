@@ -174,6 +174,11 @@ fn get_runtime_job_artifacts(job_id: String) -> Result<Vec<RuntimeJobArtifact>, 
 }
 
 #[tauri::command]
+fn get_runtime_job(job_id: String) -> Result<Option<RuntimeJobSnapshot>, String> {
+    runtime_job(job_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn get_model_evaluation_catalog() -> ModelEvaluationCatalog {
     model_evaluation_catalog()
 }
@@ -401,6 +406,10 @@ pub fn runtime_job_artifacts(job_id: String) -> std::io::Result<Vec<RuntimeJobAr
     RuntimeJobStore::default().artifacts(&job_id)
 }
 
+pub fn runtime_job(job_id: String) -> std::io::Result<Option<RuntimeJobSnapshot>> {
+    RuntimeJobStore::default().job(&job_id)
+}
+
 pub fn model_evaluation_catalog() -> ModelEvaluationCatalog {
     ModelEvaluationCatalog::reference()
 }
@@ -482,6 +491,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             cancel_runtime_job,
             retry_runtime_job,
             get_runtime_job_artifacts,
+            get_runtime_job,
             get_model_evaluation_catalog,
             get_model_manager_overview,
             install_model_candidate,
@@ -513,7 +523,7 @@ mod tests {
         app_overview, asset_library_overview, composition_editor_overview,
         export_workflow_overview, install_candidate, model_evaluation_catalog,
         model_manager_overview, mvp_validation_overview, provider_catalog, revalidate_candidate,
-        review_workspace_overview, rights_safety_overview, runtime_overview,
+        review_workspace_overview, rights_safety_overview, runtime_job, runtime_overview,
         samples_studio_overview, sfx_studio_overview, song_studio_overview, tts_studio_overview,
         video_to_audio_overview, voice_lab_overview, workspace_overview,
     };
@@ -661,6 +671,19 @@ mod tests {
             .validation_checks
             .iter()
             .any(|check| check.id == "runtime.job_store"));
+    }
+
+    #[test]
+    fn runtime_job_command_returns_none_for_unknown_id() {
+        isolated_library();
+
+        // UX-F1: the single-job polling command resolves a known job from the
+        // store and returns None (not an error) for an id with no record, so the
+        // web polling loop can stop cleanly. Traversal ids are still rejected by
+        // the shared read_job guard, surfaced here as an Err.
+        let missing = runtime_job("job-does-not-exist".to_string());
+        assert!(matches!(missing, Ok(None)));
+        assert!(runtime_job("../escape".to_string()).is_err());
     }
 
     #[test]

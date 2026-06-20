@@ -1377,6 +1377,13 @@ impl RuntimeJobStore {
             .unwrap_or_default())
     }
 
+    /// Read a single job snapshot by id so the UI can poll an in-flight worker
+    /// (UX-F1). Returns `Ok(None)` for an unknown id. Path-validated through the
+    /// same `read_job` traversal guard (F-004) as cancel/retry/artifacts.
+    pub fn job(&self, job_id: &str) -> io::Result<Option<RuntimeJobSnapshot>> {
+        self.read_job(job_id)
+    }
+
     pub fn read_jobs(&self) -> io::Result<Vec<RuntimeJobSnapshot>> {
         let jobs_root = self.root.join("jobs");
         if !jobs_root.exists() {

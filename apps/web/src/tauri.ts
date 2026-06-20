@@ -134,6 +134,18 @@ export async function retryRuntimeJob(
   });
 }
 
+export async function loadRuntimeJob(
+  jobId: string,
+): Promise<RuntimeJobSnapshot | null> {
+  if (!isTauri()) {
+    return fallbackRuntime.jobs.find((job) => job.id === jobId) ?? null;
+  }
+
+  return await invoke<RuntimeJobSnapshot | null>("get_runtime_job", {
+    jobId,
+  });
+}
+
 export async function loadRuntimeJobArtifacts(
   jobId: string,
 ): Promise<RuntimeJobArtifact[]> {

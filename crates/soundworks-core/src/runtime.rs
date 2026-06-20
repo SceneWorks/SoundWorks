@@ -1,4 +1,4 @@
-use crate::domain::{JobKind, JobProgress, JobStatus, ModelRuntime};
+use crate::domain::{JobKind, JobProgress, JobStatus, ModelRuntime, VoiceConsentStatus};
 use crate::evaluation::{EvaluationLane, ProductEligibility, ProductRuntimePath};
 use crate::manifests::{
     CapabilityWorkflow, DeviceAccelerator, ModelInstallStatus, ModelManifest, ProviderCatalog,
@@ -6,6 +6,7 @@ use crate::manifests::{
 use crate::model_manager::{
     CandidateInstallState, ModelCandidateInstallState, ModelManagerOverview,
 };
+use crate::rights::{PolicyDecision, RightsSafetyOverview};
 use crate::storage::sanitized_join;
 use kokoro_en::{KokoroTts, Voice};
 use serde::{Deserialize, Serialize};
@@ -1920,24 +1921,108 @@ fn adapter_for_model(
         .unwrap_or(ProviderAdapterKind::ResearchOnly)
 }
 
+/// Collect the voice-profile ids a request references, across the known parameter
+/// keys. A built-in provider voice (e.g. Kokoro's `voice` param) is NOT a profile
+/// and is intentionally excluded — it carries no consent obligation.
+fn referenced_voice_profile_ids(request: &RuntimeJobRequest) -> Vec<String> {
+    let mut ids = vec![];
+    for key in [
+        "voiceProfileIds",
+        "voiceProfileId",
+        "targetVoiceId",
+        "sourceVoiceId",
+    ] {
+        match request.parameters.get(key) {
+            Some(Value::String(value)) if !value.is_empty() => ids.push(value.clone()),
+            Some(Value::Array(values)) => {
+                for value in values {
+                    if let Some(text) = value.as_str() {
+                        if !text.is_empty() {
+                            ids.push(text.to_string());
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// Policy-aware admission gate (F-003). Enforces, before any synthesis runs:
+/// (1) voice consent resolved from the persisted voice profile — NOT a
+///     caller-supplied boolean — for voice-identity workflows and any request
+///     that references a voice profile; a `Prohibited` profile (public figure /
+///     unauthorized) and any non-`ExplicitConsentRecorded` profile are rejected.
+/// (2) model-use policy — a model whose `ModelUseDecision` is `Blocked`
+///     (incompatible commercial-use / research-only / Python runtime) can never run.
 fn validate_request_gates(request: &RuntimeJobRequest) -> Option<ActionableRuntimeError> {
-    if matches!(
+    let referenced_profiles = referenced_voice_profile_ids(request);
+    let consent_required = matches!(
         request.workflow,
         CapabilityWorkflow::VoiceClone | CapabilityWorkflow::VoiceConversion
-    ) && request
-        .parameters
-        .get("voiceConsentRecorded")
-        .and_then(Value::as_bool)
-        != Some(true)
-    {
-        return Some(ActionableRuntimeError {
-            code: "voice.consent_required".to_string(),
-            summary: "Voice consent is required".to_string(),
-            recovery:
-                "Record explicit consent metadata before running voice cloning or conversion."
-                    .to_string(),
-        });
+    ) || !referenced_profiles.is_empty();
+
+    if consent_required {
+        if referenced_profiles.is_empty() {
+            return Some(ActionableRuntimeError {
+                code: "voice.consent_required".to_string(),
+                summary: "Voice generation requires a consented voice profile".to_string(),
+                recovery:
+                    "Select a voice profile with explicit, recorded consent before running voice cloning or conversion."
+                        .to_string(),
+            });
+        }
+        for profile_id in &referenced_profiles {
+            match crate::voice_lab::profile_consent(profile_id) {
+                Some(VoiceConsentStatus::ExplicitConsentRecorded) => {}
+                Some(VoiceConsentStatus::Prohibited) => {
+                    return Some(ActionableRuntimeError {
+                        code: "voice.consent_prohibited".to_string(),
+                        summary: format!("Voice profile {profile_id} is prohibited for cloning"),
+                        recovery:
+                            "Public-figure or unauthorized voice references cannot be used. Create a new, consented voice profile."
+                                .to_string(),
+                    });
+                }
+                _ => {
+                    return Some(ActionableRuntimeError {
+                        code: "voice.consent_required".to_string(),
+                        summary: format!("Voice profile {profile_id} has no recorded consent"),
+                        recovery:
+                            "Record explicit speaker consent on this voice profile before running the workflow."
+                                .to_string(),
+                    });
+                }
+            }
+        }
     }
+
+    let rights = RightsSafetyOverview::reference();
+    if let Some(decision) = rights
+        .model_use_decisions
+        .iter()
+        .find(|decision| decision.candidate_id == request.model_id)
+    {
+        if decision.decision == PolicyDecision::Blocked {
+            return Some(ActionableRuntimeError {
+                code: "model.use_blocked".to_string(),
+                summary: format!(
+                    "Model {} is not an allowed SoundWorks export model",
+                    request.model_id
+                ),
+                recovery: if decision.reasons.is_empty() {
+                    "Choose a model whose license and runtime are cleared for SoundWorks."
+                        .to_string()
+                } else {
+                    decision.reasons.join(" ")
+                },
+            });
+        }
+    }
+
     None
 }
 
@@ -2857,6 +2942,129 @@ mod tests {
                 .as_ref()
                 .map(|error| error.code.as_str()),
             Some("voice.consent_required")
+        );
+    }
+
+    #[test]
+    fn consent_boolean_no_longer_bypasses_the_gate() {
+        // F-003: even when the caller self-asserts consent, a voice workflow with no
+        // consented profile is rejected — the boolean is ignored entirely.
+        let store = RuntimeJobStore::new(temp_runtime_root("consent-boolean"));
+        let overview = installed_overview(&store);
+        let mut parameters = BTreeMap::new();
+        parameters.insert("voiceConsentRecorded".to_string(), serde_json::json!(true));
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "native-smoke".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::VoiceConversion,
+                    prompt: "Convert this read into a target voice.".to_string(),
+                    source_surface: "Voice Lab".to_string(),
+                    parameters,
+                },
+            )
+            .expect("job persists");
+        assert_eq!(job.status, crate::domain::JobStatus::Failed);
+        assert_eq!(
+            job.actionable_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("voice.consent_required")
+        );
+    }
+
+    #[test]
+    fn profile_referencing_job_is_blocked_without_recorded_consent() {
+        // A profile in review (voice-profile-archival = RequiresReview) blocks even a
+        // TTS job that references it.
+        let store = RuntimeJobStore::new(temp_runtime_root("consent-archival"));
+        let overview = installed_overview(&store);
+        let mut parameters = BTreeMap::new();
+        parameters.insert(
+            "voiceProfileId".to_string(),
+            serde_json::json!("voice-profile-archival"),
+        );
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "native-smoke".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Read in the archival voice.".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters,
+                },
+            )
+            .expect("job persists");
+        assert_eq!(job.status, crate::domain::JobStatus::Failed);
+        assert_eq!(
+            job.actionable_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("voice.consent_required")
+        );
+    }
+
+    #[test]
+    fn profile_referencing_job_runs_with_explicit_consent() {
+        // The consented narrator profile (ExplicitConsentRecorded) passes the gate,
+        // so the job runs to completion.
+        let store = RuntimeJobStore::new(temp_runtime_root("consent-narrator"));
+        let overview = installed_overview(&store);
+        let mut parameters = BTreeMap::new();
+        parameters.insert(
+            "voiceProfileId".to_string(),
+            serde_json::json!("voice-profile-narrator"),
+        );
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "native-smoke".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Read in the consented narrator voice.".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters,
+                },
+            )
+            .expect("job persists");
+        assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+        assert!(job.actionable_error.is_none());
+    }
+
+    #[test]
+    fn blocked_model_is_rejected_before_execution() {
+        // F-003: a model whose use policy is Blocked (ChatTTS = noncommercial /
+        // research-only) can never run, regardless of workflow.
+        let store = RuntimeJobStore::new(temp_runtime_root("blocked-model"));
+        let overview = installed_overview(&store);
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "2noise".to_string(),
+                    model_id: "chattts".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Should never run.".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters: BTreeMap::new(),
+                },
+            )
+            .expect("job persists");
+        assert_eq!(job.status, crate::domain::JobStatus::Failed);
+        assert_eq!(
+            job.actionable_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("model.use_blocked")
         );
     }
 

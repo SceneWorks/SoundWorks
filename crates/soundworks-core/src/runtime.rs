@@ -1216,7 +1216,21 @@ impl RuntimeJobStore {
         fs::create_dir_all(record_root.join("artifacts"))?;
         let created_at = timestamp_string();
         let adapter = adapter_for_model(overview, &request);
-        let admission = overview.admit_job(&request.provider_id, &request.model_id, request.kind);
+        // UX-NB1: composition mixdown is not a model-backed job — it sums existing
+        // library clips on the native offline mixer — so it bypasses model
+        // availability admission (a real model id is never required).
+        let admission = if request.kind == JobKind::RenderComposition {
+            RuntimeJobAdmission {
+                accepted: true,
+                provider_id: request.provider_id.clone(),
+                model_id: request.model_id.clone(),
+                kind: request.kind,
+                reason: "composition mixdown runs on the native offline mixer".to_string(),
+                actionable_error: None,
+            }
+        } else {
+            overview.admit_job(&request.provider_id, &request.model_id, request.kind)
+        };
         let request_gate = validate_request_gates(&request);
 
         write_json(record_root.join("recipe.json"), &request)?;
@@ -1411,6 +1425,179 @@ impl RuntimeJobStore {
         }
     }
 
+    // UX-NB1: render the composition described in the request parameters into a
+    // single mixed WAV. Clip PCM is resolved from the project library; unresolved
+    // clips are skipped with a logged warning rather than failing the render.
+    fn write_composition_mixdown(
+        &self,
+        job: &mut RuntimeJobSnapshot,
+        request: &RuntimeJobRequest,
+        ctx: &ExecutionContext,
+    ) -> io::Result<()> {
+        use crate::composition_mixdown::{db_to_linear, mix, MixClip, MixRequest};
+
+        let params = &request.parameters;
+        let sample_rate = params
+            .get("sampleRateHz")
+            .and_then(Value::as_u64)
+            .unwrap_or(48_000) as u32;
+        let channels = params
+            .get("channels")
+            .and_then(Value::as_u64)
+            .unwrap_or(2)
+            .clamp(1, 2) as u16;
+        let duration_ms = params.get("durationMs").and_then(Value::as_u64).unwrap_or(0);
+        let master_gain = db_to_linear(
+            params
+                .get("masterGainDb")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0) as f32,
+        );
+
+        if duration_ms == 0 {
+            job.status = JobStatus::Failed;
+            job.progress = Some(JobProgress {
+                percent: 100.0,
+                message: Some("Composition has no duration to render.".to_string()),
+            });
+            job.cancellation = CancellationState::NotCancellable;
+            job.actionable_error = Some(ActionableRuntimeError {
+                code: "composition.empty".to_string(),
+                summary: "Composition has no duration".to_string(),
+                recovery: "Add at least one clip to the timeline before rendering a mixdown."
+                    .to_string(),
+            });
+            self.write_error_report(job)?;
+            return Ok(());
+        }
+
+        job.status = JobStatus::Running;
+        job.progress = Some(JobProgress {
+            percent: 45.0,
+            message: Some("Mixing composition clips into a rendered WAV.".to_string()),
+        });
+        self.append_event(job, "running", "composition mixdown started")?;
+        self.write_job(job)?;
+        if ctx.is_cancelled() {
+            mark_cancelled(job);
+            return Ok(());
+        }
+
+        let library = crate::ProjectLibraryStore::default();
+        let mut clips: Vec<MixClip> = vec![];
+        let mut resolved = 0usize;
+        let mut skipped = 0usize;
+        if let Some(entries) = params.get("clips").and_then(Value::as_array) {
+            for entry in entries {
+                let asset_id = entry.get("assetId").and_then(Value::as_str).unwrap_or("");
+                match library.load_item_pcm(asset_id).ok().flatten() {
+                    Some((samples, source_channels, source_sample_rate)) => {
+                        let source_frames =
+                            samples.len() as u64 / u64::from(source_channels.max(1));
+                        let default_end =
+                            source_frames * 1000 / u64::from(source_sample_rate.max(1));
+                        clips.push(MixClip {
+                            samples,
+                            source_channels,
+                            source_sample_rate,
+                            timeline_start_ms: entry
+                                .get("timelineStartMs")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0),
+                            source_start_ms: entry
+                                .get("sourceStartMs")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0),
+                            source_end_ms: entry
+                                .get("sourceEndMs")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(default_end),
+                            gain: db_to_linear(
+                                entry.get("gainDb").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+                            ),
+                            pan: entry.get("pan").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+                            fade_in_ms: entry
+                                .get("fadeInMs")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0),
+                            fade_out_ms: entry
+                                .get("fadeOutMs")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0),
+                        });
+                        resolved += 1;
+                    }
+                    None => {
+                        skipped += 1;
+                        job.log_tail
+                            .push(format!("skipped unresolved clip asset {asset_id}"));
+                    }
+                }
+            }
+        }
+
+        let samples = mix(&MixRequest {
+            sample_rate,
+            channels,
+            duration_ms,
+            master_gain,
+            clips,
+        });
+        if ctx.is_cancelled() {
+            mark_cancelled(job);
+            return Ok(());
+        }
+
+        let record_root = sanitized_join(&self.root, &["jobs", &job.id])?;
+        let audio_path = record_root
+            .join("artifacts")
+            .join("composition-mixdown.wav");
+        write_pcm16_wav_channels(&audio_path, &samples, sample_rate, channels)?;
+        let frame_count = samples.len() as u64 / u64::from(channels.max(1));
+        let manifest_path = record_root.join("output-manifest.json");
+        write_json(
+            &manifest_path,
+            &serde_json::json!({
+                "jobId": job.id,
+                "workflow": request.workflow,
+                "kind": request.kind,
+                "durationMs": duration_ms,
+                "sampleRateHz": sample_rate,
+                "channels": channels,
+                "clipsResolved": resolved,
+                "clipsSkipped": skipped,
+                "artifact": audio_path,
+                "note": "Native offline composition mixdown (sum of library clip PCM with per-clip gain/pan/fade).",
+            }),
+        )?;
+
+        job.status = JobStatus::Succeeded;
+        job.progress = Some(JobProgress {
+            percent: 100.0,
+            message: Some(format!(
+                "Rendered composition mixdown ({resolved} clip(s) mixed, {skipped} skipped)."
+            )),
+        });
+        job.cancellation = CancellationState::Completed;
+        job.log_tail
+            .push(format!("wrote composition-mixdown.wav with {frame_count} frames"));
+        job.artifacts = vec![
+            artifact(
+                RuntimeArtifactKind::AudioPreview,
+                &audio_path,
+                "audio/wav",
+                "Rendered composition mixdown WAV",
+            )?,
+            artifact(
+                RuntimeArtifactKind::OutputManifest,
+                &manifest_path,
+                "application/json",
+                "Composition mixdown manifest and provenance",
+            )?,
+        ];
+        Ok(())
+    }
+
     fn run_adapter(
         &self,
         mut job: RuntimeJobSnapshot,
@@ -1438,6 +1625,17 @@ impl RuntimeJobStore {
             mark_cancelled(&mut job);
             job.updated_at = timestamp_string();
             self.append_event(&job, "cancelled", "worker observed cancellation")?;
+            self.write_job(&job)?;
+            return Ok(job);
+        }
+
+        // UX-NB1: composition mixdown is offline mixing of existing clips, not a
+        // generative model, so it runs before (and instead of) the model adapter
+        // dispatch.
+        if request.kind == JobKind::RenderComposition {
+            self.write_composition_mixdown(&mut job, request, ctx)?;
+            job.updated_at = timestamp_string();
+            self.append_event(&job, status_event(&job.status), "adapter finished")?;
             self.write_job(&job)?;
             return Ok(job);
         }
@@ -2868,6 +3066,46 @@ mod tests {
             .expect("read jobs")
             .iter()
             .any(|stored| stored.id == job.id));
+    }
+
+    #[test]
+    fn composition_render_job_writes_mixdown_wav() {
+        // UX-NB1: a render-composition job bypasses model admission and runs the
+        // offline mixer. With no resolvable clips in an isolated runtime root it
+        // still renders a correctly-sized silent WAV, proving the admission
+        // bypass + adapter branch + WAV write (mixing math is unit tested in
+        // composition_mixdown).
+        let store = RuntimeJobStore::new(temp_runtime_root("mixdown"));
+        let overview = installed_overview(&store);
+        let mut parameters = BTreeMap::new();
+        parameters.insert("durationMs".to_string(), serde_json::json!(500));
+        parameters.insert("sampleRateHz".to_string(), serde_json::json!(48_000));
+        parameters.insert("channels".to_string(), serde_json::json!(2));
+        parameters.insert("masterGainDb".to_string(), serde_json::json!(0.0));
+        parameters.insert("clips".to_string(), serde_json::json!([]));
+
+        let job = store
+            .enqueue_and_run(
+                &engine(),
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "soundworks-native".to_string(),
+                    model_id: "composition-mixdown".to_string(),
+                    kind: JobKind::RenderComposition,
+                    workflow: CapabilityWorkflow::CompositionRender,
+                    prompt: "Render demo timeline".to_string(),
+                    source_surface: "Multitrack".to_string(),
+                    parameters,
+                },
+            )
+            .expect("enqueue succeeds");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+        assert!(job.artifacts.iter().any(|artifact| {
+            artifact.kind == RuntimeArtifactKind::AudioPreview
+                && artifact.bytes > 44
+                && PathBuf::from(&artifact.path).is_file()
+        }));
     }
 
     #[test]

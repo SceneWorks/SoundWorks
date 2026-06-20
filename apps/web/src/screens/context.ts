@@ -115,6 +115,7 @@ export interface AppContextValue {
     profileId: string,
     consent: VoiceConsentStatus,
   ) => void;
+  renderComposition: (mutedTrackIds?: string[]) => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

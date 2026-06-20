@@ -188,9 +188,12 @@ describe("App", () => {
       "Install a song model to generate.",
     );
 
-    // Genuinely inert affordances are no longer rendered as buttons.
+    // UX-10: Render Mixdown is now a real button wired to the composition-render
+    // job (was an inert div under F-015); it is enabled when the render plan is
+    // ready in the fixture.
     fireEvent.click(navButton("Multitrack"));
     await screen.findByRole("heading", { name: "Demo timeline" });
-    expect(screen.queryByRole("button", { name: /Render/i })).toBeNull();
+    const renderMixdown = screen.getByRole("button", { name: /Render Mixdown/i });
+    expect(renderMixdown).toBeEnabled();
   });
 });

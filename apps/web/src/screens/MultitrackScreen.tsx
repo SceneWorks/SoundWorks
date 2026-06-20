@@ -1,13 +1,16 @@
-// DR-02: Multitrack composition editor. Extracted from App.tsx and rebuilt on
-// the shared grammar (SurfaceHeader hero + HeroStat for the header/metrics,
-// MainSurface + SectionHeading for the sub-panels) in place of the bespoke
-// composition-header / composition-metrics / tts-subpanel / subpanel-heading
-// classes. The F-015 inert demotions (render action, tools, clips) stay
-// non-button elements and all data bindings are preserved verbatim.
-import { CircleCheck, ClipboardCheck, Disc3 } from "lucide-react";
+// DR-02 + UX-10: Multitrack composition editor. Render Mixdown is now a real
+// button that enqueues a composition-render job (UX-NB1 backend) with live
+// progress + inline playback of the rendered asset, and per-track Mute genuinely
+// changes the next render. Clip drag/trim and the tool palette remain a visual
+// preview (the composition document is not yet persisted-mutable) — surfaced
+// honestly with a caption rather than as dead buttons.
+import { useState } from "react";
+import { CircleCheck, ClipboardCheck, Disc3, Play } from "lucide-react";
 import {
+  GenerationPanel,
   HeroStat,
   MainSurface,
+  PlaybackControl,
   SectionHeading,
   SurfaceHeader,
 } from "../components";
@@ -20,7 +23,34 @@ import {
 import { useAppContext } from "./context";
 
 export function MultitrackScreen() {
-  const { compositionEditor, overview } = useAppContext();
+  const {
+    compositionEditor,
+    overview,
+    renderComposition,
+    runtimeOperation,
+    cancelRuntimeOperation,
+    retryRuntimeOperation,
+    assetLibrary,
+    libraryPlayback,
+    previewLibraryItem,
+  } = useAppContext();
+
+  // UX-10: client-side per-track mute overrides that feed the render (the
+  // composition document itself is not yet persisted-mutable, so clip drag/trim
+  // stays a preview — but mute + gain genuinely change the rendered mixdown).
+  const [mutedTracks, setMutedTracks] = useState<Set<string>>(new Set());
+  const toggleMute = (trackId: string) =>
+    setMutedTracks((current) => {
+      const next = new Set(current);
+      if (next.has(trackId)) {
+        next.delete(trackId);
+      } else {
+        next.add(trackId);
+      }
+      return next;
+    });
+  const canRender = compositionEditor.exportPlan.canRenderMixdown;
+  const selectedItemId = assetLibrary.selectedItem?.item.id;
 
   return (
     <section
@@ -31,22 +61,20 @@ export function MultitrackScreen() {
         eyebrow="Multitrack editor"
         title={compositionEditor.composition.name}
         actions={
-          <div
-            className={
-              compositionEditor.exportPlan.canRenderMixdown
-                ? "primary-action composition-action is-inert"
-                : "primary-action composition-action is-inert is-blocked"
+          <button
+            className="primary-action composition-action"
+            disabled={!canRender}
+            onClick={() => renderComposition([...mutedTracks])}
+            type="button"
+            title={
+              canRender
+                ? "Render the composition into a mixed-down asset"
+                : "Render is blocked — see the render plan below"
             }
-            title="Composition mixdown render is not available in this build yet"
-            aria-disabled="true"
           >
             <Disc3 aria-hidden="true" size={18} />
-            <span>
-              {compositionEditor.exportPlan.canRenderMixdown
-                ? "Render (preview)"
-                : "Blocked"}
-            </span>
-          </div>
+            <span>{canRender ? "Render Mixdown" : "Blocked"}</span>
+          </button>
         }
         stats={
           <>
@@ -70,6 +98,26 @@ export function MultitrackScreen() {
         }
       />
 
+      <GenerationPanel
+        job={runtimeOperation}
+        workflows={["composition-render"]}
+        typeLabel="Mixdown"
+        onCancel={cancelRuntimeOperation}
+        onRetry={retryRuntimeOperation}
+      >
+        <button
+          type="button"
+          className="secondary-action"
+          disabled={!selectedItemId}
+          onClick={() => selectedItemId && previewLibraryItem(selectedItemId)}
+          title="Play the rendered mixdown"
+        >
+          <Play aria-hidden="true" size={16} />
+          <span>Play latest</span>
+        </button>
+        <PlaybackControl playback={libraryPlayback} />
+      </GenerationPanel>
+
       <div className="composition-layout">
         <div className="composition-main">
           <section className="composition-toolbar" aria-label="Editor tools">
@@ -90,6 +138,10 @@ export function MultitrackScreen() {
           </section>
 
           <section className="timeline-board" aria-label="Timeline tracks">
+            <small className="field-hint">
+              Clip drag/trim and the tool palette are a visual preview; Render
+              Mixdown and per-track Mute are live and shape the rendered asset.
+            </small>
             <div className="timeline-selection" aria-label="Timeline selection">
               <span>{compositionEditor.timeline.selectedClipId}</span>
               <span>
@@ -114,10 +166,26 @@ export function MultitrackScreen() {
                     {statusLabel(track.role)} / {track.gainDb} dB / pan{" "}
                     {track.pan}
                   </small>
-                  <span>
-                    {track.muted ? "Muted" : "Live"} /{" "}
-                    {track.soloed ? "Solo" : "Mix"}
-                  </span>
+                  <button
+                    type="button"
+                    className={
+                      track.muted || mutedTracks.has(track.trackId)
+                        ? "secondary-action is-active"
+                        : "secondary-action"
+                    }
+                    disabled={track.muted}
+                    onClick={() => toggleMute(track.trackId)}
+                    title={
+                      track.muted
+                        ? "Track is muted in the composition"
+                        : "Mute this track in the next render"
+                    }
+                  >
+                    {track.muted || mutedTracks.has(track.trackId)
+                      ? "Muted"
+                      : "Mute"}
+                    {track.soloed ? " / Solo" : ""}
+                  </button>
                 </div>
                 <div className="clip-lane">
                   {track.clips.map((clip) => (

@@ -666,6 +666,35 @@ impl ProjectLibraryStore {
         }
     }
 
+    /// Resolve a library item's current audio version to interleaved `f32` PCM
+    /// for offline composition mixdown (UX-NB1). Returns `Ok(None)` when the item,
+    /// its version, or the file is absent, so the mixer can skip an unresolved
+    /// clip with a logged warning rather than failing the whole render.
+    pub fn load_item_pcm(&self, item_id: &str) -> io::Result<Option<(Vec<f32>, u16, u32)>> {
+        let Some(record) = self.read_asset_record(item_id)? else {
+            return Ok(None);
+        };
+        let Some(version) = record.item.current_version.clone() else {
+            return Ok(None);
+        };
+        let path = PathBuf::from(
+            record
+                .audio_path
+                .clone()
+                .unwrap_or_else(|| version.file.storage_path.clone()),
+        );
+        if !path.is_file() {
+            return Ok(None);
+        }
+        let wav = read_pcm16_wav(&path)?;
+        let samples = wav
+            .samples
+            .iter()
+            .map(|sample| *sample as f32 / i16::MAX as f32)
+            .collect();
+        Ok(Some((samples, wav.channels, wav.sample_rate)))
+    }
+
     pub fn save_review_edit(&self, request: SaveReviewEditRequest) -> io::Result<ReviewEditResult> {
         let mut record = self
             .read_asset_record(&request.item_id)?

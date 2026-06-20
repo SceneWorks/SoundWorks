@@ -854,6 +854,21 @@ export function App() {
             ),
           );
         });
+    } else if (workflow === "composition-render") {
+      importRuntimeArtifactToLibrary({
+        jobId: job.id,
+        projectId,
+        name: `${compositionEditor.composition.name} mixdown`,
+        tags: ["composition-render", "mixdown", "generated-audio"],
+      })
+        .then(applyProjectLibraryResult)
+        .catch((error) => {
+          setLibraryActionStatus(
+            actionFeedback.error(
+              `Mixdown rendered but save unavailable: ${String(error)}`,
+            ),
+          );
+        });
     } else if (
       workflow === "voice-conversion" ||
       workflow === "video-to-audio" ||
@@ -874,6 +889,56 @@ export function App() {
           );
         });
     }
+  }
+
+  // UX-10/UX-NB1: render the current composition into a mixed-down asset. Builds
+  // the clip list from the active (non-muted, solo-aware) tracks and enqueues a
+  // render-composition job, which the UX-F1 poller drives to terminal + imports.
+  function renderComposition(mutedTrackIds: string[] = []) {
+    const tracks = compositionEditor.tracks;
+    const anySoloed = tracks.some((track) => track.soloed);
+    const activeTracks = tracks.filter((track) => {
+      if (track.muted || mutedTrackIds.includes(track.trackId)) {
+        return false;
+      }
+      return !anySoloed || track.soloed;
+    });
+    const clips = activeTracks.flatMap((track) =>
+      track.clips.map((clip) => ({
+        assetId: clip.assetId,
+        timelineStartMs: clip.timelineStartMs,
+        sourceStartMs: clip.sourceRange.startMs,
+        sourceEndMs: clip.sourceRange.endMs,
+        gainDb: track.gainDb + clip.gainDb,
+        pan: clip.pan,
+        fadeInMs: clip.fadeInMs,
+        fadeOutMs: clip.fadeOutMs,
+      })),
+    );
+    setLibraryActionStatus(
+      actionFeedback.pending("Rendering composition mixdown…"),
+    );
+    enqueueRuntimeJob({
+      providerId: "soundworks-native",
+      modelId: "composition-mixdown",
+      kind: "render-composition",
+      workflow: "composition-render",
+      prompt: `Mixdown ${compositionEditor.composition.name}`,
+      sourceSurface: "Multitrack",
+      parameters: {
+        sampleRateHz: 48_000,
+        channels: 2,
+        durationMs: compositionEditor.timeline.durationMs,
+        masterGainDb: compositionEditor.mixer.masterGainDb,
+        clips,
+      },
+    })
+      .then(trackRuntimeJob)
+      .catch((error) => {
+        setLibraryActionStatus(
+          actionFeedback.error(`Render unavailable: ${String(error)}`),
+        );
+      });
   }
 
   // UX-F1: drive a job to its terminal state in the UI. enqueue/retry return a
@@ -1152,6 +1217,7 @@ export function App() {
     cancelRuntimeOperation,
     retryRuntimeOperation,
     recordVoiceProfileConsent,
+    renderComposition,
   };
 
   return (

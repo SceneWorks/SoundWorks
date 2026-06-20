@@ -1446,7 +1446,10 @@ impl RuntimeJobStore {
             .and_then(Value::as_u64)
             .unwrap_or(2)
             .clamp(1, 2) as u16;
-        let duration_ms = params.get("durationMs").and_then(Value::as_u64).unwrap_or(0);
+        let duration_ms = params
+            .get("durationMs")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
         let master_gain = db_to_linear(
             params
                 .get("masterGainDb")
@@ -1516,10 +1519,7 @@ impl RuntimeJobStore {
                                 entry.get("gainDb").and_then(Value::as_f64).unwrap_or(0.0) as f32,
                             ),
                             pan: entry.get("pan").and_then(Value::as_f64).unwrap_or(0.0) as f32,
-                            fade_in_ms: entry
-                                .get("fadeInMs")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
+                            fade_in_ms: entry.get("fadeInMs").and_then(Value::as_u64).unwrap_or(0),
                             fade_out_ms: entry
                                 .get("fadeOutMs")
                                 .and_then(Value::as_u64)
@@ -1579,8 +1579,9 @@ impl RuntimeJobStore {
             )),
         });
         job.cancellation = CancellationState::Completed;
-        job.log_tail
-            .push(format!("wrote composition-mixdown.wav with {frame_count} frames"));
+        job.log_tail.push(format!(
+            "wrote composition-mixdown.wav with {frame_count} frames"
+        ));
         job.artifacts = vec![
             artifact(
                 RuntimeArtifactKind::AudioPreview,

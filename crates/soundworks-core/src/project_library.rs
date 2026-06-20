@@ -1253,7 +1253,11 @@ fn demo_library_enabled() -> bool {
         .unwrap_or(false);
     // UX-15: the env var still works for CI/screenshots, but a durable user
     // preference (Settings demo toggle) enables it too.
-    env_enabled || crate::ui_preferences::UiPreferencesStore::default().load().demo == Some(true)
+    env_enabled
+        || crate::ui_preferences::UiPreferencesStore::default()
+            .load()
+            .demo
+            == Some(true)
 }
 
 fn reference_project() -> Project {

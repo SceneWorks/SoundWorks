@@ -1,71 +1,286 @@
-// DR-02: Models (Model Manager) screen. Extracted from App.tsx to complete the
-// App.tsx decomposition (F-010). For this slice it is a faithful extraction of
-// the existing model-manager panel (outer .panel -> MainSurface + SectionHeading;
-// install/revalidate wiring preserved verbatim). DR-03 rebuilds the internals
-// onto the model-type-group + model-card + WorkerProgressCard grammar with an
-// honest install state. The Provider Coverage + Evaluation Scorecard panels that
-// previously shared this surface now live on Settings (DR-03 "move off Models").
+// DR-03: Models page rebuilt on SceneWorks' model-manager grammar.
+// - Candidates grouped into collapsible model-type-group sections by capability
+//   lane, Recommended vs Additional, one ModelCard per model with a single
+//   StatusBadge (replaces the 28-row QA-console cache list + 5 status vocabularies).
+// - The in-flight operation is routed through WorkerProgressCard (a failure shows
+//   an actionable error + Retry, not a dead red banner).
+// - Honest install (F-014): there is no in-app downloader, so the always-failing
+//   Download button is gone; cards show the manual install command + a Revalidate
+//   action that actually works. Raw blocker strings are demoted to a disclosure.
+// - Provider coverage + evaluation scorecard moved to Settings (DR-02f); lane
+//   readiness + validation checks moved into a Diagnostics disclosure (off the
+//   main surface).
 import {
-  CircleAlert,
-  CircleCheck,
-  Download,
-  HardDrive,
-  PackageCheck,
-} from "lucide-react";
-import { MainSurface, SectionHeading } from "../components";
-import { statusLabel, workflowLabel } from "../viewModel";
+  ModelCard,
+  ModelGrid,
+  StatusBadge,
+  SurfaceHeader,
+  HeroStat,
+  WorkerProgressCard,
+} from "../components";
+import type { StatusTone } from "../components";
+import { formatMb, isHttpUrl, statusLabel, workflowLabel } from "../viewModel";
 import { useAppContext } from "./context";
+import type { ModelManagerOverview } from "../types";
+
+type Candidate = ModelManagerOverview["candidates"][number];
+
+// Single status vocabulary for the card badge (replaces installState/
+// evaluationStatus/productEligibility/evidenceLevel/runtimePath competing pills).
+function installTone(state: Candidate["installState"]): StatusTone {
+  switch (state) {
+    case "installed":
+      return "installed";
+    case "missing-cache":
+    case "needs-runtime-port":
+      return "warning";
+    case "blocked":
+      return "failed";
+    default:
+      return "neutral";
+  }
+}
+
+function operationTone(status: string): StatusTone {
+  if (status === "failed") return "failed";
+  if (status === "succeeded") return "completed";
+  return "neutral";
+}
+
+// Group candidates under their primary capability lane, preserving the lane order
+// the backend declares (laneReadiness is already lane-ordered).
+function groupByLane(
+  laneOrder: string[],
+  candidates: readonly Candidate[],
+): Array<{ lane: string; candidates: Candidate[] }> {
+  const groups = new Map<string, Candidate[]>();
+  for (const candidate of candidates) {
+    const lane = candidate.lanes[0] ?? "other";
+    const bucket = groups.get(lane);
+    if (bucket) {
+      bucket.push(candidate);
+    } else {
+      groups.set(lane, [candidate]);
+    }
+  }
+  const ordered = [...laneOrder.filter((lane) => groups.has(lane)), ...groups.keys()];
+  const seen = new Set<string>();
+  return ordered
+    .filter((lane) => !seen.has(lane) && seen.add(lane))
+    .map((lane) => ({ lane, candidates: groups.get(lane) ?? [] }));
+}
+
+function CandidateCard({
+  candidate,
+  recommended,
+  onRevalidate,
+}: {
+  candidate: Candidate;
+  recommended: boolean;
+  onRevalidate: (candidateId: string) => void;
+}) {
+  const installed = candidate.installState === "installed";
+  const meta = [
+    {
+      label: "Cache",
+      value: `${candidate.cache.presentFileCount}/${candidate.cache.expectedFileCount} files`,
+    },
+    { label: "Evidence", value: candidate.cache.evidence },
+  ];
+  if (candidate.cache.diskUsageMb) {
+    meta.push({ label: "On disk", value: formatMb(candidate.cache.diskUsageMb) });
+  }
+
+  return (
+    <ModelCard
+      title={candidate.name}
+      status={
+        <StatusBadge tone={installTone(candidate.installState)}>
+          {statusLabel(candidate.installState)}
+        </StatusBadge>
+      }
+      description={`${candidate.provider} · ${candidate.licenseLabel}${recommended ? " · Recommended" : ""}`}
+      meta={meta}
+      actions={
+        <>
+          {candidate.actions.includes("revalidate") ? (
+            <button
+              className="secondary-action"
+              onClick={() => onRevalidate(candidate.candidateId)}
+              type="button"
+            >
+              Revalidate cache
+            </button>
+          ) : null}
+          {isHttpUrl(candidate.sourceUrl) ? (
+            <a
+              className="model-source-link"
+              href={candidate.sourceUrl}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {candidate.sourceLabel}
+            </a>
+          ) : null}
+        </>
+      }
+    >
+      {!installed ? (
+        <div className="model-gated-notice">
+          <span>
+            Manual install required — SoundWorks has no in-app downloader yet.
+          </span>
+          <code>{candidate.downloadPlan.commandHint}</code>
+          {candidate.downloadPlan.requiresLicenseAcceptance ? (
+            <small>Requires accepting the model license first.</small>
+          ) : null}
+          {candidate.blockers.length > 0 ? (
+            <details className="model-blockers">
+              <summary>
+                {candidate.blockers.length} blocker
+                {candidate.blockers.length === 1 ? "" : "s"}
+              </summary>
+              <ul>
+                {candidate.blockers.map((blocker, index) => (
+                  <li key={index}>{blocker}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+    </ModelCard>
+  );
+}
 
 export function ModelsScreen() {
   const { modelManager, modelManagerOperation, runModelManagerAction } =
     useAppContext();
 
+  const recommendedIds = new Set(
+    modelManager.laneReadiness.map((lane) => lane.recommendedCandidateId),
+  );
+  const laneOrder = modelManager.laneReadiness.map((lane) => lane.lane);
+  const groups = groupByLane(laneOrder, modelManager.candidates);
+  const revalidate = (candidateId: string) =>
+    runModelManagerAction(candidateId, "revalidate");
+
   return (
-    <section className="system-grid" aria-label="Model manager">
-      <MainSurface className="model-manager-panel">
-        <SectionHeading
-          title="Model Manager"
-          eyebrow={`${modelManager.summary.candidateCount} candidates`}
+    <section className="models-screen" aria-label="Model manager">
+      <SurfaceHeader
+        eyebrow="Model manager"
+        title="Models"
+        blurb="No model is installed until its required files verify on disk. Install models manually into the cache, then revalidate."
+        stats={
+          <>
+            <HeroStat
+              label="Verified"
+              value={modelManager.summary.verifiedInstalledCount}
+            />
+            <HeroStat
+              label="Installable"
+              value={modelManager.summary.installableCount}
+            />
+            <HeroStat
+              label="Missing cache"
+              value={modelManager.summary.missingCacheCount}
+            />
+            <HeroStat
+              label="Cache root"
+              value={modelManager.cacheRoot}
+            />
+          </>
+        }
+      />
+
+      {modelManagerOperation ? (
+        <WorkerProgressCard
+          typeLabel={statusLabel(modelManagerOperation.action)}
+          title={modelManagerOperation.candidateId}
+          statusLabel={statusLabel(modelManagerOperation.status)}
+          tone={operationTone(modelManagerOperation.status)}
+          percent={modelManagerOperation.progressPercent}
+          message={
+            modelManagerOperation.status === "failed"
+              ? undefined
+              : modelManagerOperation.summary
+          }
+          logTail={modelManagerOperation.logTail}
+          error={
+            modelManagerOperation.status === "failed"
+              ? {
+                  summary: modelManagerOperation.summary,
+                  recovery: modelManagerOperation.recovery,
+                }
+              : null
+          }
+          actions={
+            <button
+              className="secondary-action"
+              onClick={() => revalidate(modelManagerOperation.candidateId)}
+              type="button"
+            >
+              Retry (revalidate)
+            </button>
+          }
         />
-        <div className="runtime-summary" aria-label="Model manager status">
-          <div>
-            <PackageCheck aria-hidden="true" size={18} />
-            <strong>{modelManager.summary.verifiedInstalledCount}</strong>
-            <span>verified</span>
-          </div>
-          <div>
-            <Download aria-hidden="true" size={18} />
-            <strong>{modelManager.summary.installableCount}</strong>
-            <span>installable</span>
-          </div>
-          <div>
-            <HardDrive aria-hidden="true" size={18} />
-            <strong>{modelManager.summary.missingCacheCount}</strong>
-            <span>missing cache</span>
-          </div>
-          <div>
-            <CircleAlert aria-hidden="true" size={18} />
-            <strong>{modelManager.summary.failedOperationCount}</strong>
-            <span>failed ops</span>
-          </div>
-        </div>
+      ) : null}
 
-        <div className="runtime-policy">
-          <strong>{modelManager.cacheRoot}</strong>
-          <span>
-            No model is installed until required files verify on disk.
-          </span>
-          {modelManagerOperation ? (
-            <small>
-              {statusLabel(modelManagerOperation.action)}:{" "}
-              {statusLabel(modelManagerOperation.status)}
-            </small>
-          ) : null}
-        </div>
+      {groups.map(({ lane, candidates }) => {
+        const recommended = candidates.filter((candidate) =>
+          recommendedIds.has(candidate.candidateId),
+        );
+        const additional = candidates.filter(
+          (candidate) => !recommendedIds.has(candidate.candidateId),
+        );
+        return (
+          <details className="model-type-group" key={lane} open>
+            <summary className="model-type-group-heading">
+              <h3>{workflowLabel(lane)}</h3>
+              <span>{candidates.length}</span>
+            </summary>
+            {recommended.length > 0 ? (
+              <>
+                <h4 className="model-subgroup-heading">Recommended</h4>
+                <ModelGrid>
+                  {recommended.map((candidate) => (
+                    <CandidateCard
+                      key={candidate.candidateId}
+                      candidate={candidate}
+                      recommended
+                      onRevalidate={revalidate}
+                    />
+                  ))}
+                </ModelGrid>
+              </>
+            ) : null}
+            {additional.length > 0 ? (
+              <>
+                <h4 className="model-subgroup-heading">Additional</h4>
+                <ModelGrid>
+                  {additional.map((candidate) => (
+                    <CandidateCard
+                      key={candidate.candidateId}
+                      candidate={candidate}
+                      recommended={false}
+                      onRevalidate={revalidate}
+                    />
+                  ))}
+                </ModelGrid>
+              </>
+            ) : null}
+          </details>
+        );
+      })}
 
-        <div className="model-manager-grid">
+      <details className="model-type-group">
+        <summary className="model-type-group-heading">
+          <h3>Diagnostics</h3>
+          <span>{modelManager.validationChecks.length}</span>
+        </summary>
+        <div className="model-diagnostics">
           <div className="runtime-stack">
-            <h3>Lane readiness</h3>
+            <h4 className="model-subgroup-heading">Lane readiness</h4>
             <ol className="runtime-list">
               {modelManager.laneReadiness.map((lane) => (
                 <li key={`${lane.lane}-${lane.recommendedCandidateId}`}>
@@ -82,82 +297,24 @@ export function ModelsScreen() {
               ))}
             </ol>
           </div>
-
           <div className="runtime-stack">
-            <h3>Candidate cache</h3>
-            <ol className="runtime-list model-cache-list">
-              {modelManager.candidates.slice(0, 10).map((candidate) => (
-                <li key={candidate.candidateId}>
-                  <span className={`runtime-dot ${candidate.installState}`} />
-                  <div>
-                    <strong>{candidate.name}</strong>
-                    <small>
-                      {candidate.candidateId} /{" "}
-                      {statusLabel(candidate.installState)} /{" "}
-                      {candidate.cache.presentFileCount} of{" "}
-                      {candidate.cache.expectedFileCount}
-                    </small>
-                    <em>{candidate.cache.evidence}</em>
-                    {candidate.cache.missingRequiredFiles[0] ? (
-                      <em>
-                        missing{" "}
-                        {candidate.cache.missingRequiredFiles.join(", ")}
-                      </em>
-                    ) : null}
-                    <div className="model-manager-actions">
-                      <button
-                        className="icon-button small"
-                        disabled={!candidate.actions.includes("install")}
-                        onClick={() =>
-                          runModelManagerAction(candidate.candidateId, "install")
-                        }
-                        title={`Install ${candidate.name}`}
-                        type="button"
-                      >
-                        <Download aria-hidden="true" size={15} />
-                      </button>
-                      <button
-                        className="icon-button small"
-                        onClick={() =>
-                          runModelManagerAction(
-                            candidate.candidateId,
-                            "revalidate",
-                          )
-                        }
-                        title={`Revalidate ${candidate.name}`}
-                        type="button"
-                      >
-                        <CircleCheck aria-hidden="true" size={15} />
-                      </button>
-                    </div>
-                  </div>
+            <h4 className="model-subgroup-heading">Validation checks</h4>
+            <ol className="validation-list" aria-label="Model manager checks">
+              {modelManager.validationChecks.map((check) => (
+                <li
+                  className={check.passed ? "passed" : "failed"}
+                  key={check.id}
+                >
+                  <span>
+                    {check.summary}
+                    {check.recovery ? <em>{check.recovery}</em> : null}
+                  </span>
                 </li>
               ))}
             </ol>
           </div>
         </div>
-
-        {modelManagerOperation ? (
-          <div className={`operation-banner ${modelManagerOperation.status}`}>
-            <strong>{modelManagerOperation.summary}</strong>
-            {modelManagerOperation.recovery ? (
-              <span>{modelManagerOperation.recovery}</span>
-            ) : null}
-          </div>
-        ) : null}
-
-        <ol className="validation-list" aria-label="Model manager checks">
-          {modelManager.validationChecks.map((check) => (
-            <li className={check.passed ? "passed" : "failed"} key={check.id}>
-              <CircleCheck aria-hidden="true" size={16} />
-              <span>
-                {check.summary}
-                {check.recovery ? <em>{check.recovery}</em> : null}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </MainSurface>
+      </details>
     </section>
   );
 }

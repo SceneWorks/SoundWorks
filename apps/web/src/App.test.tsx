@@ -58,7 +58,7 @@ describe("App", () => {
       ["Export", "Presets, stems, and handoff packages"],
       ["Rights", "SoundWorks launch rights policy"],
       ["Jobs", "Worker Runtime"],
-      ["Models", "Model Manager"],
+      ["Models", "Models"],
       ["Validation", "Release gate and demo matrix"],
       ["Settings", "Runtime Layers"],
     ] as const;
@@ -106,13 +106,19 @@ describe("App", () => {
     ).toBeGreaterThan(0);
 
     fireEvent.click(navButton("Models"));
-    // Kokoro is missing-cache in the reference fixtures, so its install control is
-    // enabled (the cache can be downloaded); the failed-operation surface stays
-    // visible for revalidate/install QA.
-    expect(await screen.findByTitle("Install Kokoro 82M")).toBeEnabled();
+    // DR-03: there is no in-app downloader, so the always-failing Download button
+    // is gone. The failed operation is shown as an actionable WorkerProgressCard
+    // (Retry, not a dead red banner), and each card offers a working Revalidate.
     expect(
-      screen.getByText("Kokoro install failed cache verification."),
+      await screen.findByText("Kokoro install failed cache verification."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Retry (revalidate)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Revalidate cache" }).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByTitle("Install Kokoro 82M")).not.toBeInTheDocument();
 
     fireEvent.click(navButton("Jobs"));
     expect(

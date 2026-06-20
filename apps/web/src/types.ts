@@ -3,6 +3,7 @@
 export type UiPreferences = {
   theme?: "light" | "dark";
   accent?: string;
+  demo?: boolean;
 };
 
 export type ArchitectureLayer = {

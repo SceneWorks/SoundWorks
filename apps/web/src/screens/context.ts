@@ -121,6 +121,9 @@ export interface AppContextValue {
   modelFocus: string | null;
   openModelsFor: (focus: string) => void;
   clearModelFocus: () => void;
+  // UX-15: durable demo-library toggle.
+  demoMode: boolean;
+  changeDemoMode: (next: boolean) => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

@@ -24,6 +24,10 @@ pub struct UiPreferences {
     pub theme: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub accent: Option<String>,
+    /// UX-15: opt-in demo library (F-009) as a durable preference, so the toggle
+    /// survives launches without an environment variable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub demo: Option<bool>,
 }
 
 /// Store for the durable UI-preferences file.
@@ -78,6 +82,9 @@ impl UiPreferencesStore {
         }
         if patch.accent.is_some() {
             current.accent = patch.accent;
+        }
+        if patch.demo.is_some() {
+            current.demo = patch.demo;
         }
         self.write(&current)?;
         Ok(current)
@@ -142,6 +149,7 @@ mod tests {
             .merge(UiPreferences {
                 theme: Some("dark".into()),
                 accent: None,
+                demo: None,
             })
             .expect("merge theme");
         assert_eq!(after_theme.theme.as_deref(), Some("dark"));
@@ -152,6 +160,7 @@ mod tests {
             .merge(UiPreferences {
                 theme: None,
                 accent: Some("violet".into()),
+                demo: None,
             })
             .expect("merge accent");
         assert_eq!(after_accent.theme.as_deref(), Some("dark"));
@@ -162,6 +171,29 @@ mod tests {
     }
 
     #[test]
+    fn merge_persists_demo_independently() {
+        let store = UiPreferencesStore::new(temp_root("demo"));
+        let after = store
+            .merge(UiPreferences {
+                theme: None,
+                accent: None,
+                demo: Some(true),
+            })
+            .expect("merge demo");
+        assert_eq!(after.demo, Some(true));
+        // A later theme update preserves the demo flag.
+        let next = store
+            .merge(UiPreferences {
+                theme: Some("dark".into()),
+                accent: None,
+                demo: None,
+            })
+            .expect("merge theme");
+        assert_eq!(next.demo, Some(true));
+        assert_eq!(next.theme.as_deref(), Some("dark"));
+    }
+
+    #[test]
     fn write_leaves_no_temp_file() {
         let root = temp_root("notmp");
         let store = UiPreferencesStore::new(&root);
@@ -169,6 +201,7 @@ mod tests {
             .merge(UiPreferences {
                 theme: Some("light".into()),
                 accent: None,
+                demo: None,
             })
             .expect("merge");
         let leftovers: Vec<_> = fs::read_dir(&root)

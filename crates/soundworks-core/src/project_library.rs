@@ -8,6 +8,7 @@ use crate::domain::{
     Project, RecipeSummary, RecipeWorkflow, RightsMetadata, TechnicalAudioMetadata,
     VoiceConsentStatus, WatermarkStatus, Workspace,
 };
+use crate::loudness;
 use crate::manifests::CapabilityWorkflow;
 use crate::runtime::{RuntimeArtifactKind, RuntimeJobStore};
 use crate::storage::sanitized_join;
@@ -709,9 +710,9 @@ impl ProjectLibraryStore {
             false,
         );
         if let Some(target_lufs) = request.normalize_loudness_lufs {
-            normalize_to_lufs(&mut samples, target_lufs);
+            normalize_to_lufs(&mut samples, wav.sample_rate, wav.channels, target_lufs);
         }
-        let stats = pcm_stats(&samples);
+        let stats = loudness::analyze_i16(&samples, wav.sample_rate, wav.channels);
 
         let next_index = source_version.version_index + 1;
         let version_id = format!("version-{}-review-{next_index}", request.item_id);
@@ -1445,12 +1446,6 @@ impl Pcm16Wav {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct PcmStats {
-    loudness_lufs: f32,
-    true_peak_dbfs: f32,
-}
-
 /// Read a little-endian u16 at `at`, returning InvalidData (not a panic) when the
 /// slice runs past the end of an untrusted buffer.
 fn read_u16_le(bytes: &[u8], at: usize) -> io::Result<u16> {
@@ -1621,8 +1616,11 @@ fn apply_fade(
     }
 }
 
-fn normalize_to_lufs(samples: &mut [i16], target_lufs: f32) {
-    let stats = pcm_stats(samples);
+/// Normalize toward `target_lufs` with a single-pass gain. A linear gain cannot
+/// exactly hit a gated-LUFS target (the gated block set shifts with level), but
+/// it lands within a fraction of a dB for steady material.
+fn normalize_to_lufs(samples: &mut [i16], sample_rate: u32, channels: u16, target_lufs: f32) {
+    let stats = loudness::analyze_i16(samples, sample_rate, channels);
     let gain = 10.0_f32.powf((target_lufs - stats.loudness_lufs) / 20.0);
     for sample in samples {
         *sample = scale_sample(*sample, gain);
@@ -1633,24 +1631,6 @@ fn scale_sample(sample: i16, gain: f32) -> i16 {
     (sample as f32 * gain)
         .clamp(i16::MIN as f32, i16::MAX as f32)
         .round() as i16
-}
-
-fn pcm_stats(samples: &[i16]) -> PcmStats {
-    let mut sum_squares = 0.0f32;
-    let mut peak = 0.0f32;
-    for sample in samples {
-        let value = *sample as f32 / i16::MAX as f32;
-        sum_squares += value * value;
-        peak = peak.max(value.abs());
-    }
-    let rms = (sum_squares / samples.len().max(1) as f32)
-        .sqrt()
-        .max(0.000_001);
-    let peak = peak.max(0.000_001);
-    PcmStats {
-        loudness_lufs: 20.0 * rms.log10(),
-        true_peak_dbfs: 20.0 * peak.log10(),
-    }
 }
 
 #[cfg(test)]

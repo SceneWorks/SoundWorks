@@ -752,6 +752,25 @@ export function App() {
             );
           });
       }
+      if (
+        (workflow === "voice-conversion" ||
+          workflow === "video-to-audio" ||
+          workflow === "song") &&
+        job.status === "succeeded"
+      ) {
+        importRuntimeArtifactToLibrary({
+          jobId: job.id,
+          projectId: workspace.activeProject.project.id,
+          name: `${workflowLabel(job.workflow)} generated output`,
+          tags: [workflow, "generated-audio"],
+        })
+          .then(applyProjectLibraryResult)
+          .catch((error) => {
+            setLibraryActionStatus(
+              `${workflowLabel(workflow)} generated but save unavailable: ${String(error)}`,
+            );
+          });
+      }
       refreshRuntime();
     });
   }
@@ -832,6 +851,18 @@ export function App() {
   );
   const sfxRuntimeModel = useMemo(
     () => runtimeModelFor(runtime, "sfx"),
+    [runtime],
+  );
+  const voiceRuntimeModel = useMemo(
+    () => runtimeModelFor(runtime, "voice-conversion"),
+    [runtime],
+  );
+  const videoRuntimeModel = useMemo(
+    () => runtimeModelFor(runtime, "video-to-audio"),
+    [runtime],
+  );
+  const songRuntimeModel = useMemo(
+    () => runtimeModelFor(runtime, "song"),
     [runtime],
   );
   const latestImportableRuntimeJob = useMemo(
@@ -1046,19 +1077,18 @@ export function App() {
                 </div>
                 <div className="workspace-scope-grid">
                   {workspace.scopeControls.map((scope) => (
-                    <button
+                    <div
                       className={
                         scope.active
-                          ? "workspace-scope-button active"
-                          : "workspace-scope-button"
+                          ? "workspace-scope-button active is-inert"
+                          : "workspace-scope-button is-inert"
                       }
                       key={scope.id}
                       title={scope.emptyState}
-                      type="button"
                     >
                       <span>{scope.label}</span>
                       <strong>{scope.itemCount}</strong>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -1767,19 +1797,22 @@ export function App() {
                 <p className="eyebrow">Multitrack editor</p>
                 <h2>{compositionEditor.composition.name}</h2>
               </div>
-              <button
-                className="primary-action composition-action"
-                disabled={!compositionEditor.exportPlan.canRenderMixdown}
-                title="Render composition mixdown"
-                type="button"
+              <div
+                className={
+                  compositionEditor.exportPlan.canRenderMixdown
+                    ? "primary-action composition-action is-inert"
+                    : "primary-action composition-action is-inert is-blocked"
+                }
+                title="Composition mixdown render is not available in this build yet"
+                aria-disabled="true"
               >
                 <Disc3 aria-hidden="true" size={18} />
                 <span>
                   {compositionEditor.exportPlan.canRenderMixdown
-                    ? "Render"
+                    ? "Render (preview)"
                     : "Blocked"}
                 </span>
-              </button>
+              </div>
             </div>
 
             <div className="composition-metrics" aria-label="Editor status">
@@ -1812,19 +1845,18 @@ export function App() {
                   aria-label="Editor tools"
                 >
                   {compositionEditor.tools.map((tool) => (
-                    <button
+                    <div
                       className={
                         tool.id === compositionEditor.timeline.selectedTool
-                          ? "tool-button selected"
-                          : "tool-button"
+                          ? "tool-button selected is-inert"
+                          : "tool-button is-inert"
                       }
-                      disabled={!tool.enabled}
                       key={tool.id}
                       title={tool.label}
-                      type="button"
+                      aria-disabled="true"
                     >
                       <span>{tool.label}</span>
-                    </button>
+                    </div>
                   ))}
                 </section>
 
@@ -1870,12 +1902,12 @@ export function App() {
                       </div>
                       <div className="clip-lane">
                         {track.clips.map((clip) => (
-                          <button
+                          <div
                             className={
                               clip.clipId ===
                               compositionEditor.timeline.selectedClipId
-                                ? "timeline-clip selected"
-                                : "timeline-clip"
+                                ? "timeline-clip selected is-inert"
+                                : "timeline-clip is-inert"
                             }
                             key={clip.clipId}
                             style={{
@@ -1894,11 +1926,11 @@ export function App() {
                               )}%`,
                             }}
                             title={clip.assetName}
-                            type="button"
+                            aria-disabled="true"
                           >
                             <strong>{clip.assetName}</strong>
                             <span>{statusLabel(clip.assetKind)}</span>
-                          </button>
+                          </div>
                         ))}
                       </div>
                     </article>
@@ -2067,17 +2099,20 @@ export function App() {
                 <p className="eyebrow">MVP validation</p>
                 <h2>Release gate and demo matrix</h2>
               </div>
-              <button
-                className="primary-action validation-action"
-                disabled={!mvpValidation.releaseGate.readyForMvp}
-                title="MVP release gate"
-                type="button"
+              <div
+                className={
+                  mvpValidation.releaseGate.readyForMvp
+                    ? "primary-action validation-action is-inert"
+                    : "primary-action validation-action is-inert is-blocked"
+                }
+                title="MVP release gate status"
+                role="status"
               >
                 <ClipboardCheck aria-hidden="true" size={18} />
                 <span>
                   {mvpValidation.releaseGate.readyForMvp ? "Ready" : "Blocked"}
                 </span>
-              </button>
+              </div>
             </div>
 
             <div className="mvp-metrics" aria-label="Validation status">
@@ -2514,16 +2549,25 @@ export function App() {
               </div>
               <button
                 className="primary-action voice-action"
-                disabled={!voiceLab.selectedConversion.canSubmit}
+                disabled={!voiceRuntimeModel}
+                onClick={() => {
+                  const conversion = voiceLab.selectedConversion.recipe.request;
+                  runRuntimeJob(
+                    "voice-conversion",
+                    `Voice conversion ${conversion.sourceAudioAssetId ?? "source"} -> ${conversion.targetVoiceProfileId ?? "target"}`,
+                    {
+                      sourceAudioAssetId: conversion.sourceAudioAssetId ?? null,
+                      targetVoiceProfileId:
+                        conversion.targetVoiceProfileId ?? null,
+                      preserveTiming: conversion.preserveTiming ?? true,
+                    },
+                  );
+                }}
                 type="button"
                 title="Queue voice conversion"
               >
                 <Radio aria-hidden="true" size={18} />
-                <span>
-                  {voiceLab.selectedConversion.canSubmit
-                    ? "Convert"
-                    : "Blocked"}
-                </span>
+                <span>{voiceRuntimeModel ? "Convert" : "Blocked"}</span>
               </button>
             </div>
 
@@ -2934,14 +2978,27 @@ export function App() {
               </div>
               <button
                 className="primary-action video-action"
-                disabled={!videoToAudio.submission.canSubmit}
+                disabled={!videoRuntimeModel}
+                onClick={() =>
+                  runRuntimeJob(
+                    "video-to-audio",
+                    videoToAudio.direction.prompt,
+                    {
+                      videoAssetId: videoToAudio.source.videoAssetId,
+                      syncMode: videoToAudio.direction.syncMode,
+                      negativePrompt: videoToAudio.direction.negativePrompt,
+                      durationMs: videoToAudio.direction.durationMs,
+                      targetRangeIds: videoToAudio.targetRanges.map(
+                        (target) => target.id,
+                      ),
+                    },
+                  )
+                }
                 type="button"
                 title="Queue video-to-audio generation"
               >
                 <FileVideo aria-hidden="true" size={18} />
-                <span>
-                  {videoToAudio.submission.canSubmit ? "Generate" : "Blocked"}
-                </span>
+                <span>{videoRuntimeModel ? "Generate" : "Blocked"}</span>
               </button>
             </div>
 
@@ -3434,14 +3491,24 @@ export function App() {
               </div>
               <button
                 className="primary-action samples-action"
-                disabled={!songStudio.submission.canSubmit}
+                disabled={!songRuntimeModel}
+                onClick={() =>
+                  runRuntimeJob("song", songStudio.draft.prompt, {
+                    title: songStudio.draft.title,
+                    lyrics: songStudio.draft.lyrics,
+                    styleTags: songStudio.draft.styleTags,
+                    bpm: songStudio.controls.bpm,
+                    musicalKey: songStudio.controls.musicalKey,
+                    sectionLabels: songStudio.draft.sections.map(
+                      (section) => section.label,
+                    ),
+                  })
+                }
                 type="button"
                 title="Queue song generation"
               >
                 <Music2 aria-hidden="true" size={18} />
-                <span>
-                  {songStudio.submission.canSubmit ? "Generate" : "Blocked"}
-                </span>
+                <span>{songRuntimeModel ? "Generate" : "Blocked"}</span>
               </button>
             </div>
 
@@ -3820,17 +3887,19 @@ export function App() {
                   aria-label="Lightweight edit actions"
                 >
                   {reviewWorkspace.editActions.map((action) => (
-                    <button
+                    <div
                       className={
-                        action.enabled ? "edit-action enabled" : "edit-action"
+                        action.enabled
+                          ? "edit-action enabled is-inert"
+                          : "edit-action is-inert"
                       }
                       key={action.id}
-                      type="button"
                       title={action.label}
+                      aria-disabled="true"
                     >
                       <SlidersHorizontal aria-hidden="true" size={16} />
                       <span>{action.label}</span>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -3973,17 +4042,20 @@ export function App() {
                 <p className="eyebrow">Rights + Safety</p>
                 <h2>{rightsSafety.policy.name}</h2>
               </div>
-              <button
-                className="primary-action safety-action"
-                disabled={!overview.rightsSafety.canExport}
-                type="button"
-                title="SoundWorks export gate"
+              <div
+                className={
+                  overview.rightsSafety.canExport
+                    ? "primary-action safety-action is-inert"
+                    : "primary-action safety-action is-inert is-blocked"
+                }
+                title="Rights export gate status — run exports from the Export screen"
+                role="status"
               >
                 <ShieldCheck aria-hidden="true" size={18} />
                 <span>
-                  {overview.rightsSafety.canExport ? "Export" : "Blocked"}
+                  {overview.rightsSafety.canExport ? "Ready" : "Blocked"}
                 </span>
-              </button>
+              </div>
             </div>
 
             <div

@@ -685,6 +685,24 @@ textarea.field-input {
   width: 96px;
 }
 
+/* UX-S7: first-run onboarding card + workspace project-name input. */
+.onboarding-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft) inset;
+}
+
+.onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workspace-name-input {
+  min-width: min(100%, 220px);
+}
+
 /* UX-10: an engaged/toggled secondary action (e.g. a muted track). */
 .secondary-action.is-active {
   border-color: var(--accent);

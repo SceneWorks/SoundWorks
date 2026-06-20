@@ -37,7 +37,7 @@ describe("App", () => {
   it("signals web-preview mock mode when not running in the Tauri shell", () => {
     render(<App />);
 
-    const banner = screen.getByRole("status");
+    const banner = screen.getByRole("status", { name: "Preview mode" });
     expect(banner).toHaveTextContent(/Web preview/i);
     expect(banner).toHaveTextContent(/data is simulated/i);
   });

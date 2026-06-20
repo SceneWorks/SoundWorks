@@ -94,7 +94,8 @@ export interface AppContextValue {
     candidateId: string,
     action: "install" | "revalidate",
   ) => void;
-  createProject: () => void;
+  createProject: (name?: string) => void;
+  openProject: (projectId: string) => void;
   openRecentProject: () => void;
   importLatestRuntimeArtifact: () => void;
   mutateSelectedLibraryItem: (action: LibraryMutationAction) => void;

@@ -11,11 +11,12 @@ use crate::storage::sanitized_join;
 use kokoro_en::{KokoroTts, Voice};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const RUNTIME_SCHEMA_VERSION: u32 = 2;
@@ -942,6 +943,142 @@ pub struct RuntimeJobRequest {
     pub parameters: BTreeMap<String, Value>,
 }
 
+/// Shared execution backend for the runtime job store (F-006 / F-019).
+///
+/// Holds the single process-wide Tokio runtime, a warm cache of loaded Kokoro
+/// models, and the per-job cancellation registry. The desktop keeps one instance
+/// in Tauri-managed state so every queued job reuses the same runtime + warm
+/// model rather than rebuilding a runtime and re-reading the ONNX model from disk
+/// on each request.
+pub struct RuntimeEngine {
+    runtime: tokio::runtime::Runtime,
+    kokoro: Mutex<Vec<KokoroCacheEntry>>,
+    cancellations: Mutex<HashMap<String, Arc<AtomicBool>>>,
+}
+
+struct KokoroCacheEntry {
+    key: String,
+    tts: Arc<KokoroTts>,
+}
+
+/// Upper bound on distinct Kokoro models held warm at once. Each entry pins an
+/// ONNX session + voice table in memory, so the cache is small and evicts the
+/// oldest entry once full.
+const KOKORO_CACHE_CAPACITY: usize = 4;
+
+impl RuntimeEngine {
+    pub fn new() -> io::Result<Self> {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .map_err(io::Error::other)?;
+        Ok(Self {
+            runtime,
+            kokoro: Mutex::new(Vec::new()),
+            cancellations: Mutex::new(HashMap::new()),
+        })
+    }
+
+    fn lock_kokoro(&self) -> std::sync::MutexGuard<'_, Vec<KokoroCacheEntry>> {
+        self.kokoro
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    fn lock_cancellations(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<AtomicBool>>> {
+        self.cancellations
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Get-or-create the cancellation token for a job id.
+    fn cancel_token(&self, job_id: &str) -> Arc<AtomicBool> {
+        self.lock_cancellations()
+            .entry(job_id.to_string())
+            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
+            .clone()
+    }
+
+    /// Signal an in-flight job to cancel. Returns true when a worker token
+    /// existed (i.e. the job had been queued/started in this process).
+    pub fn request_cancel(&self, job_id: &str) -> bool {
+        match self.lock_cancellations().get(job_id) {
+            Some(token) => {
+                token.store(true, Ordering::SeqCst);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Drop the cancellation token once a job reaches a terminal state.
+    pub fn forget(&self, job_id: &str) {
+        self.lock_cancellations().remove(job_id);
+    }
+
+    /// Bundle the engine with a job's cancellation token for the duration of a run.
+    pub fn context_for(&self, job_id: &str) -> ExecutionContext<'_> {
+        ExecutionContext {
+            engine: self,
+            cancel: self.cancel_token(job_id),
+        }
+    }
+
+    /// Load a Kokoro model, reusing a warm in-process instance keyed by the model
+    /// + voices directory (F-019). `KokoroTts` loads every voice in the directory
+    /// at construction, so the cache key is the cache root, not the per-call voice.
+    /// Returns `(tts, warm)` where `warm` reports a cache hit.
+    fn kokoro(&self, model_path: &Path, voices_path: &Path) -> io::Result<(Arc<KokoroTts>, bool)> {
+        let key = format!("{}|{}", model_path.display(), voices_path.display());
+        if let Some(entry) = self.lock_kokoro().iter().find(|entry| entry.key == key) {
+            return Ok((entry.tts.clone(), true));
+        }
+        let tts = self.runtime.block_on(async {
+            KokoroTts::new(model_path, voices_path)
+                .await
+                .map_err(|error| io::Error::other(error.to_string()))
+        })?;
+        let tts = Arc::new(tts);
+        let mut cache = self.lock_kokoro();
+        // Re-check: another thread may have loaded the same model concurrently.
+        if let Some(entry) = cache.iter().find(|entry| entry.key == key) {
+            return Ok((entry.tts.clone(), true));
+        }
+        if cache.len() >= KOKORO_CACHE_CAPACITY {
+            cache.remove(0);
+        }
+        cache.push(KokoroCacheEntry {
+            key,
+            tts: tts.clone(),
+        });
+        Ok((tts, false))
+    }
+}
+
+impl std::fmt::Debug for RuntimeEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeEngine")
+            .field("warm_kokoro_models", &self.lock_kokoro().len())
+            .field("tracked_cancellations", &self.lock_cancellations().len())
+            .finish()
+    }
+}
+
+/// A single job's execution handle: the shared engine plus that job's cancellation
+/// token. Passed to the adapters so they can run on the shared runtime / warm
+/// model cache and observe cooperative cancellation at checkpoints.
+pub struct ExecutionContext<'a> {
+    engine: &'a RuntimeEngine,
+    cancel: Arc<AtomicBool>,
+}
+
+impl ExecutionContext<'_> {
+    fn is_cancelled(&self) -> bool {
+        self.cancel.load(Ordering::SeqCst)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RuntimeJobStore {
     root: PathBuf,
@@ -1051,7 +1188,54 @@ impl RuntimeJobStore {
             return Ok(job);
         }
 
-        self.run_adapter(job, &request)
+        // F-006: persist the job as `Queued` and return immediately. Synthesis is
+        // driven off the calling thread by `run_job` (the desktop spawns a worker;
+        // tests call `enqueue_and_run`). This is what makes the queue/worker/cancel
+        // vocabulary honest (F-037): the caller is no longer blocked for the full
+        // generation, and a job can be cancelled while it is genuinely Queued.
+        self.write_job(&job)?;
+        Ok(job)
+    }
+
+    /// Execute a previously `enqueue`d job to a terminal state. Idempotent for
+    /// non-`Queued` jobs (returns them unchanged) and absent jobs (`Ok(None)`).
+    /// The worker observes cooperative cancellation through `ctx` and runs Kokoro
+    /// on the shared runtime + warm model cache.
+    pub fn run_job(
+        &self,
+        job_id: &str,
+        ctx: &ExecutionContext,
+    ) -> io::Result<Option<RuntimeJobSnapshot>> {
+        let Some(job) = self.read_job(job_id)? else {
+            return Ok(None);
+        };
+        if job.status != JobStatus::Queued {
+            return Ok(Some(job));
+        }
+        // F-004: recompute the recipe path from the validated id, never trust the
+        // persisted string.
+        let recipe_path = sanitized_join(&self.root, &["jobs", &job.id, "recipe.json"])?;
+        let request: RuntimeJobRequest = read_json(&recipe_path)?;
+        Ok(Some(self.run_adapter(job, &request, ctx)?))
+    }
+
+    /// Convenience for tests and synchronous callers: enqueue, then run to a
+    /// terminal state on the current thread. Rejected jobs short-circuit without
+    /// running an adapter.
+    pub fn enqueue_and_run(
+        &self,
+        engine: &RuntimeEngine,
+        overview: &RuntimeOverview,
+        request: RuntimeJobRequest,
+    ) -> io::Result<RuntimeJobSnapshot> {
+        let job = self.enqueue(overview, request)?;
+        if job.status != JobStatus::Queued {
+            return Ok(job);
+        }
+        let ctx = engine.context_for(&job.id);
+        let result = self.run_job(&job.id, &ctx)?.unwrap_or(job);
+        engine.forget(&result.id);
+        Ok(result)
     }
 
     pub fn cancel(&self, job_id: &str) -> io::Result<Option<RuntimeJobSnapshot>> {
@@ -1136,6 +1320,7 @@ impl RuntimeJobStore {
         &self,
         mut job: RuntimeJobSnapshot,
         request: &RuntimeJobRequest,
+        ctx: &ExecutionContext,
     ) -> io::Result<RuntimeJobSnapshot> {
         job.status = JobStatus::Running;
         job.progress = Some(JobProgress {
@@ -1148,32 +1333,29 @@ impl RuntimeJobStore {
             job.adapter, job.provider_id, job.model_id
         ));
         self.append_event(&job, "running", "provider adapter claimed job")?;
-        if request
-            .prompt
-            .to_ascii_lowercase()
-            .contains("hold-for-cancel")
-        {
-            job.progress = Some(JobProgress {
-                percent: 50.0,
-                message: Some(
-                    "Provider adapter is holding the job for cancellation QA.".to_string(),
-                ),
-            });
-            job.log_tail
-                .push("holding job for cancellation QA".to_string());
+        // Persist the Running transition so a concurrent `cancel` (and any UI
+        // poll) observes the job in flight before synthesis begins.
+        self.write_job(&job)?;
+
+        // F-006: real cooperative cancellation. If the worker boundary was asked
+        // to cancel before synthesis started, stop here with no orphaned output.
+        if ctx.is_cancelled() {
+            mark_cancelled(&mut job);
+            job.updated_at = timestamp_string();
+            self.append_event(&job, "cancelled", "worker observed cancellation")?;
             self.write_job(&job)?;
             return Ok(job);
         }
 
         match job.adapter {
             ProviderAdapterKind::NativeRust if job.model_id == "kokoro-82m" => {
-                self.write_kokoro_tts_audio(&mut job, request)?
+                self.write_kokoro_tts_audio(&mut job, request, ctx)?
             }
             ProviderAdapterKind::NativeRust if job.model_id == "native-procedural-sfx" => {
-                self.write_native_sfx_audio(&mut job, request)?
+                self.write_native_sfx_audio(&mut job, request, ctx)?
             }
             ProviderAdapterKind::NativeRust if job.model_id == "native-procedural-music" => {
-                self.write_native_music_audio(&mut job, request)?
+                self.write_native_music_audio(&mut job, request, ctx)?
             }
             ProviderAdapterKind::NativeRust => self.write_smoke_audio(&mut job, request)?,
             ProviderAdapterKind::LocalExecutable
@@ -1253,6 +1435,7 @@ impl RuntimeJobStore {
         &self,
         job: &mut RuntimeJobSnapshot,
         request: &RuntimeJobRequest,
+        ctx: &ExecutionContext,
     ) -> io::Result<()> {
         let cache_root = request
             .parameters
@@ -1318,14 +1501,35 @@ impl RuntimeJobStore {
             .and_then(Value::as_f64)
             .map(|speed| speed as f32)
             .unwrap_or(1.0);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(io::Error::other)?;
-        let synth = runtime.block_on(async {
-            let tts = KokoroTts::new(&model_path, &voices_path)
-                .await
-                .map_err(|error| io::Error::other(error.to_string()))?;
+        // F-019: reuse a warm Kokoro model + the shared Tokio runtime instead of
+        // rebuilding a runtime and re-reading the ONNX model from disk per request.
+        let (tts, warm) = match ctx.engine.kokoro(&model_path, &voices_path) {
+            Ok(loaded) => loaded,
+            Err(error) => {
+                job.status = JobStatus::Failed;
+                job.progress = Some(JobProgress {
+                    percent: 100.0,
+                    message: Some("Kokoro model failed to load.".to_string()),
+                });
+                job.cancellation = CancellationState::NotCancellable;
+                job.actionable_error = Some(ActionableRuntimeError {
+                    code: "tts.kokoro_load_failed".to_string(),
+                    summary: "Kokoro model failed to load".to_string(),
+                    recovery: error.to_string(),
+                });
+                self.write_error_report(job)?;
+                return Ok(());
+            }
+        };
+        job.log_tail.push(
+            if warm {
+                "served Kokoro from a warm in-process model cache"
+            } else {
+                "cold-loaded Kokoro model into the shared warm cache"
+            }
+            .to_string(),
+        );
+        let synth = ctx.engine.runtime.block_on(async {
             tts.synth(text, Voice::new(voice).with_speed(speed))
                 .await
                 .map_err(|error| io::Error::other(error.to_string()))
@@ -1348,6 +1552,14 @@ impl RuntimeJobStore {
                 return Ok(());
             }
         };
+
+        // ONNX inference itself is not preemptible, but if cancellation arrived
+        // while it ran we discard the result rather than commit a "succeeded"
+        // artifact the user already cancelled.
+        if ctx.is_cancelled() {
+            mark_cancelled(job);
+            return Ok(());
+        }
 
         let record_root = PathBuf::from(&job.record_root);
         let audio_path = record_root.join("artifacts").join("kokoro-tts.wav");
@@ -1373,6 +1585,7 @@ impl RuntimeJobStore {
                 "durationMs": duration_ms,
                 "sampleCount": samples.len(),
                 "synthesisMs": took.as_millis(),
+                "warmStart": warm,
                 "artifact": audio_path,
                 "note": "Real Kokoro speech synthesis from verified local cache; no Python runtime was used.",
             }),
@@ -1409,6 +1622,7 @@ impl RuntimeJobStore {
         &self,
         job: &mut RuntimeJobSnapshot,
         request: &RuntimeJobRequest,
+        ctx: &ExecutionContext,
     ) -> io::Result<()> {
         let prompt = request.prompt.trim();
         if prompt.is_empty() {
@@ -1483,6 +1697,10 @@ impl RuntimeJobStore {
             realism,
             loopable,
         );
+        if ctx.is_cancelled() {
+            mark_cancelled(job);
+            return Ok(());
+        }
         let stats = audio_stats(&samples);
         let record_root = PathBuf::from(&job.record_root);
         let audio_path = record_root.join("artifacts").join("native-sfx.wav");
@@ -1548,6 +1766,7 @@ impl RuntimeJobStore {
         &self,
         job: &mut RuntimeJobSnapshot,
         request: &RuntimeJobRequest,
+        ctx: &ExecutionContext,
     ) -> io::Result<()> {
         let prompt = request.prompt.trim();
         if prompt.is_empty() {
@@ -1650,6 +1869,10 @@ impl RuntimeJobStore {
             articulation,
             velocity,
         );
+        if ctx.is_cancelled() {
+            mark_cancelled(job);
+            return Ok(());
+        }
         let stats = audio_stats(&samples);
         let record_root = PathBuf::from(&job.record_root);
         let audio_path = record_root.join("artifacts").join(match request.workflow {
@@ -2040,6 +2263,22 @@ fn kokoro_cache_root() -> PathBuf {
         .join("kokoro-82m")
 }
 
+/// Move an in-flight job into the cancelled terminal state without committing any
+/// output. The caller is responsible for persisting the snapshot and appending the
+/// `cancelled` event afterwards.
+fn mark_cancelled(job: &mut RuntimeJobSnapshot) {
+    job.status = JobStatus::Cancelled;
+    job.cancellation = CancellationState::Completed;
+    job.progress = Some(JobProgress {
+        percent: job
+            .progress
+            .as_ref()
+            .map_or(0.0, |progress| progress.percent),
+        message: Some("Worker cancelled the job before output was committed.".to_string()),
+    });
+    job.log_tail.push("cancelled by user request".to_string());
+}
+
 fn status_event(status: &JobStatus) -> &'static str {
     match status {
         JobStatus::Queued => "queued",
@@ -2390,14 +2629,15 @@ mod tests {
     use super::{
         CacheStatus, CancellationState, DeviceInventory, LicenseAcceptanceState, ModelCacheState,
         ProviderAdapterKind, RuntimeArtifactKind, RuntimeAvailability, RuntimeCompatibility,
-        RuntimeHealth, RuntimeJobRequest, RuntimeJobStore, RuntimeOverview, RuntimePackagingPolicy,
-        ValidationStatus, WarmupStatus,
+        RuntimeEngine, RuntimeHealth, RuntimeJobRequest, RuntimeJobStore, RuntimeOverview,
+        RuntimePackagingPolicy, ValidationStatus, WarmupStatus,
     };
     use crate::domain::{JobKind, ModelRuntime};
     use crate::manifests::{CapabilityWorkflow, ModelInstallStatus, ProviderCatalog};
     use std::collections::BTreeMap;
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     #[test]
     fn reference_runtime_blocks_manifest_only_models_and_jobs() {
@@ -2508,7 +2748,8 @@ mod tests {
         let overview = installed_overview(&store);
 
         let job = store
-            .enqueue(
+            .enqueue_and_run(
+                &engine(),
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "hexgrad".to_string(),
@@ -2607,7 +2848,8 @@ mod tests {
         parameters.insert("voice".to_string(), serde_json::json!("af_heart"));
 
         let job = store
-            .enqueue(
+            .enqueue_and_run(
+                &engine(),
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "hexgrad".to_string(),
@@ -2651,7 +2893,8 @@ mod tests {
         parameters.insert("voiceConsentRecorded".to_string(), serde_json::json!(true));
 
         let job = store
-            .enqueue(
+            .enqueue_and_run(
+                &engine(),
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "hexgrad".to_string(),
@@ -2712,7 +2955,8 @@ mod tests {
         );
 
         let job = store
-            .enqueue(
+            .enqueue_and_run(
+                &engine(),
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "soundworks-native".to_string(),
@@ -2796,7 +3040,8 @@ mod tests {
         );
 
         let job = store
-            .enqueue(
+            .enqueue_and_run(
+                &engine(),
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "soundworks-native".to_string(),
@@ -2877,7 +3122,8 @@ mod tests {
         parameters.insert("velocityEnergy".to_string(), serde_json::json!(84));
 
         let job = store
-            .enqueue(
+            .enqueue_and_run(
+                &engine(),
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "soundworks-native".to_string(),
@@ -3036,7 +3282,8 @@ mod tests {
             serde_json::json!("voice-profile-narrator"),
         );
         let job = store
-            .enqueue(
+            .enqueue_and_run(
+                &engine(),
                 &overview,
                 RuntimeJobRequest {
                     provider_id: "hexgrad".to_string(),
@@ -3083,11 +3330,14 @@ mod tests {
     }
 
     #[test]
-    fn runtime_job_store_cancels_running_job_and_retries_failed_job() {
-        let store = RuntimeJobStore::new(temp_runtime_root("cancel-retry"));
+    fn enqueue_returns_queued_without_running_synthesis() {
+        // F-006: enqueue must persist a Queued job and return immediately, leaving
+        // synthesis to the worker (run_job). The job is genuinely cancellable while
+        // it waits, and no artifact has been produced yet.
+        let store = RuntimeJobStore::new(temp_runtime_root("queued-only"));
         let overview = installed_overview(&store);
 
-        let running = store
+        let queued = store
             .enqueue(
                 &overview,
                 RuntimeJobRequest {
@@ -3095,16 +3345,134 @@ mod tests {
                     model_id: "native-smoke".to_string(),
                     kind: JobKind::GenerateAudio,
                     workflow: CapabilityWorkflow::Tts,
-                    prompt: "hold-for-cancel".to_string(),
+                    prompt: "Queue me".to_string(),
                     source_surface: "TTS Studio".to_string(),
                     parameters: BTreeMap::new(),
                 },
             )
-            .expect("running job persists");
-        assert_eq!(running.status, crate::domain::JobStatus::Running);
+            .expect("queued job persists");
+
+        assert_eq!(queued.status, crate::domain::JobStatus::Queued);
+        assert_eq!(queued.cancellation, CancellationState::Cancellable);
+        assert!(queued.artifacts.is_empty());
+        // The persisted record is readable as Queued before any worker claims it.
+        assert!(store
+            .read_jobs()
+            .expect("read jobs")
+            .iter()
+            .any(|stored| stored.id == queued.id
+                && stored.status == crate::domain::JobStatus::Queued));
+    }
+
+    #[test]
+    fn worker_observes_cancellation_and_writes_no_output() {
+        // F-006: a real cooperative cancellation. Requesting cancel on the worker
+        // boundary before the worker runs makes run_job stop at its first checkpoint
+        // with a Cancelled terminal and no committed artifact.
+        let store = RuntimeJobStore::new(temp_runtime_root("worker-cancel"));
+        let overview = installed_overview(&store);
+        let engine = engine();
+
+        let queued = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "native-smoke".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Cancel me before synthesis".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters: BTreeMap::new(),
+                },
+            )
+            .expect("queued job persists");
+        assert_eq!(queued.status, crate::domain::JobStatus::Queued);
+
+        let ctx = engine.context_for(&queued.id);
+        assert!(engine.request_cancel(&queued.id));
+        let cancelled = store
+            .run_job(&queued.id, &ctx)
+            .expect("worker runs")
+            .expect("job exists");
+        assert_eq!(cancelled.status, crate::domain::JobStatus::Cancelled);
+        assert_eq!(cancelled.cancellation, CancellationState::Completed);
+        assert!(cancelled.artifacts.is_empty());
+    }
+
+    #[test]
+    fn spawned_worker_drives_queued_job_to_success() {
+        // F-006: the shared engine + store can run a queued job on a background
+        // thread (proves the worker payload is Send and reaches a terminal state
+        // off the enqueuing thread). The desktop uses exactly this handoff.
+        let store = RuntimeJobStore::new(temp_runtime_root("worker-async"));
+        let overview = installed_overview(&store);
+        let engine = Arc::new(engine());
+
+        let queued = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "native-smoke".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Async worker run".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters: BTreeMap::new(),
+                },
+            )
+            .expect("queued job persists");
+        assert_eq!(queued.status, crate::domain::JobStatus::Queued);
+
+        let job_id = queued.id.clone();
+        let root = store.root().to_path_buf();
+        let worker_engine = engine.clone();
+        std::thread::spawn(move || {
+            let store = RuntimeJobStore::new(root);
+            let ctx = worker_engine.context_for(&job_id);
+            let _ = store.run_job(&job_id, &ctx);
+            worker_engine.forget(&job_id);
+        })
+        .join()
+        .expect("worker thread joins");
+
+        let done = store
+            .read_jobs()
+            .expect("read jobs")
+            .into_iter()
+            .find(|stored| stored.id == queued.id)
+            .expect("job persisted");
+        assert_eq!(done.status, crate::domain::JobStatus::Succeeded);
+        assert!(done
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.kind == RuntimeArtifactKind::AudioPreview));
+    }
+
+    #[test]
+    fn runtime_job_store_cancels_queued_job_and_retries_failed_job() {
+        let store = RuntimeJobStore::new(temp_runtime_root("cancel-retry"));
+        let overview = installed_overview(&store);
+
+        let queued = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "native-smoke".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Queue then cancel".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters: BTreeMap::new(),
+                },
+            )
+            .expect("queued job persists");
+        assert_eq!(queued.status, crate::domain::JobStatus::Queued);
 
         let cancelled = store
-            .cancel(&running.id)
+            .cancel(&queued.id)
             .expect("cancel command succeeds")
             .expect("job exists");
         assert_eq!(cancelled.status, crate::domain::JobStatus::Cancelled);
@@ -3130,6 +3498,10 @@ mod tests {
             .expect("retry job exists");
         assert_ne!(retried.id, failed.id);
         assert_eq!(retried.retry_count, 1);
+    }
+
+    fn engine() -> RuntimeEngine {
+        RuntimeEngine::new().expect("runtime engine builds")
     }
 
     fn installed_overview(store: &RuntimeJobStore) -> RuntimeOverview {

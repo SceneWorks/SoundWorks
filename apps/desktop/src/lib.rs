@@ -1,29 +1,32 @@
 use soundworks_core::{
     AppOverview, AssetLibraryOverview, CompositionEditorOverview, CreateProjectRequest,
     ExportLibraryItemRequest, ExportLibraryItemResult, ExportWorkflowOverview,
-    ImportRuntimeArtifactRequest, LibraryMutationRequest, LibraryPlayback, ModelEvaluationCatalog,
-    ModelManagerOperation, ModelManagerOverview, MvpValidationOverview, ProjectLibraryActionResult,
-    ProjectLibraryStore, ProviderCatalog, ReviewEditResult, ReviewWorkspaceOverview,
-    RightsSafetyOverview, RuntimeJobArtifact, RuntimeJobRequest, RuntimeJobSnapshot,
-    RuntimeJobStore, RuntimeOverview, SamplesStudioOverview, SaveReviewEditRequest,
-    SfxStudioOverview, SongStudioOverview, TtsStudioOverview, VideoToAudioOverview,
-    VoiceLabOverview, WorkspaceOverview,
+    ImportRuntimeArtifactRequest, JobStatus, LibraryMutationRequest, LibraryPlayback,
+    ModelEvaluationCatalog, ModelManagerOperation, ModelManagerOverview, MvpValidationOverview,
+    ProjectLibraryActionResult, ProjectLibraryStore, ProviderCatalog, ReviewEditResult,
+    ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeEngine, RuntimeJobArtifact,
+    RuntimeJobRequest, RuntimeJobSnapshot, RuntimeJobStore, RuntimeOverview, SamplesStudioOverview,
+    SaveReviewEditRequest, SfxStudioOverview, SongStudioOverview, TtsStudioOverview,
+    VideoToAudioOverview, VoiceLabOverview, WorkspaceOverview,
 };
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Shared, Tauri-managed application state. The write lock serializes every
 /// store-mutating command (F-005), preventing the lost-update / TOCTOU race on the
 /// shared `workspace.json` that concurrent Tauri commands could otherwise cause.
-/// This managed struct is also the intended home for Phase 4's cancellation-token
-/// registry (kept here rather than a global static so the registry has a natural home).
+/// The `engine` is the single process-wide runtime backend (F-006/F-019): one
+/// Tokio runtime, a warm Kokoro cache, and the per-job cancellation registry,
+/// reused by every queued job's background worker.
 pub struct AppState {
     write_lock: Mutex<()>,
+    engine: Arc<RuntimeEngine>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
             write_lock: Mutex::new(()),
+            engine: Arc::new(RuntimeEngine::new().expect("runtime engine initializes")),
         }
     }
 }
@@ -144,7 +147,7 @@ fn enqueue_runtime_job(
     request: RuntimeJobRequest,
 ) -> Result<RuntimeJobSnapshot, String> {
     let _guard = lock_writes(&state);
-    enqueue_job(request).map_err(|error| error.to_string())
+    enqueue_job(state.engine.clone(), request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -153,7 +156,7 @@ fn cancel_runtime_job(
     job_id: String,
 ) -> Result<Option<RuntimeJobSnapshot>, String> {
     let _guard = lock_writes(&state);
-    cancel_job(job_id).map_err(|error| error.to_string())
+    cancel_job(&state.engine, job_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -162,7 +165,7 @@ fn retry_runtime_job(
     job_id: String,
 ) -> Result<Option<RuntimeJobSnapshot>, String> {
     let _guard = lock_writes(&state);
-    retry_job(job_id).map_err(|error| error.to_string())
+    retry_job(state.engine.clone(), job_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -314,30 +317,64 @@ pub fn runtime_overview() -> RuntimeOverview {
     )
 }
 
-pub fn enqueue_job(request: RuntimeJobRequest) -> std::io::Result<RuntimeJobSnapshot> {
-    let store = RuntimeJobStore::default();
-    let overview = RuntimeOverview::from_model_manager(
+fn build_runtime_overview(store: &RuntimeJobStore) -> RuntimeOverview {
+    RuntimeOverview::from_model_manager(
         &ModelManagerOverview::reference(),
         &soundworks_core::DeviceInventory::reference_mac(),
         soundworks_core::RuntimePackagingPolicy::shipped_desktop(),
-        &store,
-    );
-    store.enqueue(&overview, request)
+        store,
+    )
 }
 
-pub fn cancel_job(job_id: String) -> std::io::Result<Option<RuntimeJobSnapshot>> {
+/// Spawn a background worker that runs a queued job to completion on the shared
+/// engine and then releases its cancellation token (F-006). Job records live in
+/// per-job directories, so the worker writes outside the command write lock
+/// without contending on the shared `workspace.json`.
+fn spawn_runtime_worker(engine: Arc<RuntimeEngine>, job_id: String) {
+    std::thread::spawn(move || {
+        let store = RuntimeJobStore::default();
+        let ctx = engine.context_for(&job_id);
+        let _ = store.run_job(&job_id, &ctx);
+        engine.forget(&job_id);
+    });
+}
+
+pub fn enqueue_job(
+    engine: Arc<RuntimeEngine>,
+    request: RuntimeJobRequest,
+) -> std::io::Result<RuntimeJobSnapshot> {
+    let store = RuntimeJobStore::default();
+    let overview = build_runtime_overview(&store);
+    let queued = store.enqueue(&overview, request)?;
+    if queued.status == JobStatus::Queued {
+        spawn_runtime_worker(engine, queued.id.clone());
+    }
+    Ok(queued)
+}
+
+pub fn cancel_job(
+    engine: &RuntimeEngine,
+    job_id: String,
+) -> std::io::Result<Option<RuntimeJobSnapshot>> {
+    // Signal any in-flight worker to stop, then persist the cancellation for a
+    // job still sitting in the queue.
+    engine.request_cancel(&job_id);
     RuntimeJobStore::default().cancel(&job_id)
 }
 
-pub fn retry_job(job_id: String) -> std::io::Result<Option<RuntimeJobSnapshot>> {
+pub fn retry_job(
+    engine: Arc<RuntimeEngine>,
+    job_id: String,
+) -> std::io::Result<Option<RuntimeJobSnapshot>> {
     let store = RuntimeJobStore::default();
-    let overview = RuntimeOverview::from_model_manager(
-        &ModelManagerOverview::reference(),
-        &soundworks_core::DeviceInventory::reference_mac(),
-        soundworks_core::RuntimePackagingPolicy::shipped_desktop(),
-        &store,
-    );
-    store.retry(&overview, &job_id)
+    let overview = build_runtime_overview(&store);
+    let retried = store.retry(&overview, &job_id)?;
+    if let Some(job) = &retried {
+        if job.status == JobStatus::Queued {
+            spawn_runtime_worker(engine, job.id.clone());
+        }
+    }
+    Ok(retried)
 }
 
 pub fn runtime_job_artifacts(job_id: String) -> std::io::Result<Vec<RuntimeJobArtifact>> {

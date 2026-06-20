@@ -59,6 +59,7 @@ import {
   loadMvpValidationOverview,
   loadRightsSafetyOverview,
   loadReviewWorkspaceOverview,
+  loadRuntimeJob,
   loadRuntimeOverview,
   loadSamplesStudioOverview,
   loadSongStudioOverview,
@@ -305,6 +306,14 @@ function readStoredAccent(): string {
   }
 }
 
+// UX-F1: terminal job statuses (lowercase serde rendering of the Rust JobStatus
+// enum). A job in any other state (queued/running) is still in flight and is
+// polled to completion.
+const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
+const JOB_POLL_INTERVAL_MS = 700;
+// Safety bound (~7 min) so a hung worker never leaves the UI polling forever.
+const MAX_JOB_POLLS = 600;
+
 export function App() {
   const [activeView, setActiveView] = useState<ActiveView>("workspace");
   const [overview, setOverview] = useState<AppOverview>(fallbackOverview);
@@ -375,6 +384,9 @@ export function App() {
   const webPreview = !isTauri();
   const mountedRef = useRef(true);
   const loadedViewsRef = useRef<Set<ActiveView>>(new Set());
+  // UX-F1: handle for the in-flight job poller so it can be cleared on a new
+  // job, on terminal state, or on unmount.
+  const jobPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Apply an overview load to component state, surfacing real (desktop) command
   // failures instead of silently keeping stale fixtures (F-008).
@@ -402,6 +414,10 @@ export function App() {
 
     return () => {
       mountedRef.current = false;
+      if (jobPollRef.current !== null) {
+        clearInterval(jobPollRef.current);
+        jobPollRef.current = null;
+      }
     };
   }, []);
 
@@ -530,10 +546,14 @@ export function App() {
     });
   }
 
-  function refreshRuntime() {
+  // UX-F1: refresh the runtime model + job LIST without clobbering
+  // runtimeOperation — the active job is owned by the polling loop and the
+  // cancel/retry handlers, which set it to the relevant snapshot explicitly.
+  function reloadRuntime() {
     loadRuntimeOverview().then((nextRuntime) => {
-      setRuntime(nextRuntime);
-      setRuntimeOperation(nextRuntime.jobs[0] ?? null);
+      if (mountedRef.current) {
+        setRuntime(nextRuntime);
+      }
     });
   }
 
@@ -699,6 +719,134 @@ export function App() {
       });
   }
 
+  function stopJobPolling() {
+    if (jobPollRef.current !== null) {
+      clearInterval(jobPollRef.current);
+      jobPollRef.current = null;
+    }
+  }
+
+  // Import a terminally-succeeded generation job's audio artifact into the active
+  // project library, routed by workflow. Shared by every studio's generate flow
+  // and fired once the polling loop observes a `succeeded` job (UX-F1) — on
+  // desktop the enqueue snapshot is `Queued`, so this no longer runs eagerly.
+  function importSucceededJob(job: RuntimeJobSnapshot) {
+    if (job.status !== "succeeded") {
+      return;
+    }
+    const projectId = workspace.activeProject.project.id;
+    const { workflow } = job;
+    if (workflow === "tts") {
+      importRuntimeArtifactToLibrary({
+        jobId: job.id,
+        projectId,
+        name: `${workflowLabel(workflow)} generated voice clip`,
+        tags: ["tts", "voice-clip", "generated-speech"],
+      })
+        .then(applyProjectLibraryResult)
+        .catch((error) => {
+          setLibraryActionStatus(
+            `TTS generated but save unavailable: ${String(error)}`,
+          );
+        });
+    } else if (workflow === "sfx" || workflow === "ambience") {
+      importRuntimeArtifactToLibrary({
+        jobId: job.id,
+        projectId,
+        name: `${workflowLabel(workflow)} generated ${workflow === "ambience" ? "bed" : "effect"}`,
+        tags: [workflow, "generated-audio", ...(sfxStudio.prompt.tags ?? [])],
+      })
+        .then(applyProjectLibraryResult)
+        .catch((error) => {
+          setLibraryActionStatus(
+            `SFX generated but save unavailable: ${String(error)}`,
+          );
+        });
+    } else if (workflow === "instrument-sample" || workflow === "loop") {
+      importRuntimeArtifactToLibrary({
+        jobId: job.id,
+        projectId,
+        name: `${workflowLabel(workflow)} generated ${workflow === "loop" ? "loop" : "sample"}`,
+        tags: [
+          workflow,
+          "generated-audio",
+          samplesStudio.controls.musicalKey,
+          `${samplesStudio.controls.bpm}-bpm`,
+          ...(samplesStudio.prompt.genreTags ?? []),
+        ],
+      })
+        .then(applyProjectLibraryResult)
+        .catch((error) => {
+          setLibraryActionStatus(
+            `Sample/loop generated but save unavailable: ${String(error)}`,
+          );
+        });
+    } else if (
+      workflow === "voice-conversion" ||
+      workflow === "video-to-audio" ||
+      workflow === "song"
+    ) {
+      importRuntimeArtifactToLibrary({
+        jobId: job.id,
+        projectId,
+        name: `${workflowLabel(workflow)} generated output`,
+        tags: [workflow, "generated-audio"],
+      })
+        .then(applyProjectLibraryResult)
+        .catch((error) => {
+          setLibraryActionStatus(
+            `${workflowLabel(workflow)} generated but save unavailable: ${String(error)}`,
+          );
+        });
+    }
+  }
+
+  // UX-F1: drive a job to its terminal state in the UI. enqueue/retry return a
+  // `Queued` snapshot on desktop (the worker runs in a background thread), so
+  // poll the single job until it finishes — surfacing live progress through
+  // runtimeOperation and firing the import on success. Web preview returns a
+  // terminal fixture, so no interval is started.
+  function trackRuntimeJob(job: RuntimeJobSnapshot) {
+    stopJobPolling();
+    setRuntimeOperation(job);
+    if (TERMINAL_JOB_STATUSES.has(job.status)) {
+      importSucceededJob(job);
+      reloadRuntime();
+      return;
+    }
+    if (!isTauri()) {
+      return;
+    }
+    let polls = 0;
+    jobPollRef.current = setInterval(() => {
+      polls += 1;
+      loadRuntimeJob(job.id)
+        .then((next) => {
+          if (!mountedRef.current) {
+            return;
+          }
+          if (!next) {
+            stopJobPolling();
+            return;
+          }
+          setRuntimeOperation(next);
+          if (TERMINAL_JOB_STATUSES.has(next.status)) {
+            stopJobPolling();
+            importSucceededJob(next);
+            reloadRuntime();
+          } else if (polls >= MAX_JOB_POLLS) {
+            stopJobPolling();
+          }
+        })
+        .catch((error) => {
+          stopJobPolling();
+          if (mountedRef.current) {
+            setDataError(String(error));
+          }
+        });
+    }, JOB_POLL_INTERVAL_MS);
+  }
+
   function runRuntimeJob(
     workflow: RuntimeJobRequest["workflow"],
     prompt: string,
@@ -718,100 +866,32 @@ export function App() {
         ...parameters,
       },
     };
-    enqueueRuntimeJob(request).then((job) => {
-      setRuntimeOperation(job);
-      if (workflow === "tts" && job.status === "succeeded") {
-        importRuntimeArtifactToLibrary({
-          jobId: job.id,
-          projectId: workspace.activeProject.project.id,
-          name: `${workflowLabel(job.workflow)} generated voice clip`,
-          tags: ["tts", "voice-clip", "generated-speech"],
-        })
-          .then(applyProjectLibraryResult)
-          .catch((error) => {
-            setLibraryActionStatus(
-              `TTS generated but save unavailable: ${String(error)}`,
-            );
-          });
-      }
-      if (
-        (workflow === "sfx" || workflow === "ambience") &&
-        job.status === "succeeded"
-      ) {
-        importRuntimeArtifactToLibrary({
-          jobId: job.id,
-          projectId: workspace.activeProject.project.id,
-          name: `${workflowLabel(job.workflow)} generated ${workflow === "ambience" ? "bed" : "effect"}`,
-          tags: [workflow, "generated-audio", ...(sfxStudio.prompt.tags ?? [])],
-        })
-          .then(applyProjectLibraryResult)
-          .catch((error) => {
-            setLibraryActionStatus(
-              `SFX generated but save unavailable: ${String(error)}`,
-            );
-          });
-      }
-      if (
-        (workflow === "instrument-sample" || workflow === "loop") &&
-        job.status === "succeeded"
-      ) {
-        importRuntimeArtifactToLibrary({
-          jobId: job.id,
-          projectId: workspace.activeProject.project.id,
-          name: `${workflowLabel(job.workflow)} generated ${workflow === "loop" ? "loop" : "sample"}`,
-          tags: [
-            workflow,
-            "generated-audio",
-            samplesStudio.controls.musicalKey,
-            `${samplesStudio.controls.bpm}-bpm`,
-            ...(samplesStudio.prompt.genreTags ?? []),
-          ],
-        })
-          .then(applyProjectLibraryResult)
-          .catch((error) => {
-            setLibraryActionStatus(
-              `Sample/loop generated but save unavailable: ${String(error)}`,
-            );
-          });
-      }
-      if (
-        (workflow === "voice-conversion" ||
-          workflow === "video-to-audio" ||
-          workflow === "song") &&
-        job.status === "succeeded"
-      ) {
-        importRuntimeArtifactToLibrary({
-          jobId: job.id,
-          projectId: workspace.activeProject.project.id,
-          name: `${workflowLabel(job.workflow)} generated output`,
-          tags: [workflow, "generated-audio"],
-        })
-          .then(applyProjectLibraryResult)
-          .catch((error) => {
-            setLibraryActionStatus(
-              `${workflowLabel(workflow)} generated but save unavailable: ${String(error)}`,
-            );
-          });
-      }
-      refreshRuntime();
-    });
+    enqueueRuntimeJob(request)
+      .then((job) => {
+        trackRuntimeJob(job);
+      })
+      .catch((error) => {
+        setLibraryActionStatus(`Generation unavailable: ${String(error)}`);
+      });
   }
 
   function cancelRuntimeOperation(jobId: string) {
+    stopJobPolling();
     cancelRuntimeJob(jobId).then((job) => {
       if (job) {
         setRuntimeOperation(job);
       }
-      refreshRuntime();
+      reloadRuntime();
     });
   }
 
   function retryRuntimeOperation(jobId: string) {
     retryRuntimeJob(jobId).then((job) => {
       if (job) {
-        setRuntimeOperation(job);
+        trackRuntimeJob(job);
+      } else {
+        reloadRuntime();
       }
-      refreshRuntime();
     });
   }
 

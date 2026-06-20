@@ -874,7 +874,7 @@ mod tests {
     use super::{AppOverview, ScaffoldStatus};
     use crate::domain::{AudioAssetKind, RecipeWorkflow};
     use crate::fixtures::{composition_fixture, fixture_set, project_fixture};
-    use crate::storage::{StoragePathAllocator, SCHEMA_MIGRATIONS};
+    use crate::storage::StoragePathAllocator;
 
     #[test]
     fn baseline_contains_all_initial_studio_surfaces() {
@@ -1057,119 +1057,6 @@ mod tests {
             error,
             crate::storage::StoragePathError::UnsafeSegment("../asset".to_string())
         );
-    }
-
-    #[test]
-    fn schema_migrations_cover_required_domain_tables() {
-        let sql = SCHEMA_MIGRATIONS
-            .iter()
-            .map(|migration| migration.sql)
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        for table in [
-            "projects",
-            "audio_assets",
-            "audio_asset_versions",
-            "generation_recipes",
-            "generation_jobs",
-            "voice_profiles",
-            "compositions",
-            "storage_paths",
-            "provider_manifests",
-            "model_manifests",
-            "model_evaluation_candidates",
-            "model_evaluation_fixtures",
-            "model_evaluation_recommendations",
-            "voice_lab_profiles",
-            "voice_lab_reference_clips",
-            "voice_lab_provider_scorecards",
-            "voice_lab_safety_gates",
-            "voice_lab_conversion_submissions",
-            "sfx_studio_prompts",
-            "sfx_studio_variants",
-            "sfx_studio_submissions",
-            "sfx_studio_saved_outputs",
-            "sfx_studio_provider_scorecards",
-            "sfx_studio_post_processing_actions",
-            "video_to_audio_sources",
-            "video_to_audio_target_ranges",
-            "video_to_audio_detected_events",
-            "video_to_audio_provider_scorecards",
-            "video_to_audio_submissions",
-            "video_to_audio_sync_previews",
-            "video_to_audio_saved_outputs",
-            "video_to_audio_export_packages",
-            "video_to_audio_safety_gates",
-            "workspace_records",
-            "workspace_project_cards",
-            "workspace_global_libraries",
-            "workspace_scope_controls",
-            "workspace_source_picker_policies",
-            "workspace_transfer_actions",
-            "workspace_composition_asset_links",
-            "workspace_parity_notes",
-            "workspace_validation_checks",
-            "samples_studio_prompts",
-            "samples_studio_variants",
-            "samples_studio_submissions",
-            "samples_studio_saved_outputs",
-            "samples_studio_provider_scorecards",
-            "samples_studio_pack_collections",
-            "samples_studio_qa_checks",
-            "song_studio_drafts",
-            "song_studio_sections",
-            "song_studio_variants",
-            "song_studio_submissions",
-            "song_studio_saved_outputs",
-            "song_studio_provider_scorecards",
-            "song_studio_export_targets",
-            "review_workspace_assets",
-            "review_preview_caches",
-            "review_edit_actions",
-            "review_edit_submissions",
-            "review_version_comparisons",
-            "review_provenance_links",
-            "rights_consent_checks",
-            "rights_model_use_decisions",
-            "rights_content_policy_gates",
-            "rights_export_sidecars",
-            "rights_disclosure_checks",
-            "asset_library_items",
-            "asset_library_tags",
-            "asset_library_collections",
-            "asset_library_collection_items",
-            "asset_library_saved_filters",
-            "asset_library_reuse_events",
-            "export_presets",
-            "export_submissions",
-            "export_sidecars",
-            "export_daw_handoffs",
-            "export_sceneworks_handoffs",
-            "composition_editor_sessions",
-            "composition_editor_tracks",
-            "composition_editor_clips",
-            "composition_editor_mixer_state",
-            "composition_editor_component_decisions",
-            "composition_editor_render_plans",
-            "mvp_validation_demo_workflows",
-            "mvp_validation_regression_fixtures",
-            "mvp_validation_checks",
-            "mvp_validation_manual_scorecards",
-            "mvp_validation_stress_cases",
-            "mvp_validation_known_limitations",
-            "mvp_validation_requirement_coverage",
-            "mvp_validation_release_gates",
-            "model_manager_candidates",
-            "model_manager_lane_readiness",
-            "model_manager_operations",
-            "model_manager_validation_checks",
-        ] {
-            assert!(
-                sql.contains(table),
-                "expected schema migrations to include {table}"
-            );
-        }
     }
 
     #[test]

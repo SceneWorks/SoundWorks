@@ -1,0 +1,58 @@
+/* SoundWorks consumes the shared SceneWorks shell, then adapts it for the
+   denser audio workspace and narrow desktop/mobile preview widths. */
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sidebar {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--gap-3);
+    padding: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .brand {
+    flex: 0 0 168px;
+  }
+
+  .nav-sections {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--gap-3);
+  }
+
+  .sidebar-section {
+    min-width: max-content;
+  }
+
+  .sidebar-section-title {
+    white-space: nowrap;
+  }
+
+  .workspace {
+    overflow-x: hidden;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .topbar-title {
+    flex: 1 1 100%;
+  }
+
+  .topbar-spacer {
+    display: none;
+  }
+
+  .topbar-status {
+    width: 100%;
+  }
+}

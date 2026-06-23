@@ -14,6 +14,7 @@
     "gen:fixtures": "cargo run -p soundworks-core --bin gen_web_fixtures -- src/appData.generated.json"
   },
   "dependencies": {
+    "@sceneworks/ui": "0.2.0",
     "@tauri-apps/api": "^2.0.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",

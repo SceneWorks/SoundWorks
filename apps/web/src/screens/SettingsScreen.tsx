@@ -12,12 +12,8 @@ import {
   ClipboardCheck,
   Cpu,
 } from "lucide-react";
-import {
-  MainSurface,
-  SectionHeading,
-  SegmentedControl,
-} from "../components";
-import { ACCENTS } from "../accents";
+import { ACCENTS } from "@sceneworks/ui";
+import { MainSurface, SectionHeading, SegmentedControl } from "../components";
 import type { ThemeMode } from "../accents";
 import { countFor, workflowLabel } from "../viewModel";
 import { useAppContext } from "./context";
@@ -103,110 +99,110 @@ export function SettingsScreen() {
           <span>{overview.commands.length}</span>
         </summary>
         <div className="system-grid">
-      <MainSurface>
-        <SectionHeading
-          title="Runtime Layers"
-          eyebrow={`${overview.architecture.layers.length} layers`}
-        />
-        <ol className="layer-list">
-          {overview.architecture.layers.map((layer) => (
-            <li key={layer.id}>
-              <span className={`layer-dot ${layer.status}`} />
+          <MainSurface>
+            <SectionHeading
+              title="Runtime Layers"
+              eyebrow={`${overview.architecture.layers.length} layers`}
+            />
+            <ol className="layer-list">
+              {overview.architecture.layers.map((layer) => (
+                <li key={layer.id}>
+                  <span className={`layer-dot ${layer.status}`} />
+                  <div>
+                    <strong>{layer.name}</strong>
+                    <p>{layer.responsibility}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </MainSurface>
+
+          <MainSurface>
+            <SectionHeading
+              title="Command Boundary"
+              eyebrow={`${overview.commands.length} commands`}
+            />
+            <div className="command-list">
+              {overview.commands.map((command) => (
+                <article className="command-row" key={command.name}>
+                  <strong>{command.name}</strong>
+                  <span>{command.direction}</span>
+                  <p>{command.purpose}</p>
+                </article>
+              ))}
+            </div>
+          </MainSurface>
+
+          <MainSurface className="provider-panel">
+            <SectionHeading
+              title="Provider Coverage"
+              eyebrow={`${overview.providerCatalog.capabilityCount} capabilities`}
+            />
+            <div className="provider-metrics" aria-label="Provider catalog">
               <div>
-                <strong>{layer.name}</strong>
-                <p>{layer.responsibility}</p>
+                <strong>{overview.providerCatalog.providerCount}</strong>
+                <span>providers</span>
               </div>
-            </li>
-          ))}
-        </ol>
-      </MainSurface>
+              <div>
+                <strong>{overview.providerCatalog.modelCount}</strong>
+                <span>models</span>
+              </div>
+            </div>
+            <ol className="workflow-list">
+              {overview.providerCatalog.workflows.map((workflow) => (
+                <li key={workflow.workflow}>
+                  <Cpu aria-hidden="true" size={16} />
+                  <span>{workflowLabel(workflow.workflow)}</span>
+                  <small>{workflow.defaultModelId}</small>
+                </li>
+              ))}
+            </ol>
+          </MainSurface>
 
-      <MainSurface>
-        <SectionHeading
-          title="Command Boundary"
-          eyebrow={`${overview.commands.length} commands`}
-        />
-        <div className="command-list">
-          {overview.commands.map((command) => (
-            <article className="command-row" key={command.name}>
-              <strong>{command.name}</strong>
-              <span>{command.direction}</span>
-              <p>{command.purpose}</p>
-            </article>
-          ))}
-        </div>
-      </MainSurface>
-
-      <MainSurface className="provider-panel">
-        <SectionHeading
-          title="Provider Coverage"
-          eyebrow={`${overview.providerCatalog.capabilityCount} capabilities`}
-        />
-        <div className="provider-metrics" aria-label="Provider catalog">
-          <div>
-            <strong>{overview.providerCatalog.providerCount}</strong>
-            <span>providers</span>
-          </div>
-          <div>
-            <strong>{overview.providerCatalog.modelCount}</strong>
-            <span>models</span>
-          </div>
-        </div>
-        <ol className="workflow-list">
-          {overview.providerCatalog.workflows.map((workflow) => (
-            <li key={workflow.workflow}>
-              <Cpu aria-hidden="true" size={16} />
-              <span>{workflowLabel(workflow.workflow)}</span>
-              <small>{workflow.defaultModelId}</small>
-            </li>
-          ))}
-        </ol>
-      </MainSurface>
-
-      <MainSurface className="evaluation-panel">
-        <SectionHeading
-          title="Evaluation Scorecard"
-          eyebrow={`${overview.modelEvaluation.candidateCount} candidates`}
-        />
-        <div className="evaluation-summary" aria-label="Model evaluation">
-          <div>
-            <ClipboardCheck aria-hidden="true" size={18} />
-            <strong>{overview.modelEvaluation.sourceCount}</strong>
-            <span>sources</span>
-          </div>
-          <div>
-            <Boxes aria-hidden="true" size={18} />
-            <strong>{overview.modelEvaluation.fixtureCount}</strong>
-            <span>fixtures</span>
-          </div>
-          <div>
-            <CircleCheck aria-hidden="true" size={18} />
-            <strong>
-              {countFor(
-                overview.modelEvaluation.productEligibilityCounts,
-                "product-candidate",
+          <MainSurface className="evaluation-panel">
+            <SectionHeading
+              title="Evaluation Scorecard"
+              eyebrow={`${overview.modelEvaluation.candidateCount} candidates`}
+            />
+            <div className="evaluation-summary" aria-label="Model evaluation">
+              <div>
+                <ClipboardCheck aria-hidden="true" size={18} />
+                <strong>{overview.modelEvaluation.sourceCount}</strong>
+                <span>sources</span>
+              </div>
+              <div>
+                <Boxes aria-hidden="true" size={18} />
+                <strong>{overview.modelEvaluation.fixtureCount}</strong>
+                <span>fixtures</span>
+              </div>
+              <div>
+                <CircleCheck aria-hidden="true" size={18} />
+                <strong>
+                  {countFor(
+                    overview.modelEvaluation.productEligibilityCounts,
+                    "product-candidate",
+                  )}
+                </strong>
+                <span>product candidates</span>
+              </div>
+              <div>
+                <CircleAlert aria-hidden="true" size={18} />
+                <strong>
+                  {countFor(overview.modelEvaluation.statusCounts, "blocked")}
+                </strong>
+                <span>blocked</span>
+              </div>
+            </div>
+            <ol className="recommendation-list" aria-label="Recommended spikes">
+              {overview.modelEvaluation.recommendedCandidateIds.map(
+                (candidateId) => (
+                  <li key={candidateId}>
+                    <span>{candidateId}</span>
+                  </li>
+                ),
               )}
-            </strong>
-            <span>product candidates</span>
-          </div>
-          <div>
-            <CircleAlert aria-hidden="true" size={18} />
-            <strong>
-              {countFor(overview.modelEvaluation.statusCounts, "blocked")}
-            </strong>
-            <span>blocked</span>
-          </div>
-        </div>
-        <ol className="recommendation-list" aria-label="Recommended spikes">
-          {overview.modelEvaluation.recommendedCandidateIds.map(
-            (candidateId) => (
-              <li key={candidateId}>
-                <span>{candidateId}</span>
-              </li>
-            ),
-          )}
-        </ol>
-      </MainSurface>
+            </ol>
+          </MainSurface>
         </div>
       </details>
     </section>

@@ -3873,7 +3873,6 @@
           "revalidate",
           "open-source",
           "install",
-          "repair-cache",
           "accept-license"
         ],
         "blockers": [
@@ -3923,7 +3922,7 @@
         },
         "evaluationStatus": "promising-spike",
         "evidenceLevel": "source-metadata",
-        "installState": "missing-cache",
+        "installState": "needs-runtime-port",
         "lanes": [
           "song",
           "sfx",
@@ -4685,8 +4684,7 @@
         "actions": [
           "revalidate",
           "open-source",
-          "install",
-          "repair-cache"
+          "install"
         ],
         "blockers": [
           "Need no-Python product path and watermark/provenance validation"
@@ -4740,7 +4738,7 @@
         },
         "evaluationStatus": "promising-spike",
         "evidenceLevel": "install-documented",
-        "installState": "missing-cache",
+        "installState": "needs-runtime-port",
         "lanes": [
           "tts",
           "voice-clone",
@@ -5000,8 +4998,7 @@
         "actions": [
           "revalidate",
           "open-source",
-          "install",
-          "repair-cache"
+          "install"
         ],
         "blockers": [
           "Need consent UX and executable packaging proof"
@@ -5055,7 +5052,7 @@
         },
         "evaluationStatus": "promising-spike",
         "evidenceLevel": "source-metadata",
-        "installState": "missing-cache",
+        "installState": "needs-runtime-port",
         "lanes": [
           "voice-clone",
           "voice-conversion",
@@ -5134,7 +5131,6 @@
           "revalidate",
           "open-source",
           "install",
-          "repair-cache",
           "accept-license"
         ],
         "blockers": [
@@ -5184,7 +5180,7 @@
         },
         "evaluationStatus": "promising-spike",
         "evidenceLevel": "source-metadata",
-        "installState": "missing-cache",
+        "installState": "needs-runtime-port",
         "lanes": [
           "sfx",
           "ambience",
@@ -5719,7 +5715,7 @@
       "candidateCount": 28,
       "failedOperationCount": 2,
       "installableCount": 10,
-      "missingCacheCount": 6,
+      "missingCacheCount": 2,
       "verifiedInstalledCount": 0
     },
     "validationChecks": [
@@ -5739,7 +5735,7 @@
         "id": "model-manager.missing-cache-visible",
         "passed": true,
         "recovery": null,
-        "summary": "6 candidate(s) expose missing-cache state for install/revalidate QA."
+        "summary": "2 candidate(s) expose missing-cache state for install/revalidate QA."
       },
       {
         "id": "model-manager.failed-download-visible",
@@ -6867,7 +6863,7 @@
       "candidateCount": 28,
       "failedOperationCount": 1,
       "installableCount": 9,
-      "missingCacheCount": 5,
+      "missingCacheCount": 1,
       "verifiedInstalledCount": 1
     },
     "mvpValidation": {

@@ -127,15 +127,17 @@ impl ModelCandidateInstallState {
         let cache = ModelCacheVerification::inspect(cache_root, &download_plan);
         let hard_blockers = hard_install_blockers(candidate);
         let blockers = install_blockers(candidate);
-        let install_state = if cache.verified {
-            CandidateInstallState::Installed
-        } else if candidate.product_eligibility == ProductEligibility::ResearchOnly {
+        let install_state = if candidate.product_eligibility == ProductEligibility::ResearchOnly {
             CandidateInstallState::ResearchOnly
         } else if !hard_blockers.is_empty()
             || candidate.status == EvaluationStatus::Blocked
             || candidate.product_eligibility == ProductEligibility::Blocked
         {
             CandidateInstallState::Blocked
+        } else if candidate.product_eligibility != ProductEligibility::ProductCandidate {
+            CandidateInstallState::NeedsRuntimePort
+        } else if cache.verified {
+            CandidateInstallState::Installed
         } else if download_plan.supports_automated_download {
             CandidateInstallState::MissingCache
         } else {
@@ -991,6 +993,50 @@ mod tests {
     }
 
     #[test]
+    fn verified_cache_does_not_override_runtime_port_requirement() {
+        let cache_root = temp_cache_root("needs-runtime-port");
+        let stable = cache_root.join("stable-audio-3");
+        fs::create_dir_all(&stable).expect("create stable cache dir");
+        fs::write(stable.join("README.md"), "stable audio").expect("write readme");
+        fs::write(stable.join("model.safetensors"), "weights").expect("write weights");
+
+        let overview =
+            ModelManagerOverview::from_catalog(&ModelEvaluationCatalog::reference(), cache_root);
+        let candidate = overview
+            .candidates
+            .iter()
+            .find(|candidate| candidate.candidate_id == "stable-audio-3")
+            .expect("stable audio state");
+
+        assert!(candidate.cache.verified);
+        assert_eq!(
+            candidate.install_state,
+            CandidateInstallState::NeedsRuntimePort
+        );
+        assert_eq!(overview.summary.verified_installed_count, 0);
+    }
+
+    #[test]
+    fn verified_cache_does_not_override_research_only_eligibility() {
+        let cache_root = temp_cache_root("research-only");
+        let levo = cache_root.join("levo-2");
+        fs::create_dir_all(&levo).expect("create levo cache dir");
+        fs::write(levo.join("README.md"), "research cache").expect("write readme");
+
+        let overview =
+            ModelManagerOverview::from_catalog(&ModelEvaluationCatalog::reference(), cache_root);
+        let candidate = overview
+            .candidates
+            .iter()
+            .find(|candidate| candidate.candidate_id == "levo-2")
+            .expect("levo state");
+
+        assert!(candidate.cache.verified);
+        assert_eq!(candidate.install_state, CandidateInstallState::ResearchOnly);
+        assert_eq!(overview.summary.verified_installed_count, 0);
+    }
+
+    #[test]
     fn install_action_reports_failed_cache_verification_for_missing_candidate() {
         let operation = ModelManagerOperation::install("kokoro-82m");
 
@@ -1016,5 +1062,14 @@ mod tests {
             .lane_readiness
             .iter()
             .any(|lane| lane.recommended_candidate_id == "mmaudio" && lane.blocker.is_some()));
+    }
+
+    fn temp_cache_root(label: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "soundworks-model-manager-{label}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        root
     }
 }

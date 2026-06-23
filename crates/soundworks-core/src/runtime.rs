@@ -569,7 +569,7 @@ impl ModelRuntimeState {
             | ProductRuntimePath::NativeLibraryBinding
             | ProductRuntimePath::ExternalExecutable => ModelRuntime::Local,
         };
-        let availability = if candidate.cache.verified {
+        let availability = if candidate.install_state == CandidateInstallState::Installed {
             RuntimeAvailability::Installed
         } else {
             RuntimeAvailability::Unavailable
@@ -594,11 +594,19 @@ impl ModelRuntimeState {
             execution_strategy: ExecutionStrategy::for_model(&candidate.candidate_id, runtime),
             workflows,
             availability,
-            install_status: ModelInstallStatus::Installed,
+            install_status: if availability == RuntimeAvailability::Installed {
+                ModelInstallStatus::Installed
+            } else {
+                ModelInstallStatus::Unavailable
+            },
             cache: ModelCacheState {
                 cache_path: Some(candidate.cache.cache_path.clone()),
                 package_id: candidate.download_plan.repository_id.clone(),
-                status: CacheStatus::Ready,
+                status: if candidate.cache.verified {
+                    CacheStatus::Ready
+                } else {
+                    CacheStatus::Missing
+                },
                 expected_size_mb: candidate.download_plan.expected_size_mb,
                 disk_usage_mb: candidate.cache.disk_usage_mb,
                 verified: candidate.cache.verified,
@@ -2922,6 +2930,7 @@ mod tests {
     };
     use crate::domain::{JobKind, ModelRuntime};
     use crate::manifests::{CapabilityWorkflow, ModelInstallStatus, ProviderCatalog};
+    use crate::CandidateInstallState;
     use std::collections::BTreeMap;
     use std::fs;
     use std::path::PathBuf;
@@ -3001,6 +3010,39 @@ mod tests {
         );
         assert_eq!(runtime.status_counts.available, 1);
         assert_eq!(runtime.status_counts.unavailable, 3);
+    }
+
+    #[test]
+    fn runtime_ignores_verified_cache_for_non_product_candidates() {
+        let cache_root = temp_runtime_root("non-product-cache");
+        let stable = cache_root.join("stable-audio-3");
+        fs::create_dir_all(&stable).expect("create stable cache");
+        fs::write(stable.join("README.md"), "stable audio").expect("write readme");
+        fs::write(stable.join("model.safetensors"), "weights").expect("write weights");
+        let manager = crate::ModelManagerOverview::from_catalog(
+            &crate::ModelEvaluationCatalog::reference(),
+            cache_root,
+        );
+        let candidate = manager
+            .candidates
+            .iter()
+            .find(|candidate| candidate.candidate_id == "stable-audio-3")
+            .expect("stable audio candidate");
+        assert!(candidate.cache.verified);
+        assert_ne!(candidate.install_state, CandidateInstallState::Installed);
+
+        let store = RuntimeJobStore::new(temp_runtime_root("non-product-runtime"));
+        let runtime = RuntimeOverview::from_model_manager(
+            &manager,
+            &DeviceInventory::reference_mac(),
+            RuntimePackagingPolicy::shipped_desktop(),
+            &store,
+        );
+
+        assert!(runtime
+            .model_states
+            .iter()
+            .all(|state| state.model_id != "stable-audio-3"));
     }
 
     #[test]

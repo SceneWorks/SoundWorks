@@ -90,10 +90,7 @@ export interface AppContextValue {
   latestImportableRuntimeJob: RuntimeJobSnapshot | null;
 
   // Handlers
-  runModelManagerAction: (
-    candidateId: string,
-    action: "install" | "revalidate",
-  ) => void;
+  runModelManagerAction: (candidateId: string, action: "revalidate") => void;
   createProject: (name?: string) => void;
   openProject: (projectId: string) => void;
   openRecentProject: () => void;

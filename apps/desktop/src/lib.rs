@@ -200,11 +200,6 @@ fn get_model_manager_overview() -> ModelManagerOverview {
 }
 
 #[tauri::command]
-fn install_model_candidate(candidate_id: String) -> ModelManagerOperation {
-    install_candidate(candidate_id)
-}
-
-#[tauri::command]
 fn revalidate_model_candidate(candidate_id: String) -> ModelManagerOperation {
     revalidate_candidate(candidate_id)
 }
@@ -443,10 +438,6 @@ pub fn model_manager_overview() -> ModelManagerOverview {
     ModelManagerOverview::reference()
 }
 
-pub fn install_candidate(candidate_id: String) -> ModelManagerOperation {
-    ModelManagerOperation::install(&candidate_id)
-}
-
 pub fn revalidate_candidate(candidate_id: String) -> ModelManagerOperation {
     ModelManagerOperation::revalidate(&candidate_id)
 }
@@ -524,7 +515,6 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             set_voice_profile_consent,
             get_model_evaluation_catalog,
             get_model_manager_overview,
-            install_model_candidate,
             revalidate_model_candidate,
             get_mvp_validation_overview,
             get_tts_studio_overview,
@@ -551,12 +541,11 @@ pub fn run() {
 mod tests {
     use super::{
         app_overview, asset_library_overview, composition_editor_overview,
-        export_workflow_overview, install_candidate, model_evaluation_catalog,
-        model_manager_overview, mvp_validation_overview, provider_catalog,
-        record_voice_profile_consent, revalidate_candidate, review_workspace_overview,
-        rights_safety_overview, runtime_job, runtime_overview, samples_studio_overview,
-        sfx_studio_overview, song_studio_overview, tts_studio_overview, video_to_audio_overview,
-        voice_lab_overview, workspace_overview,
+        export_workflow_overview, model_evaluation_catalog, model_manager_overview,
+        mvp_validation_overview, provider_catalog, record_voice_profile_consent,
+        revalidate_candidate, review_workspace_overview, rights_safety_overview, runtime_job,
+        runtime_overview, samples_studio_overview, sfx_studio_overview, song_studio_overview,
+        tts_studio_overview, video_to_audio_overview, voice_lab_overview, workspace_overview,
     };
     use soundworks_core::VoiceConsentStatus;
     use std::sync::Mutex;
@@ -828,13 +817,6 @@ mod tests {
             .candidates
             .iter()
             .any(|candidate| candidate.candidate_id == "kokoro-82m"));
-
-        let install = install_candidate("kokoro-82m".to_string());
-        assert_eq!(install.candidate_id, "kokoro-82m");
-        assert_eq!(
-            install.status,
-            soundworks_core::ModelManagerOperationStatus::Failed
-        );
 
         let revalidate = revalidate_candidate("kokoro-82m".to_string());
         assert_eq!(revalidate.candidate_id, "kokoro-82m");

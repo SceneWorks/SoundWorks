@@ -194,34 +194,6 @@ function fallbackRuntimeJob(request: RuntimeJobRequest): RuntimeJobSnapshot {
   };
 }
 
-export async function installModelCandidate(
-  candidateId: string,
-): Promise<ModelManagerOperation> {
-  if (!isTauri()) {
-    return (
-      fallbackModelManager.operations.find(
-        (operation) =>
-          operation.candidateId === candidateId &&
-          operation.action === "install",
-      ) ?? {
-        id: `install-${candidateId}`,
-        candidateId,
-        action: "install",
-        status: "failed",
-        progressPercent: 100,
-        summary: "Install command is unavailable in web fallback mode.",
-        recovery:
-          "Open the Tauri desktop runtime or inspect the SoundWorks model cache manually.",
-        logTail: [],
-      }
-    );
-  }
-
-  return await invoke<ModelManagerOperation>("install_model_candidate", {
-    candidateId,
-  });
-}
-
 export async function revalidateModelCandidate(
   candidateId: string,
 ): Promise<ModelManagerOperation> {

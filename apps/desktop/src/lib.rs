@@ -425,6 +425,12 @@ pub fn record_voice_profile_consent(
     profile_id: String,
     consent: VoiceConsentStatus,
 ) -> std::io::Result<VoiceLabOverview> {
+    if !soundworks_core::voice_lab::profile_exists(&profile_id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("unknown voice profile id: {profile_id}"),
+        ));
+    }
     VoiceConsentStore::default().record(&profile_id, consent)?;
     Ok(voice_lab_overview())
 }
@@ -553,6 +559,9 @@ mod tests {
         voice_lab_overview, workspace_overview,
     };
     use soundworks_core::VoiceConsentStatus;
+    use std::sync::Mutex;
+
+    static VOICE_CONSENT_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn app_overview_command_returns_soundworks() {
@@ -703,38 +712,65 @@ mod tests {
     fn record_voice_profile_consent_overrides_displayed_profile() {
         // UX-08: isolate the consent store to a temp root so recording consent
         // never touches the developer's real app-support directory.
-        let dir =
-            std::env::temp_dir().join(format!("soundworks-consent-cmd-{}", std::process::id()));
+        with_isolated_voice_consent_root("cmd", || {
+            // The archival fixture profile starts as RequiresReview.
+            let before = voice_lab_overview();
+            let archival = before
+                .voice_profiles
+                .iter()
+                .find(|profile| profile.profile.id == "voice-profile-archival")
+                .expect("archival profile present");
+            assert_eq!(archival.profile.consent, VoiceConsentStatus::RequiresReview);
+
+            // Recording explicit consent returns an overview reflecting the override.
+            let after = record_voice_profile_consent(
+                "voice-profile-archival".to_string(),
+                VoiceConsentStatus::ExplicitConsentRecorded,
+            )
+            .expect("record consent");
+            let archival_after = after
+                .voice_profiles
+                .iter()
+                .find(|profile| profile.profile.id == "voice-profile-archival")
+                .expect("archival profile present");
+            assert_eq!(
+                archival_after.profile.consent,
+                VoiceConsentStatus::ExplicitConsentRecorded
+            );
+        });
+    }
+
+    #[test]
+    fn record_voice_profile_consent_rejects_unknown_profile() {
+        with_isolated_voice_consent_root("cmd-unknown", || {
+            let error = record_voice_profile_consent(
+                "voice-profile-made-up".to_string(),
+                VoiceConsentStatus::ExplicitConsentRecorded,
+            )
+            .expect_err("unknown profile is rejected");
+
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+            assert!(error.to_string().contains("unknown voice profile id"));
+        });
+    }
+
+    fn with_isolated_voice_consent_root(label: &str, f: impl FnOnce()) {
+        let _guard = VOICE_CONSENT_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time after epoch")
+            .as_millis();
+        let dir = std::env::temp_dir().join(format!("soundworks-consent-{label}-{}", millis));
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("SOUNDWORKS_VOICE_CONSENT_ROOT", &dir);
-
-        // The archival fixture profile starts as RequiresReview.
-        let before = voice_lab_overview();
-        let archival = before
-            .voice_profiles
-            .iter()
-            .find(|profile| profile.profile.id == "voice-profile-archival")
-            .expect("archival profile present");
-        assert_eq!(archival.profile.consent, VoiceConsentStatus::RequiresReview);
-
-        // Recording explicit consent returns an overview reflecting the override.
-        let after = record_voice_profile_consent(
-            "voice-profile-archival".to_string(),
-            VoiceConsentStatus::ExplicitConsentRecorded,
-        )
-        .expect("record consent");
-        let archival_after = after
-            .voice_profiles
-            .iter()
-            .find(|profile| profile.profile.id == "voice-profile-archival")
-            .expect("archival profile present");
-        assert_eq!(
-            archival_after.profile.consent,
-            VoiceConsentStatus::ExplicitConsentRecorded
-        );
-
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
         std::env::remove_var("SOUNDWORKS_VOICE_CONSENT_ROOT");
         let _ = std::fs::remove_dir_all(&dir);
+        if let Err(payload) = result {
+            std::panic::resume_unwind(payload);
+        }
     }
 
     #[test]

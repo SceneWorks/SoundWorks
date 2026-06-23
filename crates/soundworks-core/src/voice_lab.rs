@@ -343,25 +343,36 @@ fn candidate_ids_for(scorecards: &[VoiceProviderScorecard], lane: EvaluationLane
         .collect()
 }
 
-/// Resolve a voice profile's stored consent status by id (F-003). Generation
-/// admission consults this instead of trusting a caller-supplied boolean. Today it
-/// reads the voice-lab profile catalog; when user-created profiles are persisted
-/// (UX-08 / the storage `voice_profiles` table) this is the single place to switch
-/// the source. Returns `None` for an unknown profile id, which callers treat as
-/// "no recorded consent" (blocked).
-pub fn profile_consent(profile_id: &str) -> Option<VoiceConsentStatus> {
-    // UX-08: a user-recorded consent override (persisted by VoiceConsentStore)
-    // wins over the fixture catalog, so recording consent in the UI genuinely
-    // unblocks admission. Falls back to the reference catalog for fixture
-    // profiles with no override.
-    if let Some(status) = crate::voice_consent::VoiceConsentStore::default().consent_for(profile_id)
-    {
-        return Some(status);
-    }
+fn reference_profile_consent(profile_id: &str) -> Option<VoiceConsentStatus> {
     reference_profiles()
         .into_iter()
         .find(|entry| entry.profile.id == profile_id)
         .map(|entry| entry.profile.consent)
+}
+
+fn catalog_profile_consent(profile_id: &str) -> Option<VoiceConsentStatus> {
+    reference_profile_consent(profile_id)
+        .or_else(|| crate::tts::reference_profile_consent(profile_id))
+}
+
+pub fn profile_exists(profile_id: &str) -> bool {
+    catalog_profile_consent(profile_id).is_some()
+}
+
+/// Resolve a voice profile's stored consent status by id (F-003). Generation
+/// admission consults this instead of trusting a caller-supplied boolean. Today it
+/// reads the reference voice-profile catalogs; when user-created profiles are
+/// persisted (UX-08 / the storage `voice_profiles` table) this is the single
+/// place to switch the source. Returns `None` for an unknown profile id, which
+/// callers treat as "no recorded consent" (blocked).
+pub fn profile_consent(profile_id: &str) -> Option<VoiceConsentStatus> {
+    let catalog_status = catalog_profile_consent(profile_id)?;
+    // UX-08: a user-recorded consent override (persisted by VoiceConsentStore)
+    // wins over the fixture catalog only for profiles that actually exist, so an
+    // arbitrary persisted id cannot bless a fabricated runtime request.
+    crate::voice_consent::VoiceConsentStore::default()
+        .consent_for(profile_id)
+        .or(Some(catalog_status))
 }
 
 /// Apply persisted consent overrides (UX-08) to a profile list. The overview

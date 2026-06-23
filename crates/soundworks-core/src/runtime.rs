@@ -2925,7 +2925,9 @@ mod tests {
     use std::collections::BTreeMap;
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
+
+    static CONSENT_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn reference_runtime_blocks_manifest_only_models_and_jobs() {
@@ -3599,64 +3601,145 @@ mod tests {
     fn profile_referencing_job_is_blocked_without_recorded_consent() {
         // A profile in review (voice-profile-archival = RequiresReview) blocks even a
         // TTS job that references it.
-        let store = RuntimeJobStore::new(temp_runtime_root("consent-archival"));
-        let overview = installed_overview(&store);
-        let mut parameters = BTreeMap::new();
-        parameters.insert(
-            "voiceProfileId".to_string(),
-            serde_json::json!("voice-profile-archival"),
-        );
-        let job = store
-            .enqueue(
-                &overview,
-                RuntimeJobRequest {
-                    provider_id: "hexgrad".to_string(),
-                    model_id: "native-smoke".to_string(),
-                    kind: JobKind::GenerateAudio,
-                    workflow: CapabilityWorkflow::Tts,
-                    prompt: "Read in the archival voice.".to_string(),
-                    source_surface: "TTS Studio".to_string(),
-                    parameters,
-                },
-            )
-            .expect("job persists");
-        assert_eq!(job.status, crate::domain::JobStatus::Failed);
-        assert_eq!(
-            job.actionable_error
-                .as_ref()
-                .map(|error| error.code.as_str()),
-            Some("voice.consent_required")
-        );
+        with_isolated_consent_root("consent-archival-root", || {
+            let store = RuntimeJobStore::new(temp_runtime_root("consent-archival"));
+            let overview = installed_overview(&store);
+            let mut parameters = BTreeMap::new();
+            parameters.insert(
+                "voiceProfileId".to_string(),
+                serde_json::json!("voice-profile-archival"),
+            );
+            let job = store
+                .enqueue(
+                    &overview,
+                    RuntimeJobRequest {
+                        provider_id: "hexgrad".to_string(),
+                        model_id: "native-smoke".to_string(),
+                        kind: JobKind::GenerateAudio,
+                        workflow: CapabilityWorkflow::Tts,
+                        prompt: "Read in the archival voice.".to_string(),
+                        source_surface: "TTS Studio".to_string(),
+                        parameters,
+                    },
+                )
+                .expect("job persists");
+            assert_eq!(job.status, crate::domain::JobStatus::Failed);
+            assert_eq!(
+                job.actionable_error
+                    .as_ref()
+                    .map(|error| error.code.as_str()),
+                Some("voice.consent_required")
+            );
+        });
     }
 
     #[test]
     fn profile_referencing_job_runs_with_explicit_consent() {
         // The consented narrator profile (ExplicitConsentRecorded) passes the gate,
         // so the job runs to completion.
-        let store = RuntimeJobStore::new(temp_runtime_root("consent-narrator"));
-        let overview = installed_overview(&store);
-        let mut parameters = BTreeMap::new();
-        parameters.insert(
-            "voiceProfileId".to_string(),
-            serde_json::json!("voice-profile-narrator"),
-        );
-        let job = store
-            .enqueue_and_run(
-                &engine(),
-                &overview,
-                RuntimeJobRequest {
-                    provider_id: "hexgrad".to_string(),
-                    model_id: "native-smoke".to_string(),
-                    kind: JobKind::GenerateAudio,
-                    workflow: CapabilityWorkflow::Tts,
-                    prompt: "Read in the consented narrator voice.".to_string(),
-                    source_surface: "TTS Studio".to_string(),
-                    parameters,
-                },
-            )
-            .expect("job persists");
-        assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
-        assert!(job.actionable_error.is_none());
+        with_isolated_consent_root("consent-narrator-root", || {
+            let store = RuntimeJobStore::new(temp_runtime_root("consent-narrator"));
+            let overview = installed_overview(&store);
+            let mut parameters = BTreeMap::new();
+            parameters.insert(
+                "voiceProfileId".to_string(),
+                serde_json::json!("voice-profile-narrator"),
+            );
+            let job = store
+                .enqueue_and_run(
+                    &engine(),
+                    &overview,
+                    RuntimeJobRequest {
+                        provider_id: "hexgrad".to_string(),
+                        model_id: "native-smoke".to_string(),
+                        kind: JobKind::GenerateAudio,
+                        workflow: CapabilityWorkflow::Tts,
+                        prompt: "Read in the consented narrator voice.".to_string(),
+                        source_surface: "TTS Studio".to_string(),
+                        parameters,
+                    },
+                )
+                .expect("job persists");
+            assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+            assert!(job.actionable_error.is_none());
+        });
+    }
+
+    #[test]
+    fn default_tts_speaker_profiles_pass_consent_gate() {
+        // CR2-001: TTS owns both Narrator and Producer reference profiles. Runtime
+        // consent resolution must see both, not only the Voice Lab fixture catalog.
+        with_isolated_consent_root("consent-tts-speakers-root", || {
+            let store = RuntimeJobStore::new(temp_runtime_root("consent-tts-speakers"));
+            let overview = installed_overview(&store);
+            let mut parameters = BTreeMap::new();
+            parameters.insert(
+                "voiceProfileIds".to_string(),
+                serde_json::json!(["voice-profile-narrator", "voice-profile-producer"]),
+            );
+            let job = store
+                .enqueue_and_run(
+                    &engine(),
+                    &overview,
+                    RuntimeJobRequest {
+                        provider_id: "hexgrad".to_string(),
+                        model_id: "native-smoke".to_string(),
+                        kind: JobKind::GenerateAudio,
+                        workflow: CapabilityWorkflow::Tts,
+                        prompt: "Read this with the default multi-speaker TTS profile set."
+                            .to_string(),
+                        source_surface: "TTS Studio".to_string(),
+                        parameters,
+                    },
+                )
+                .expect("job persists");
+            assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+            assert!(job.actionable_error.is_none());
+        });
+    }
+
+    #[test]
+    fn unknown_profile_override_still_blocks_runtime_admission() {
+        // CR2-002: a persisted explicit-consent record is only an override for a
+        // known catalog profile; it cannot invent a valid profile id.
+        with_isolated_consent_root("unknown-profile-consent-root", || {
+            crate::VoiceConsentStore::default()
+                .record(
+                    "voice-profile-made-up",
+                    crate::domain::VoiceConsentStatus::ExplicitConsentRecorded,
+                )
+                .expect("record unknown override");
+
+            let store = RuntimeJobStore::new(temp_runtime_root("unknown-profile-override"));
+            let overview = installed_overview(&store);
+            let mut parameters = BTreeMap::new();
+            parameters.insert(
+                "voiceProfileId".to_string(),
+                serde_json::json!("voice-profile-made-up"),
+            );
+            let job = store
+                .enqueue(
+                    &overview,
+                    RuntimeJobRequest {
+                        provider_id: "hexgrad".to_string(),
+                        model_id: "native-smoke".to_string(),
+                        kind: JobKind::GenerateAudio,
+                        workflow: CapabilityWorkflow::Tts,
+                        prompt: "Read in a fabricated voice.".to_string(),
+                        source_surface: "TTS Studio".to_string(),
+                        parameters,
+                    },
+                )
+                .expect("job persists");
+
+            assert_eq!(job.status, crate::domain::JobStatus::Failed);
+            assert_eq!(
+                job.actionable_error
+                    .as_ref()
+                    .map(|error| error.code.as_str()),
+                Some("voice.consent_required")
+            );
+        });
     }
 
     #[test]
@@ -4020,6 +4103,21 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
         root
+    }
+
+    fn with_isolated_consent_root<T>(label: &str, f: impl FnOnce() -> T) -> T {
+        let _guard = CONSENT_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let root = temp_runtime_root(label);
+        std::env::set_var("SOUNDWORKS_VOICE_CONSENT_ROOT", &root);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+        std::env::remove_var("SOUNDWORKS_VOICE_CONSENT_ROOT");
+        let _ = fs::remove_dir_all(&root);
+        match result {
+            Ok(value) => value,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
     }
 
     #[test]

@@ -1435,7 +1435,7 @@ impl RuntimeJobStore {
 
     // UX-NB1: render the composition described in the request parameters into a
     // single mixed WAV. Clip PCM is resolved from the project library; unresolved
-    // clips are skipped with a logged warning rather than failing the render.
+    // clips are skipped only when at least one playable clip remains.
     fn write_composition_mixdown(
         &self,
         job: &mut RuntimeJobSnapshot,
@@ -1542,6 +1542,24 @@ impl RuntimeJobStore {
                     }
                 }
             }
+        }
+
+        if resolved == 0 && skipped > 0 {
+            job.status = JobStatus::Failed;
+            job.progress = Some(JobProgress {
+                percent: 100.0,
+                message: Some("Composition clips could not be resolved.".to_string()),
+            });
+            job.cancellation = CancellationState::NotCancellable;
+            job.actionable_error = Some(ActionableRuntimeError {
+                code: "composition.unresolved_clips".to_string(),
+                summary: "Composition mixdown has no playable clips".to_string(),
+                recovery:
+                    "Re-link or import the requested timeline clips before rendering the mixdown."
+                        .to_string(),
+            });
+            self.write_error_report(job)?;
+            return Ok(());
         }
 
         let samples = mix(&MixRequest {
@@ -3166,6 +3184,62 @@ mod tests {
                 && artifact.bytes > 44
                 && PathBuf::from(&artifact.path).is_file()
         }));
+    }
+
+    #[test]
+    fn composition_render_fails_when_all_requested_clips_are_unresolved() {
+        let store = RuntimeJobStore::new(temp_runtime_root("mixdown-unresolved"));
+        let overview = installed_overview(&store);
+        let mut parameters = BTreeMap::new();
+        parameters.insert("durationMs".to_string(), serde_json::json!(500));
+        parameters.insert("sampleRateHz".to_string(), serde_json::json!(48_000));
+        parameters.insert("channels".to_string(), serde_json::json!(2));
+        parameters.insert("masterGainDb".to_string(), serde_json::json!(0.0));
+        parameters.insert(
+            "clips".to_string(),
+            serde_json::json!([
+                {
+                    "assetId": "missing-library-clip",
+                    "timelineStartMs": 0,
+                    "sourceStartMs": 0,
+                    "sourceEndMs": 500,
+                    "gainDb": 0.0,
+                    "pan": 0.0
+                }
+            ]),
+        );
+
+        let job = store
+            .enqueue_and_run(
+                &engine(),
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "soundworks-native".to_string(),
+                    model_id: "composition-mixdown".to_string(),
+                    kind: JobKind::RenderComposition,
+                    workflow: CapabilityWorkflow::CompositionRender,
+                    prompt: "Render missing clip timeline".to_string(),
+                    source_surface: "Multitrack".to_string(),
+                    parameters,
+                },
+            )
+            .expect("enqueue succeeds");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Failed);
+        assert_eq!(
+            job.actionable_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("composition.unresolved_clips")
+        );
+        assert!(job.artifacts.iter().any(|artifact| {
+            artifact.kind == RuntimeArtifactKind::ErrorReport
+                && PathBuf::from(&artifact.path).is_file()
+        }));
+        assert!(job
+            .log_tail
+            .iter()
+            .any(|line| line.contains("missing-library-clip")));
     }
 
     #[test]

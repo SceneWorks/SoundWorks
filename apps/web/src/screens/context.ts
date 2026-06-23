@@ -113,7 +113,29 @@ export interface AppContextValue {
     profileId: string,
     consent: VoiceConsentStatus,
   ) => void;
-  renderComposition: (mutedTrackIds?: string[]) => void;
+  renderComposition: () => void;
+  addCompositionClipToTrack: (
+    trackId: string,
+    asset: CompositionEditorOverview["assetBin"][number],
+  ) => void;
+  moveCompositionClip: (clipId: string, timelineStartMs: number) => void;
+  trimCompositionClip: (
+    clipId: string,
+    sourceRange: { startMs: number; endMs: number },
+    fadeInMs: number,
+    fadeOutMs: number,
+  ) => void;
+  deleteCompositionClip: (clipId: string) => void;
+  addCompositionTrack: (role?: string) => void;
+  updateCompositionTrack: (
+    trackId: string,
+    patch: {
+      gainDb?: number | null;
+      pan?: number | null;
+      muted?: boolean | null;
+      soloed?: boolean | null;
+    },
+  ) => void;
   // UX-14: deep-link from a studio gate to the Models grid, pre-filtered.
   modelFocus: string | null;
   openModelsFor: (focus: string) => void;

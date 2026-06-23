@@ -544,6 +544,53 @@ export type CompositionEditorOverview = {
   }>;
 };
 
+export type AddCompositionClipRequest = {
+  compositionId: string;
+  trackId: string;
+  assetId: string;
+  versionId: string;
+  timelineStartMs: number;
+  sourceRange: { startMs: number; endMs: number };
+  fadeInMs: number;
+  fadeOutMs: number;
+  gainDb: number;
+  pan: number;
+};
+
+export type MoveCompositionClipRequest = {
+  compositionId: string;
+  clipId: string;
+  timelineStartMs: number;
+};
+
+export type TrimCompositionClipRequest = {
+  compositionId: string;
+  clipId: string;
+  sourceRange: { startMs: number; endMs: number };
+  fadeInMs: number;
+  fadeOutMs: number;
+};
+
+export type DeleteCompositionClipRequest = {
+  compositionId: string;
+  clipId: string;
+};
+
+export type AddCompositionTrackRequest = {
+  compositionId: string;
+  name: string;
+  role: string;
+};
+
+export type UpdateCompositionTrackRequest = {
+  compositionId: string;
+  trackId: string;
+  gainDb?: number | null;
+  pan?: number | null;
+  muted?: boolean | null;
+  soloed?: boolean | null;
+};
+
 export type LibraryScope =
   | {
       kind: "globalLibrary";

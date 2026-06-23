@@ -1,14 +1,16 @@
 use soundworks_core::{
-    AppOverview, AssetLibraryOverview, CompositionEditorOverview, CreateProjectRequest,
-    ExportLibraryItemRequest, ExportLibraryItemResult, ExportWorkflowOverview,
-    ImportRuntimeArtifactRequest, JobStatus, LibraryMutationRequest, LibraryPlayback,
-    ModelEvaluationCatalog, ModelManagerOperation, ModelManagerOverview, MvpValidationOverview,
-    ProjectLibraryActionResult, ProjectLibraryStore, ProviderCatalog, ReviewEditResult,
-    ReviewWorkspaceOverview, RightsSafetyOverview, RuntimeEngine, RuntimeJobArtifact,
-    RuntimeJobRequest, RuntimeJobSnapshot, RuntimeJobStore, RuntimeOverview, SamplesStudioOverview,
-    SaveReviewEditRequest, SfxStudioOverview, SongStudioOverview, TtsStudioOverview, UiPreferences,
-    UiPreferencesStore, VideoToAudioOverview, VoiceConsentStatus, VoiceConsentStore,
-    VoiceLabOverview, WorkspaceOverview,
+    AddCompositionClipRequest, AddCompositionTrackRequest, AppOverview, AssetLibraryOverview,
+    CompositionDocumentStore, CompositionEditorOverview, CreateProjectRequest,
+    DeleteCompositionClipRequest, ExportLibraryItemRequest, ExportLibraryItemResult,
+    ExportWorkflowOverview, ImportRuntimeArtifactRequest, JobStatus, LibraryMutationRequest,
+    LibraryPlayback, ModelEvaluationCatalog, ModelManagerOperation, ModelManagerOverview,
+    MoveCompositionClipRequest, MvpValidationOverview, ProjectLibraryActionResult,
+    ProjectLibraryStore, ProviderCatalog, ReviewEditResult, ReviewWorkspaceOverview,
+    RightsSafetyOverview, RuntimeEngine, RuntimeJobArtifact, RuntimeJobRequest, RuntimeJobSnapshot,
+    RuntimeJobStore, RuntimeOverview, SamplesStudioOverview, SaveReviewEditRequest,
+    SfxStudioOverview, SongStudioOverview, TrimCompositionClipRequest, TtsStudioOverview,
+    UiPreferences, UiPreferencesStore, UpdateCompositionTrackRequest, VideoToAudioOverview,
+    VoiceConsentStatus, VoiceConsentStore, VoiceLabOverview, WorkspaceOverview,
 };
 use std::sync::{Arc, Mutex};
 
@@ -135,6 +137,60 @@ fn get_export_workflow_overview() -> ExportWorkflowOverview {
 #[tauri::command]
 fn get_composition_editor_overview() -> CompositionEditorOverview {
     composition_editor_overview()
+}
+
+#[tauri::command]
+fn add_composition_clip(
+    state: tauri::State<AppState>,
+    request: AddCompositionClipRequest,
+) -> Result<CompositionEditorOverview, String> {
+    let _guard = lock_writes(&state);
+    composition_add_clip(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn move_composition_clip(
+    state: tauri::State<AppState>,
+    request: MoveCompositionClipRequest,
+) -> Result<CompositionEditorOverview, String> {
+    let _guard = lock_writes(&state);
+    composition_move_clip(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn trim_composition_clip(
+    state: tauri::State<AppState>,
+    request: TrimCompositionClipRequest,
+) -> Result<CompositionEditorOverview, String> {
+    let _guard = lock_writes(&state);
+    composition_trim_clip(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn delete_composition_clip(
+    state: tauri::State<AppState>,
+    request: DeleteCompositionClipRequest,
+) -> Result<CompositionEditorOverview, String> {
+    let _guard = lock_writes(&state);
+    composition_delete_clip(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn add_composition_track(
+    state: tauri::State<AppState>,
+    request: AddCompositionTrackRequest,
+) -> Result<CompositionEditorOverview, String> {
+    let _guard = lock_writes(&state);
+    composition_add_track(request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn update_composition_track(
+    state: tauri::State<AppState>,
+    request: UpdateCompositionTrackRequest,
+) -> Result<CompositionEditorOverview, String> {
+    let _guard = lock_writes(&state);
+    composition_update_track(request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -336,7 +392,45 @@ pub fn export_workflow_overview() -> ExportWorkflowOverview {
 }
 
 pub fn composition_editor_overview() -> CompositionEditorOverview {
-    CompositionEditorOverview::reference()
+    CompositionDocumentStore::default()
+        .overview()
+        .unwrap_or_else(|_| CompositionEditorOverview::reference())
+}
+
+pub fn composition_add_clip(
+    request: AddCompositionClipRequest,
+) -> std::io::Result<CompositionEditorOverview> {
+    CompositionDocumentStore::default().add_clip(request)
+}
+
+pub fn composition_move_clip(
+    request: MoveCompositionClipRequest,
+) -> std::io::Result<CompositionEditorOverview> {
+    CompositionDocumentStore::default().move_clip(request)
+}
+
+pub fn composition_trim_clip(
+    request: TrimCompositionClipRequest,
+) -> std::io::Result<CompositionEditorOverview> {
+    CompositionDocumentStore::default().trim_clip(request)
+}
+
+pub fn composition_delete_clip(
+    request: DeleteCompositionClipRequest,
+) -> std::io::Result<CompositionEditorOverview> {
+    CompositionDocumentStore::default().delete_clip(request)
+}
+
+pub fn composition_add_track(
+    request: AddCompositionTrackRequest,
+) -> std::io::Result<CompositionEditorOverview> {
+    CompositionDocumentStore::default().add_track(request)
+}
+
+pub fn composition_update_track(
+    request: UpdateCompositionTrackRequest,
+) -> std::io::Result<CompositionEditorOverview> {
+    CompositionDocumentStore::default().update_track(request)
 }
 
 pub fn runtime_overview() -> RuntimeOverview {
@@ -506,6 +600,12 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
             export_library_item,
             get_export_workflow_overview,
             get_composition_editor_overview,
+            add_composition_clip,
+            move_composition_clip,
+            trim_composition_clip,
+            delete_composition_clip,
+            add_composition_track,
+            update_composition_track,
             get_runtime_overview,
             enqueue_runtime_job,
             cancel_runtime_job,
@@ -540,17 +640,21 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        app_overview, asset_library_overview, composition_editor_overview,
-        export_workflow_overview, model_evaluation_catalog, model_manager_overview,
-        mvp_validation_overview, provider_catalog, record_voice_profile_consent,
-        revalidate_candidate, review_workspace_overview, rights_safety_overview, runtime_job,
-        runtime_overview, samples_studio_overview, sfx_studio_overview, song_studio_overview,
-        tts_studio_overview, video_to_audio_overview, voice_lab_overview, workspace_overview,
+        app_overview, asset_library_overview, composition_add_track, composition_editor_overview,
+        composition_update_track, export_workflow_overview, model_evaluation_catalog,
+        model_manager_overview, mvp_validation_overview, provider_catalog,
+        record_voice_profile_consent, revalidate_candidate, review_workspace_overview,
+        rights_safety_overview, runtime_job, runtime_overview, samples_studio_overview,
+        sfx_studio_overview, song_studio_overview, tts_studio_overview, video_to_audio_overview,
+        voice_lab_overview, workspace_overview,
     };
-    use soundworks_core::VoiceConsentStatus;
+    use soundworks_core::{
+        AddCompositionTrackRequest, TrackRole, UpdateCompositionTrackRequest, VoiceConsentStatus,
+    };
     use std::sync::Mutex;
 
     static VOICE_CONSENT_ENV_LOCK: Mutex<()> = Mutex::new(());
+    static COMPOSITION_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn app_overview_command_returns_soundworks() {
@@ -656,16 +760,60 @@ mod tests {
 
     #[test]
     fn composition_editor_command_returns_timeline_and_component_decision() {
-        let editor = composition_editor_overview();
+        with_isolated_composition_root("cmd-overview", || {
+            let editor = composition_editor_overview();
 
-        assert_eq!(editor.schema_version, 1);
-        assert_eq!(editor.tracks.len(), 4);
-        assert_eq!(editor.timeline.selected_clip_id, "clip-voice-intro");
-        assert!(editor.mixer.render_ready);
-        assert!(editor
-            .component_decisions
-            .iter()
-            .any(|decision| decision.id == "waveform-playlist"));
+            assert_eq!(editor.schema_version, 1);
+            assert_eq!(editor.tracks.len(), 4);
+            assert_eq!(editor.timeline.selected_clip_id, "clip-voice-intro");
+            assert!(editor.mixer.render_ready);
+            assert!(editor
+                .component_decisions
+                .iter()
+                .any(|decision| decision.id == "waveform-playlist"));
+        });
+    }
+
+    #[test]
+    fn composition_editor_commands_persist_track_mutations() {
+        with_isolated_composition_root("cmd-mutate", || {
+            let with_track = composition_add_track(AddCompositionTrackRequest {
+                composition_id: "composition-demo".to_string(),
+                name: "Solo Print".to_string(),
+                role: TrackRole::Stem,
+            })
+            .expect("add track");
+            let track_id = with_track
+                .tracks
+                .iter()
+                .find(|track| track.name == "Solo Print")
+                .expect("created track")
+                .track_id
+                .clone();
+
+            let updated = composition_update_track(UpdateCompositionTrackRequest {
+                composition_id: "composition-demo".to_string(),
+                track_id: track_id.clone(),
+                gain_db: Some(-4.0),
+                pan: Some(-0.2),
+                muted: Some(true),
+                soloed: Some(false),
+            })
+            .expect("update track");
+            let track = updated
+                .tracks
+                .iter()
+                .find(|track| track.track_id == track_id)
+                .expect("updated track");
+            assert!(track.muted);
+            assert_eq!(track.gain_db, -4.0);
+
+            let reloaded = composition_editor_overview();
+            assert!(reloaded
+                .tracks
+                .iter()
+                .any(|track| track.track_id == track_id && track.muted));
+        });
     }
 
     #[test]
@@ -756,6 +904,25 @@ mod tests {
         std::env::set_var("SOUNDWORKS_VOICE_CONSENT_ROOT", &dir);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
         std::env::remove_var("SOUNDWORKS_VOICE_CONSENT_ROOT");
+        let _ = std::fs::remove_dir_all(&dir);
+        if let Err(payload) = result {
+            std::panic::resume_unwind(payload);
+        }
+    }
+
+    fn with_isolated_composition_root(label: &str, f: impl FnOnce()) {
+        let _guard = COMPOSITION_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time after epoch")
+            .as_millis();
+        let dir = std::env::temp_dir().join(format!("soundworks-compositions-{label}-{millis}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("SOUNDWORKS_COMPOSITION_ROOT", &dir);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+        std::env::remove_var("SOUNDWORKS_COMPOSITION_ROOT");
         let _ = std::fs::remove_dir_all(&dir);
         if let Err(payload) = result {
             std::panic::resume_unwind(payload);

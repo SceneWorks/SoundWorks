@@ -1663,6 +1663,12 @@ button.export-preset-card:focus-visible {
   font-size: 0.76rem;
 }
 
+.track-gain-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
 .clip-lane {
   position: relative;
   min-height: 82px;

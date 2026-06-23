@@ -18,10 +18,13 @@ import {
   fallbackWorkspace,
 } from "./appData";
 import type {
+  AddCompositionClipRequest,
+  AddCompositionTrackRequest,
   AppOverview,
   AssetLibraryOverview,
   CompositionEditorOverview,
   CreateProjectRequest,
+  DeleteCompositionClipRequest,
   ExportLibraryItemRequest,
   ExportLibraryItemResult,
   ExportWorkflowOverview,
@@ -39,12 +42,15 @@ import type {
   RuntimeJobSnapshot,
   ModelManagerOperation,
   ModelManagerOverview,
+  MoveCompositionClipRequest,
   SamplesStudioOverview,
   SaveReviewEditRequest,
   SongStudioOverview,
   SfxStudioOverview,
+  TrimCompositionClipRequest,
   TtsStudioOverview,
   UiPreferences,
+  UpdateCompositionTrackRequest,
   VideoToAudioOverview,
   VoiceConsentStatus,
   VoiceLabOverview,
@@ -354,6 +360,58 @@ export async function loadCompositionEditorOverview(): Promise<CompositionEditor
     "get_composition_editor_overview",
     fallbackCompositionEditor,
   );
+}
+
+async function mutateComposition(
+  command: string,
+  request:
+    | AddCompositionClipRequest
+    | MoveCompositionClipRequest
+    | TrimCompositionClipRequest
+    | DeleteCompositionClipRequest
+    | AddCompositionTrackRequest
+    | UpdateCompositionTrackRequest,
+): Promise<CompositionEditorOverview> {
+  if (!isTauri()) {
+    throw new Error("Composition edits require the Tauri desktop shell.");
+  }
+  return await invoke<CompositionEditorOverview>(command, { request });
+}
+
+export async function addCompositionClip(
+  request: AddCompositionClipRequest,
+): Promise<CompositionEditorOverview> {
+  return mutateComposition("add_composition_clip", request);
+}
+
+export async function moveCompositionClip(
+  request: MoveCompositionClipRequest,
+): Promise<CompositionEditorOverview> {
+  return mutateComposition("move_composition_clip", request);
+}
+
+export async function trimCompositionClip(
+  request: TrimCompositionClipRequest,
+): Promise<CompositionEditorOverview> {
+  return mutateComposition("trim_composition_clip", request);
+}
+
+export async function deleteCompositionClip(
+  request: DeleteCompositionClipRequest,
+): Promise<CompositionEditorOverview> {
+  return mutateComposition("delete_composition_clip", request);
+}
+
+export async function addCompositionTrack(
+  request: AddCompositionTrackRequest,
+): Promise<CompositionEditorOverview> {
+  return mutateComposition("add_composition_track", request);
+}
+
+export async function updateCompositionTrack(
+  request: UpdateCompositionTrackRequest,
+): Promise<CompositionEditorOverview> {
+  return mutateComposition("update_composition_track", request);
 }
 
 export async function loadMvpValidationOverview(): Promise<MvpValidationOverview> {

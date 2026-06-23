@@ -1399,6 +1399,16 @@ impl RuntimeJobStore {
             .unwrap_or_default())
     }
 
+    pub fn resolve_artifact_path(&self, artifact_path: &str) -> io::Result<PathBuf> {
+        let path = Path::new(artifact_path);
+        if path.is_absolute() {
+            let relative_path = relative_store_path(&self.root, path)?;
+            return self.resolve_artifact_path(&relative_path);
+        }
+        let segments: Vec<&str> = artifact_path.split('/').collect();
+        sanitized_join(&self.root, &segments)
+    }
+
     /// Read a single job snapshot by id so the UI can poll an in-flight worker
     /// (UX-F1). Returns `Ok(None)` for an unknown id. Path-validated through the
     /// same `read_job` traversal guard (F-004) as cancel/retry/artifacts.
@@ -1415,7 +1425,7 @@ impl RuntimeJobStore {
         for entry in fs::read_dir(jobs_root)? {
             let path = entry?.path().join("job.json");
             if path.is_file() {
-                jobs.push(read_json(&path)?);
+                jobs.push(self.normalize_job_artifact_paths(read_json(&path)?));
             }
         }
         Ok(jobs)
@@ -1427,10 +1437,23 @@ impl RuntimeJobStore {
         // closes the read-traversal across the whole job store.
         let path = sanitized_join(&self.root, &["jobs", job_id, "job.json"])?;
         if path.is_file() {
-            Ok(Some(read_json(path)?))
+            Ok(Some(self.normalize_job_artifact_paths(read_json(path)?)))
         } else {
             Ok(None)
         }
+    }
+
+    fn normalize_job_artifact_paths(&self, mut job: RuntimeJobSnapshot) -> RuntimeJobSnapshot {
+        for artifact in &mut job.artifacts {
+            if Path::new(&artifact.path).is_absolute() {
+                if let Ok(relative_path) =
+                    relative_store_path(&self.root, Path::new(&artifact.path))
+                {
+                    artifact.path = relative_path;
+                }
+            }
+        }
+        job
     }
 
     // UX-NB1: render the composition described in the request parameters into a
@@ -1611,12 +1634,14 @@ impl RuntimeJobStore {
         job.artifacts = vec![
             artifact(
                 RuntimeArtifactKind::AudioPreview,
+                &self.root,
                 &audio_path,
                 "audio/wav",
                 "Rendered composition mixdown WAV",
             )?,
             artifact(
                 RuntimeArtifactKind::OutputManifest,
+                &self.root,
                 &manifest_path,
                 "application/json",
                 "Composition mixdown manifest and provenance",
@@ -1735,12 +1760,14 @@ impl RuntimeJobStore {
         job.artifacts = vec![
             artifact(
                 RuntimeArtifactKind::AudioPreview,
+                &self.root,
                 &audio_path,
                 "audio/wav",
                 "Runtime smoke WAV artifact",
             )?,
             artifact(
                 RuntimeArtifactKind::OutputManifest,
+                &self.root,
                 &manifest_path,
                 "application/json",
                 "Output manifest and provenance",
@@ -1922,12 +1949,14 @@ impl RuntimeJobStore {
         job.artifacts = vec![
             artifact(
                 RuntimeArtifactKind::AudioPreview,
+                &self.root,
                 &audio_path,
                 "audio/wav",
                 "Generated Kokoro speech WAV",
             )?,
             artifact(
                 RuntimeArtifactKind::OutputManifest,
+                &self.root,
                 &manifest_path,
                 "application/json",
                 "Generated speech manifest and provenance",
@@ -2066,12 +2095,14 @@ impl RuntimeJobStore {
         job.artifacts = vec![
             artifact(
                 RuntimeArtifactKind::AudioPreview,
+                &self.root,
                 &audio_path,
                 "audio/wav",
                 "Generated native SFX/ambience WAV",
             )?,
             artifact(
                 RuntimeArtifactKind::OutputManifest,
+                &self.root,
                 &manifest_path,
                 "application/json",
                 "Generated SFX manifest, loop metadata, and provenance",
@@ -2250,12 +2281,14 @@ impl RuntimeJobStore {
         job.artifacts = vec![
             artifact(
                 RuntimeArtifactKind::AudioPreview,
+                &self.root,
                 &audio_path,
                 "audio/wav",
                 "Generated native sample/loop WAV",
             )?,
             artifact(
                 RuntimeArtifactKind::OutputManifest,
+                &self.root,
                 &manifest_path,
                 "application/json",
                 "Generated sample/loop manifest, BPM/key/loop metadata, and provenance",
@@ -2278,6 +2311,7 @@ impl RuntimeJobStore {
         )?;
         job.artifacts = vec![artifact(
             RuntimeArtifactKind::ErrorReport,
+            &self.root,
             &path,
             "application/json",
             "Actionable runtime error report",
@@ -2613,17 +2647,37 @@ fn status_event(status: &JobStatus) -> &'static str {
 
 fn artifact(
     kind: RuntimeArtifactKind,
+    store_root: &Path,
     path: &Path,
     mime_type: &str,
     summary: &str,
 ) -> io::Result<RuntimeJobArtifact> {
+    let persisted_path = relative_store_path(store_root, path)?;
     Ok(RuntimeJobArtifact {
         kind,
-        path: path.display().to_string(),
+        path: persisted_path,
         mime_type: mime_type.to_string(),
         bytes: fs::metadata(path)?.len(),
         summary: summary.to_string(),
     })
+}
+
+fn relative_store_path(store_root: &Path, path: &Path) -> io::Result<String> {
+    let relative_path = path.strip_prefix(store_root).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "runtime artifact path {} is outside store root {}",
+                path.display(),
+                store_root.display()
+            ),
+        )
+    })?;
+    Ok(relative_path
+        .iter()
+        .map(|segment| segment.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/"))
 }
 
 fn write_json(path: impl AsRef<Path>, value: &impl Serialize) -> io::Result<()> {
@@ -2958,8 +3012,9 @@ mod tests {
     use super::{
         CacheStatus, CancellationState, DeviceInventory, ExecutionStrategy, LicenseAcceptanceState,
         ModelCacheState, NativeModel, ProviderAdapterKind, RuntimeArtifactKind,
-        RuntimeAvailability, RuntimeCompatibility, RuntimeEngine, RuntimeHealth, RuntimeJobRequest,
-        RuntimeJobStore, RuntimeOverview, RuntimePackagingPolicy, ValidationStatus, WarmupStatus,
+        RuntimeAvailability, RuntimeCompatibility, RuntimeEngine, RuntimeHealth,
+        RuntimeJobArtifact, RuntimeJobRequest, RuntimeJobStore, RuntimeOverview,
+        RuntimePackagingPolicy, ValidationStatus, WarmupStatus,
     };
     use crate::domain::{JobKind, ModelRuntime};
     use crate::manifests::{CapabilityWorkflow, ModelInstallStatus, ProviderCatalog};
@@ -2970,6 +3025,12 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     static CONSENT_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn artifact_file_exists(store: &RuntimeJobStore, artifact: &RuntimeJobArtifact) -> bool {
+        store
+            .resolve_artifact_path(&artifact.path)
+            .is_ok_and(|path| path.is_file())
+    }
 
     #[test]
     fn reference_runtime_blocks_manifest_only_models_and_jobs() {
@@ -3134,16 +3195,64 @@ mod tests {
         assert!(job_record_root.join("recipe.json").is_file());
         assert!(job_record_root.join("model.json").is_file());
         assert!(job_record_root.join("events.jsonl").is_file());
+        let audio_artifact = job
+            .artifacts
+            .iter()
+            .find(|artifact| artifact.kind == RuntimeArtifactKind::AudioPreview)
+            .expect("audio artifact");
+        assert!(PathBuf::from(&audio_artifact.path).is_relative());
+        assert!(audio_artifact
+            .path
+            .starts_with(&format!("jobs/{}/artifacts/", job.id)));
         assert!(job.artifacts.iter().any(|artifact| {
             artifact.kind == RuntimeArtifactKind::AudioPreview
                 && artifact.bytes > 44
-                && PathBuf::from(&artifact.path).is_file()
+                && artifact_file_exists(&store, artifact)
         }));
         assert!(store
             .read_jobs()
             .expect("read jobs")
             .iter()
             .any(|stored| stored.id == job.id));
+    }
+
+    #[test]
+    fn legacy_absolute_artifact_paths_are_normalized_on_read() {
+        let store = RuntimeJobStore::new(temp_runtime_root("legacy-artifact-path"));
+        let overview = installed_overview(&store);
+
+        let job = store
+            .enqueue_and_run(
+                &engine(),
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "hexgrad".to_string(),
+                    model_id: "native-smoke".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Runtime smoke path migration".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters: BTreeMap::new(),
+                },
+            )
+            .expect("enqueue succeeds");
+
+        let mut legacy_job = job.clone();
+        let absolute_artifact_path = store
+            .resolve_artifact_path(&legacy_job.artifacts[0].path)
+            .expect("resolve artifact");
+        legacy_job.artifacts[0].path = absolute_artifact_path.display().to_string();
+        super::write_json(
+            store.root().join(&job.record_root).join("job.json"),
+            &legacy_job,
+        )
+        .expect("write legacy job");
+
+        let reread = store.job(&job.id).expect("read job").expect("job exists");
+        assert!(PathBuf::from(&reread.artifacts[0].path).is_relative());
+        assert!(reread.artifacts[0]
+            .path
+            .starts_with(&format!("jobs/{}/artifacts/", job.id)));
     }
 
     #[test]
@@ -3182,7 +3291,7 @@ mod tests {
         assert!(job.artifacts.iter().any(|artifact| {
             artifact.kind == RuntimeArtifactKind::AudioPreview
                 && artifact.bytes > 44
-                && PathBuf::from(&artifact.path).is_file()
+                && artifact_file_exists(&store, artifact)
         }));
     }
 
@@ -3234,7 +3343,7 @@ mod tests {
         );
         assert!(job.artifacts.iter().any(|artifact| {
             artifact.kind == RuntimeArtifactKind::ErrorReport
-                && PathBuf::from(&artifact.path).is_file()
+                && artifact_file_exists(&store, artifact)
         }));
         assert!(job
             .log_tail
@@ -3294,7 +3403,7 @@ mod tests {
         assert!(job.actionable_error.is_some());
         assert!(job.artifacts.iter().any(|artifact| {
             artifact.kind == RuntimeArtifactKind::ErrorReport
-                && PathBuf::from(&artifact.path).is_file()
+                && artifact_file_exists(&store, artifact)
         }));
     }
 
@@ -3375,7 +3484,7 @@ mod tests {
             artifact.kind == RuntimeArtifactKind::AudioPreview
                 && artifact.summary.contains("Generated Kokoro speech")
                 && artifact.bytes > 44
-                && PathBuf::from(&artifact.path).is_file()
+                && artifact_file_exists(&store, artifact)
         }));
 
         let library = crate::ProjectLibraryStore::new(temp_runtime_root("kokoro-library"));
@@ -3443,7 +3552,7 @@ mod tests {
             artifact.kind == RuntimeArtifactKind::AudioPreview
                 && artifact.summary.contains("Generated native SFX")
                 && artifact.bytes > 44
-                && PathBuf::from(&artifact.path).is_file()
+                && artifact_file_exists(&store, artifact)
         }));
 
         let library = crate::ProjectLibraryStore::new(temp_runtime_root("native-sfx-library"));
@@ -3537,7 +3646,7 @@ mod tests {
             artifact.kind == RuntimeArtifactKind::AudioPreview
                 && artifact.summary.contains("Generated native sample/loop")
                 && artifact.bytes > 44
-                && PathBuf::from(&artifact.path).is_file()
+                && artifact_file_exists(&store, artifact)
         }));
 
         let library = crate::ProjectLibraryStore::new(temp_runtime_root("native-music-library"));
@@ -3625,7 +3734,7 @@ mod tests {
         assert!(job.artifacts.iter().any(|artifact| {
             artifact.kind == RuntimeArtifactKind::AudioPreview
                 && artifact.bytes > 44
-                && PathBuf::from(&artifact.path).is_file()
+                && artifact_file_exists(&store, artifact)
         }));
 
         let library = crate::ProjectLibraryStore::new(temp_runtime_root("native-sample-library"));

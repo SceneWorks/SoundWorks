@@ -1480,7 +1480,7 @@ impl RuntimeJobStore {
         let duration_ms = params
             .get("durationMs")
             .and_then(Value::as_u64)
-            .unwrap_or(0);
+            .unwrap_or_else(|| composition_document_duration_ms(params).unwrap_or(0));
         let master_gain = db_to_linear(
             params
                 .get("masterGainDb")
@@ -1521,49 +1521,65 @@ impl RuntimeJobStore {
         let mut clips: Vec<MixClip> = vec![];
         let mut resolved = 0usize;
         let mut skipped = 0usize;
-        if let Some(entries) = params.get("clips").and_then(Value::as_array) {
-            for entry in entries {
-                let asset_id = entry.get("assetId").and_then(Value::as_str).unwrap_or("");
-                match library.load_item_pcm(asset_id).ok().flatten() {
-                    Some((samples, source_channels, source_sample_rate)) => {
-                        let source_frames =
-                            samples.len() as u64 / u64::from(source_channels.max(1));
-                        let default_end =
-                            source_frames * 1000 / u64::from(source_sample_rate.max(1));
-                        clips.push(MixClip {
-                            samples,
-                            source_channels,
-                            source_sample_rate,
-                            timeline_start_ms: entry
-                                .get("timelineStartMs")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
-                            source_start_ms: entry
-                                .get("sourceStartMs")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
-                            source_end_ms: entry
-                                .get("sourceEndMs")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(default_end),
-                            gain: db_to_linear(
-                                entry.get("gainDb").and_then(Value::as_f64).unwrap_or(0.0) as f32,
-                            ),
-                            pan: entry.get("pan").and_then(Value::as_f64).unwrap_or(0.0) as f32,
-                            fade_in_ms: entry.get("fadeInMs").and_then(Value::as_u64).unwrap_or(0),
-                            fade_out_ms: entry
-                                .get("fadeOutMs")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0),
-                        });
-                        resolved += 1;
-                    }
-                    None => {
-                        skipped += 1;
-                        job.log_tail
-                            .push(format!("skipped unresolved clip asset {asset_id}"));
+        let document_entries = params
+            .get("clips")
+            .and_then(Value::as_array)
+            .cloned()
+            .map(Ok)
+            .unwrap_or_else(|| composition_document_clip_entries(params));
+        match document_entries {
+            Ok(entries) => {
+                for entry in &entries {
+                    let asset_id = entry.get("assetId").and_then(Value::as_str).unwrap_or("");
+                    match library.load_item_pcm(asset_id).ok().flatten() {
+                        Some((samples, source_channels, source_sample_rate)) => {
+                            let source_frames =
+                                samples.len() as u64 / u64::from(source_channels.max(1));
+                            let default_end =
+                                source_frames * 1000 / u64::from(source_sample_rate.max(1));
+                            clips.push(MixClip {
+                                samples,
+                                source_channels,
+                                source_sample_rate,
+                                timeline_start_ms: entry
+                                    .get("timelineStartMs")
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(0),
+                                source_start_ms: entry
+                                    .get("sourceStartMs")
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(0),
+                                source_end_ms: entry
+                                    .get("sourceEndMs")
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(default_end),
+                                gain: db_to_linear(
+                                    entry.get("gainDb").and_then(Value::as_f64).unwrap_or(0.0)
+                                        as f32,
+                                ),
+                                pan: entry.get("pan").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+                                fade_in_ms: entry
+                                    .get("fadeInMs")
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(0),
+                                fade_out_ms: entry
+                                    .get("fadeOutMs")
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(0),
+                            });
+                            resolved += 1;
+                        }
+                        None => {
+                            skipped += 1;
+                            job.log_tail
+                                .push(format!("skipped unresolved clip asset {asset_id}"));
+                        }
                     }
                 }
+            }
+            Err(error) => {
+                job.log_tail
+                    .push(format!("composition document unavailable: {error}"));
             }
         }
 
@@ -2709,6 +2725,44 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: impl AsRef<Path>) -> io::Result
     serde_json::from_slice(&bytes).map_err(io::Error::other)
 }
 
+fn composition_document_clip_entries(params: &BTreeMap<String, Value>) -> io::Result<Vec<Value>> {
+    let composition_id = params
+        .get("compositionId")
+        .and_then(Value::as_str)
+        .unwrap_or("composition-demo");
+    let composition = crate::CompositionDocumentStore::default().composition(composition_id)?;
+    let any_soloed = composition.tracks.iter().any(|track| track.soloed);
+    Ok(composition
+        .tracks
+        .iter()
+        .filter(|track| !track.muted)
+        .filter(|track| !any_soloed || track.soloed)
+        .flat_map(|track| {
+            track.clips.iter().map(|clip| {
+                serde_json::json!({
+                    "assetId": clip.asset_id,
+                    "timelineStartMs": clip.timeline_start_ms,
+                    "sourceStartMs": clip.source_range.start_ms,
+                    "sourceEndMs": clip.source_range.end_ms,
+                    "gainDb": track.gain_db + clip.gain_db,
+                    "pan": clip.pan,
+                    "fadeInMs": clip.fade_in_ms,
+                    "fadeOutMs": clip.fade_out_ms,
+                })
+            })
+        })
+        .collect())
+}
+
+fn composition_document_duration_ms(params: &BTreeMap<String, Value>) -> io::Result<u64> {
+    let composition_id = params
+        .get("compositionId")
+        .and_then(Value::as_str)
+        .unwrap_or("composition-demo");
+    let composition = crate::CompositionDocumentStore::default().composition(composition_id)?;
+    Ok(crate::composition_duration_ms(&composition).max(34_000))
+}
+
 fn timestamp_millis() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -3025,6 +3079,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     static CONSENT_ENV_LOCK: Mutex<()> = Mutex::new(());
+    static COMPOSITION_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn artifact_file_exists(store: &RuntimeJobStore, artifact: &RuntimeJobArtifact) -> bool {
         store
@@ -3293,6 +3348,58 @@ mod tests {
                 && artifact.bytes > 44
                 && artifact_file_exists(&store, artifact)
         }));
+    }
+
+    #[test]
+    fn composition_render_reads_persisted_document_when_clips_are_omitted() {
+        with_isolated_composition_root("mixdown-document", || {
+            let document_store = crate::CompositionDocumentStore::default();
+            for track_id in ["track-voice", "track-loop", "track-sfx", "track-stems"] {
+                document_store
+                    .update_track(crate::UpdateCompositionTrackRequest {
+                        composition_id: "composition-demo".to_string(),
+                        track_id: track_id.to_string(),
+                        gain_db: None,
+                        pan: None,
+                        muted: Some(true),
+                        soloed: None,
+                    })
+                    .expect("mute persisted track");
+            }
+
+            let store = RuntimeJobStore::new(temp_runtime_root("mixdown-document-runtime"));
+            let overview = installed_overview(&store);
+            let mut parameters = BTreeMap::new();
+            parameters.insert(
+                "compositionId".to_string(),
+                serde_json::json!("composition-demo"),
+            );
+            parameters.insert("sampleRateHz".to_string(), serde_json::json!(48_000));
+            parameters.insert("channels".to_string(), serde_json::json!(2));
+            parameters.insert("masterGainDb".to_string(), serde_json::json!(0.0));
+
+            let job = store
+                .enqueue_and_run(
+                    &engine(),
+                    &overview,
+                    RuntimeJobRequest {
+                        provider_id: "soundworks-native".to_string(),
+                        model_id: "composition-mixdown".to_string(),
+                        kind: JobKind::RenderComposition,
+                        workflow: CapabilityWorkflow::CompositionRender,
+                        prompt: "Render saved timeline".to_string(),
+                        source_surface: "Multitrack".to_string(),
+                        parameters,
+                    },
+                )
+                .expect("enqueue succeeds");
+
+            assert_eq!(job.status, crate::domain::JobStatus::Succeeded);
+            assert!(job.progress.as_ref().is_some_and(|progress| progress
+                .message
+                .as_ref()
+                .is_some_and(|message| message.contains("0 clip(s) mixed"))));
+        });
     }
 
     #[test]
@@ -4381,6 +4488,21 @@ mod tests {
         std::env::set_var("SOUNDWORKS_VOICE_CONSENT_ROOT", &root);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
         std::env::remove_var("SOUNDWORKS_VOICE_CONSENT_ROOT");
+        let _ = fs::remove_dir_all(&root);
+        match result {
+            Ok(value) => value,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
+    fn with_isolated_composition_root<T>(label: &str, f: impl FnOnce() -> T) -> T {
+        let _guard = COMPOSITION_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let root = temp_runtime_root(label);
+        std::env::set_var("SOUNDWORKS_COMPOSITION_ROOT", &root);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+        std::env::remove_var("SOUNDWORKS_COMPOSITION_ROOT");
         let _ = fs::remove_dir_all(&root);
         match result {
             Ok(value) => value,

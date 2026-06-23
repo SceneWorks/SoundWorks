@@ -1,11 +1,14 @@
-// DR-02 + UX-10: Multitrack composition editor. Render Mixdown is now a real
-// button that enqueues a composition-render job (UX-NB1 backend) with live
-// progress + inline playback of the rendered asset, and per-track Mute genuinely
-// changes the next render. Clip drag/trim and the tool palette remain a visual
-// preview (the composition document is not yet persisted-mutable) — surfaced
-// honestly with a caption rather than as dead buttons.
 import { useState } from "react";
-import { CircleCheck, ClipboardCheck, Disc3, Play } from "lucide-react";
+import {
+  CircleCheck,
+  ClipboardCheck,
+  Disc3,
+  Plus,
+  Scissors,
+  Trash2,
+  MoveHorizontal,
+  Play,
+} from "lucide-react";
 import {
   GenerationPanel,
   HeroStat,
@@ -27,6 +30,12 @@ export function MultitrackScreen() {
     compositionEditor,
     overview,
     renderComposition,
+    addCompositionClipToTrack,
+    moveCompositionClip,
+    trimCompositionClip,
+    deleteCompositionClip,
+    addCompositionTrack,
+    updateCompositionTrack,
     runtimeOperation,
     cancelRuntimeOperation,
     retryRuntimeOperation,
@@ -35,22 +44,50 @@ export function MultitrackScreen() {
     previewLibraryItem,
   } = useAppContext();
 
-  // UX-10: client-side per-track mute overrides that feed the render (the
-  // composition document itself is not yet persisted-mutable, so clip drag/trim
-  // stays a preview — but mute + gain genuinely change the rendered mixdown).
-  const [mutedTracks, setMutedTracks] = useState<Set<string>>(new Set());
-  const toggleMute = (trackId: string) =>
-    setMutedTracks((current) => {
-      const next = new Set(current);
-      if (next.has(trackId)) {
-        next.delete(trackId);
-      } else {
-        next.add(trackId);
-      }
-      return next;
-    });
+  const [selectedClipId, setSelectedClipId] = useState(
+    compositionEditor.timeline.selectedClipId,
+  );
   const canRender = compositionEditor.exportPlan.canRenderMixdown;
   const selectedItemId = assetLibrary.selectedItem?.item.id;
+  const trackWithSelectedClip = compositionEditor.tracks.find((track) =>
+    track.clips.some((clip) => clip.clipId === selectedClipId),
+  );
+  const selectedClip =
+    trackWithSelectedClip?.clips.find((clip) => clip.clipId === selectedClipId) ??
+    compositionEditor.tracks.flatMap((track) => track.clips)[0];
+  const selectedTrackId =
+    trackWithSelectedClip?.trackId ?? compositionEditor.tracks[0]?.trackId;
+  const defaultAsset = compositionEditor.assetBin[0];
+  const snapMs = compositionEditor.timeline.snapGridMs;
+
+  const moveSelectedClip = (direction: -1 | 1) => {
+    if (!selectedClip) {
+      return;
+    }
+    moveCompositionClip(
+      selectedClip.clipId,
+      Math.max(0, selectedClip.timelineStartMs + direction * snapMs),
+    );
+  };
+
+  const trimSelectedClip = () => {
+    if (!selectedClip) {
+      return;
+    }
+    const startMs = Math.min(
+      selectedClip.sourceRange.startMs + snapMs,
+      selectedClip.sourceRange.endMs - 250,
+    );
+    trimCompositionClip(
+      selectedClip.clipId,
+      {
+        startMs: Math.max(0, startMs),
+        endMs: selectedClip.sourceRange.endMs,
+      },
+      selectedClip.fadeInMs,
+      selectedClip.fadeOutMs,
+    );
+  };
 
   return (
     <section
@@ -64,7 +101,7 @@ export function MultitrackScreen() {
           <button
             className="primary-action composition-action"
             disabled={!canRender}
-            onClick={() => renderComposition([...mutedTracks])}
+            onClick={() => renderComposition()}
             type="button"
             title={
               canRender
@@ -121,29 +158,88 @@ export function MultitrackScreen() {
       <div className="composition-layout">
         <div className="composition-main">
           <section className="composition-toolbar" aria-label="Editor tools">
-            {compositionEditor.tools.map((tool) => (
-              <div
+            <button
+              className="tool-button"
+              type="button"
+              disabled={!selectedTrackId || !defaultAsset}
+              onClick={() =>
+                selectedTrackId &&
+                defaultAsset &&
+                addCompositionClipToTrack(selectedTrackId, defaultAsset)
+              }
+              title="Add the first bin asset to the selected track"
+            >
+              <Plus aria-hidden="true" size={16} />
+              <span>Add clip</span>
+            </button>
+            <button
+              className="tool-button"
+              type="button"
+              disabled={!selectedClip}
+              onClick={() => moveSelectedClip(-1)}
+              title="Move selected clip earlier"
+            >
+              <MoveHorizontal aria-hidden="true" size={16} />
+              <span>Earlier</span>
+            </button>
+            <button
+              className="tool-button"
+              type="button"
+              disabled={!selectedClip}
+              onClick={() => moveSelectedClip(1)}
+              title="Move selected clip later"
+            >
+              <MoveHorizontal aria-hidden="true" size={16} />
+              <span>Later</span>
+            </button>
+            <button
+              className="tool-button"
+              type="button"
+              disabled={!selectedClip}
+              onClick={trimSelectedClip}
+              title="Trim selected clip by one grid step"
+            >
+              <Scissors aria-hidden="true" size={16} />
+              <span>Trim</span>
+            </button>
+            <button
+              className="tool-button"
+              type="button"
+              disabled={!selectedClip}
+              onClick={() => selectedClip && deleteCompositionClip(selectedClip.clipId)}
+              title="Delete selected clip"
+            >
+              <Trash2 aria-hidden="true" size={16} />
+              <span>Delete</span>
+            </button>
+            <button
+              className="tool-button"
+              type="button"
+              onClick={() => addCompositionTrack("sfx")}
+              title="Add a new SFX track"
+            >
+              <Plus aria-hidden="true" size={16} />
+              <span>Add track</span>
+            </button>
+            {compositionEditor.tools.slice(0, 3).map((tool) => (
+              <button
                 className={
                   tool.id === compositionEditor.timeline.selectedTool
-                    ? "tool-button selected is-inert"
-                    : "tool-button is-inert"
+                    ? "tool-button selected"
+                    : "tool-button"
                 }
                 key={tool.id}
                 title={tool.label}
-                aria-disabled="true"
+                type="button"
               >
                 <span>{tool.label}</span>
-              </div>
+              </button>
             ))}
           </section>
 
           <section className="timeline-board" aria-label="Timeline tracks">
-            <small className="field-hint">
-              Clip drag/trim and the tool palette are a visual preview; Render
-              Mixdown and per-track Mute are live and shape the rendered asset.
-            </small>
             <div className="timeline-selection" aria-label="Timeline selection">
-              <span>{compositionEditor.timeline.selectedClipId}</span>
+              <span>{selectedClip?.clipId ?? "no clip selected"}</span>
               <span>
                 cursor{" "}
                 {formatDuration(compositionEditor.timeline.playbackCursorMs)}
@@ -168,35 +264,64 @@ export function MultitrackScreen() {
                   </small>
                   <button
                     type="button"
-                    className={
-                      track.muted || mutedTracks.has(track.trackId)
-                        ? "secondary-action is-active"
-                        : "secondary-action"
+                    className={track.muted ? "secondary-action is-active" : "secondary-action"}
+                    onClick={() =>
+                      updateCompositionTrack(track.trackId, {
+                        muted: !track.muted,
+                      })
                     }
-                    disabled={track.muted}
-                    onClick={() => toggleMute(track.trackId)}
-                    title={
-                      track.muted
-                        ? "Track is muted in the composition"
-                        : "Mute this track in the next render"
-                    }
+                    title="Toggle saved track mute"
                   >
-                    {track.muted || mutedTracks.has(track.trackId)
-                      ? "Muted"
-                      : "Mute"}
-                    {track.soloed ? " / Solo" : ""}
+                    {track.muted ? "Muted" : "Mute"}
                   </button>
+                  <button
+                    type="button"
+                    className={track.soloed ? "secondary-action is-active" : "secondary-action"}
+                    onClick={() =>
+                      updateCompositionTrack(track.trackId, {
+                        soloed: !track.soloed,
+                      })
+                    }
+                    title="Toggle saved track solo"
+                  >
+                    {track.soloed ? "Soloed" : "Solo"}
+                  </button>
+                  <div className="track-gain-controls" aria-label={`${track.name} gain`}>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() =>
+                        updateCompositionTrack(track.trackId, {
+                          gainDb: Math.max(-60, track.gainDb - 1),
+                        })
+                      }
+                    >
+                      -1 dB
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() =>
+                        updateCompositionTrack(track.trackId, {
+                          gainDb: Math.min(12, track.gainDb + 1),
+                        })
+                      }
+                    >
+                      +1 dB
+                    </button>
+                  </div>
                 </div>
                 <div className="clip-lane">
                   {track.clips.map((clip) => (
-                    <div
+                    <button
                       className={
-                        clip.clipId ===
-                        compositionEditor.timeline.selectedClipId
-                          ? "timeline-clip selected is-inert"
-                          : "timeline-clip is-inert"
+                        clip.clipId === selectedClip?.clipId
+                          ? "timeline-clip selected"
+                          : "timeline-clip"
                       }
                       key={clip.clipId}
+                      type="button"
+                      onClick={() => setSelectedClipId(clip.clipId)}
                       style={{
                         marginLeft: `${Math.min(
                           68,
@@ -213,11 +338,10 @@ export function MultitrackScreen() {
                         )}%`,
                       }}
                       title={clip.assetName}
-                      aria-disabled="true"
                     >
                       <strong>{clip.assetName}</strong>
                       <span>{statusLabel(clip.assetKind)}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </article>
@@ -261,6 +385,18 @@ export function MultitrackScreen() {
                     <span>{statusLabel(asset.sourceWorkflow)}</span>
                     {asset.draggableToTimeline ? <span>placeable</span> : null}
                   </div>
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    disabled={!selectedTrackId || !asset.draggableToTimeline}
+                    onClick={() =>
+                      selectedTrackId && addCompositionClipToTrack(selectedTrackId, asset)
+                    }
+                    title="Add this asset to the selected track"
+                  >
+                    <Plus aria-hidden="true" size={14} />
+                    <span>Add</span>
+                  </button>
                 </article>
               ))}
             </div>

@@ -2809,6 +2809,100 @@
           "pan": 0.0,
           "role": "music",
           "soloed": false
+        },
+        {
+          "automation": [],
+          "clips": [
+            {
+              "assetId": "asset-sfx-001",
+              "fadeInMs": 60,
+              "fadeOutMs": 160,
+              "gainDb": 0.0,
+              "id": "clip-hatch-hit",
+              "pan": 0.0,
+              "sourceRange": {
+                "endMs": 1800,
+                "startMs": 0
+              },
+              "timelineStartMs": 7000,
+              "versionId": "version-sfx-001-a"
+            },
+            {
+              "assetId": "asset-ambience-001",
+              "fadeInMs": 60,
+              "fadeOutMs": 160,
+              "gainDb": -2.0,
+              "id": "clip-ambience-room",
+              "pan": 0.0,
+              "sourceRange": {
+                "endMs": 12000,
+                "startMs": 0
+              },
+              "timelineStartMs": 11200,
+              "versionId": "version-ambience-001-a"
+            }
+          ],
+          "gainDb": -3.0,
+          "id": "track-sfx",
+          "muted": false,
+          "name": "Foley hits",
+          "pan": -0.18000000715255737,
+          "role": "sfx",
+          "soloed": false
+        },
+        {
+          "automation": [],
+          "clips": [
+            {
+              "assetId": "asset-song-001",
+              "fadeInMs": 60,
+              "fadeOutMs": 160,
+              "gainDb": -2.0,
+              "id": "clip-song-hook",
+              "pan": 0.0,
+              "sourceRange": {
+                "endMs": 18000,
+                "startMs": 0
+              },
+              "timelineStartMs": 16000,
+              "versionId": "version-song-001-a"
+            },
+            {
+              "assetId": "asset-stem-vocal-001",
+              "fadeInMs": 60,
+              "fadeOutMs": 160,
+              "gainDb": -2.0,
+              "id": "clip-vocal-stem",
+              "pan": 0.0,
+              "sourceRange": {
+                "endMs": 18000,
+                "startMs": 0
+              },
+              "timelineStartMs": 16000,
+              "versionId": "version-stem-vocal-001-a"
+            },
+            {
+              "assetId": "asset-music-001",
+              "fadeInMs": 60,
+              "fadeOutMs": 160,
+              "gainDb": -2.0,
+              "id": "clip-music-reference",
+              "pan": 0.0,
+              "sourceRange": {
+                "endMs": 9500,
+                "startMs": 0
+              },
+              "timelineStartMs": 24000,
+              "versionId": "version-music-001-a"
+            }
+          ],
+          "gainDb": -5.0,
+          "id": "track-stems",
+          "muted": false,
+          "name": "Song stems",
+          "pan": 0.11999999731779099,
+          "role": "stem",
+          "soloed": false
         }
       ]
     },
@@ -3130,10 +3224,7 @@
         "trackId": "track-loop"
       },
       {
-        "automationTargets": [
-          "gain",
-          "pan"
-        ],
+        "automationTargets": [],
         "clipCount": 2,
         "clips": [
           {
@@ -3147,7 +3238,7 @@
             "clipId": "clip-hatch-hit",
             "fadeInMs": 60,
             "fadeOutMs": 160,
-            "gainDb": -2.0,
+            "gainDb": 0.0,
             "lane": 0,
             "pan": 0.0,
             "sourceRange": {
@@ -3162,8 +3253,8 @@
           },
           {
             "assetId": "asset-ambience-001",
-            "assetKind": "ambience",
-            "assetName": "Engine room bed",
+            "assetKind": "reference-audio",
+            "assetName": "asset-ambience-001",
             "canDelete": true,
             "canDuplicate": true,
             "canSplit": true,
@@ -3196,15 +3287,13 @@
         "trackId": "track-sfx"
       },
       {
-        "automationTargets": [
-          "gain"
-        ],
+        "automationTargets": [],
         "clipCount": 3,
         "clips": [
           {
             "assetId": "asset-song-001",
             "assetKind": "song",
-            "assetName": "City Lights full mix",
+            "assetName": "Signal reveal cue",
             "canDelete": true,
             "canDuplicate": true,
             "canSplit": true,
@@ -6804,9 +6893,9 @@
       "clipCount": 7,
       "componentCandidateCount": 4,
       "editableAssetKinds": [
-        "ambience",
         "loop",
         "music-clip",
+        "reference-audio",
         "sfx",
         "song",
         "stem",

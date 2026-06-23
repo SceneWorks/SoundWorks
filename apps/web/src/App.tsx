@@ -42,16 +42,20 @@ import {
 } from "./appData";
 import {
   loadAppOverview,
+  addCompositionClip as addCompositionClipCommand,
+  addCompositionTrack as addCompositionTrackCommand,
   loadAssetLibraryOverview,
   loadCompositionEditorOverview,
   cancelRuntimeJob,
   createSoundWorksProject,
+  deleteCompositionClip as deleteCompositionClipCommand,
   enqueueRuntimeJob,
   exportLibraryItem,
   importRuntimeArtifactToLibrary,
   loadLibraryPlayback,
   loadExportWorkflowOverview,
   mutateLibraryItem,
+  moveCompositionClip as moveCompositionClipCommand,
   openSoundWorksProject,
   retryRuntimeJob,
   saveReviewEdit,
@@ -73,6 +77,8 @@ import {
   isTauri,
   loadUiPreferences,
   saveUiPreferences,
+  trimCompositionClip as trimCompositionClipCommand,
+  updateCompositionTrack as updateCompositionTrackCommand,
 } from "./tauri";
 import { isThemeMode } from "./accents";
 import type { ThemeMode } from "./accents";
@@ -623,6 +629,29 @@ export function App() {
     refreshOverviewSummary();
   }
 
+  function applyCompositionEditorResult(
+    promise: Promise<CompositionEditorOverview>,
+    pendingMessage: string,
+    successMessage: string,
+  ) {
+    setLibraryActionStatus(actionFeedback.pending(pendingMessage));
+    promise
+      .then((nextEditor) => {
+        if (mountedRef.current) {
+          setCompositionEditor(nextEditor);
+          setLibraryActionStatus(actionFeedback.success(successMessage));
+          refreshOverviewSummary();
+        }
+      })
+      .catch((error) => {
+        if (mountedRef.current) {
+          setLibraryActionStatus(
+            actionFeedback.error(`Composition edit unavailable: ${String(error)}`),
+          );
+        }
+      });
+  }
+
   function createProject(name?: string) {
     const projectName =
       name?.trim() || `SoundWorks Recovery ${new Date().toLocaleTimeString()}`;
@@ -932,30 +961,124 @@ export function App() {
     }
   }
 
-  // UX-10/UX-NB1: render the current composition into a mixed-down asset. Builds
-  // the clip list from the active (non-muted, solo-aware) tracks and enqueues a
-  // render-composition job, which the UX-F1 poller drives to terminal + imports.
-  function renderComposition(mutedTrackIds: string[] = []) {
-    const tracks = compositionEditor.tracks;
-    const anySoloed = tracks.some((track) => track.soloed);
-    const activeTracks = tracks.filter((track) => {
-      if (track.muted || mutedTrackIds.includes(track.trackId)) {
-        return false;
-      }
-      return !anySoloed || track.soloed;
-    });
-    const clips = activeTracks.flatMap((track) =>
-      track.clips.map((clip) => ({
-        assetId: clip.assetId,
-        timelineStartMs: clip.timelineStartMs,
-        sourceStartMs: clip.sourceRange.startMs,
-        sourceEndMs: clip.sourceRange.endMs,
-        gainDb: track.gainDb + clip.gainDb,
-        pan: clip.pan,
-        fadeInMs: clip.fadeInMs,
-        fadeOutMs: clip.fadeOutMs,
-      })),
+  function addCompositionClipToTrack(
+    trackId: string,
+    asset: CompositionEditorOverview["assetBin"][number],
+  ) {
+    const track = compositionEditor.tracks.find(
+      (candidate) => candidate.trackId === trackId,
     );
+    const timelineStartMs =
+      track?.clips.reduce(
+        (max, clip) =>
+          Math.max(
+            max,
+            clip.timelineStartMs +
+              clip.sourceRange.endMs -
+              clip.sourceRange.startMs,
+          ),
+        0,
+      ) ?? 0;
+    applyCompositionEditorResult(
+      addCompositionClipCommand({
+        compositionId: compositionEditor.composition.id,
+        trackId,
+        assetId: asset.assetId,
+        versionId: asset.versionId,
+        timelineStartMs,
+        sourceRange: {
+          startMs: 0,
+          endMs: Math.max(250, asset.durationMs),
+        },
+        fadeInMs: 0,
+        fadeOutMs: 120,
+        gainDb: 0,
+        pan: 0,
+      }),
+      `Adding ${asset.name} to timeline…`,
+      `${asset.name} added to the composition.`,
+    );
+  }
+
+  function moveCompositionClip(clipId: string, timelineStartMs: number) {
+    applyCompositionEditorResult(
+      moveCompositionClipCommand({
+        compositionId: compositionEditor.composition.id,
+        clipId,
+        timelineStartMs,
+      }),
+      "Moving clip…",
+      "Clip position saved.",
+    );
+  }
+
+  function trimCompositionClip(
+    clipId: string,
+    sourceRange: { startMs: number; endMs: number },
+    fadeInMs: number,
+    fadeOutMs: number,
+  ) {
+    applyCompositionEditorResult(
+      trimCompositionClipCommand({
+        compositionId: compositionEditor.composition.id,
+        clipId,
+        sourceRange,
+        fadeInMs,
+        fadeOutMs,
+      }),
+      "Trimming clip…",
+      "Clip trim saved.",
+    );
+  }
+
+  function deleteCompositionClip(clipId: string) {
+    applyCompositionEditorResult(
+      deleteCompositionClipCommand({
+        compositionId: compositionEditor.composition.id,
+        clipId,
+      }),
+      "Deleting clip…",
+      "Clip deleted from the composition.",
+    );
+  }
+
+  function addCompositionTrack(role = "sfx") {
+    const index = compositionEditor.tracks.length + 1;
+    applyCompositionEditorResult(
+      addCompositionTrackCommand({
+        compositionId: compositionEditor.composition.id,
+        name: `Track ${index}`,
+        role,
+      }),
+      "Adding track…",
+      "Track added to the composition.",
+    );
+  }
+
+  function updateCompositionTrack(
+    trackId: string,
+    patch: {
+      gainDb?: number | null;
+      pan?: number | null;
+      muted?: boolean | null;
+      soloed?: boolean | null;
+    },
+  ) {
+    applyCompositionEditorResult(
+      updateCompositionTrackCommand({
+        compositionId: compositionEditor.composition.id,
+        trackId,
+        ...patch,
+      }),
+      "Saving track mix state…",
+      "Track mix state saved.",
+    );
+  }
+
+  // UX-10/UX-NB1/UX-NB2: render the saved composition document into a mixed-down
+  // asset. The backend resolves `compositionId` through the persisted document
+  // store, including saved clip edits and track mute/solo/gain.
+  function renderComposition() {
     setLibraryActionStatus(
       actionFeedback.pending("Rendering composition mixdown…"),
     );
@@ -967,11 +1090,10 @@ export function App() {
       prompt: `Mixdown ${compositionEditor.composition.name}`,
       sourceSurface: "Multitrack",
       parameters: {
+        compositionId: compositionEditor.composition.id,
         sampleRateHz: 48_000,
         channels: 2,
-        durationMs: compositionEditor.timeline.durationMs,
         masterGainDb: compositionEditor.mixer.masterGainDb,
-        clips,
       },
     })
       .then(trackRuntimeJob)
@@ -1260,6 +1382,12 @@ export function App() {
     retryRuntimeOperation,
     recordVoiceProfileConsent,
     renderComposition,
+    addCompositionClipToTrack,
+    moveCompositionClip,
+    trimCompositionClip,
+    deleteCompositionClip,
+    addCompositionTrack,
+    updateCompositionTrack,
     modelFocus,
     openModelsFor,
     clearModelFocus: () => setModelFocus(null),

@@ -5,9 +5,10 @@
 //! fixture catalog (`voice_lab::profile_consent`) — there was no way for a user to
 //! *record* consent, so every user-created profile was permanently blocked. This
 //! store is the durable write side: a small JSON map of profile id -> consent
-//! status, written atomically alongside `ui_preferences.json`, that
-//! `voice_lab::profile_consent` consults before falling back to the fixture
-//! catalog. The web preview has no backend and simply cannot record consent.
+//! status, written atomically alongside `ui_preferences.json`. The runtime
+//! consults this store only after confirming the profile id exists in a catalog,
+//! so a persisted override cannot create a valid profile by itself. The web
+//! preview has no backend and simply cannot record consent.
 
 use crate::domain::VoiceConsentStatus;
 use crate::ui_preferences::UiPreferencesStore;

@@ -741,7 +741,7 @@ fn reference_speakers() -> Vec<TtsSpeaker> {
     ]
 }
 
-fn reference_voice_profiles() -> Vec<VoiceProfile> {
+pub(crate) fn reference_voice_profiles() -> Vec<VoiceProfile> {
     reference_speakers()
         .into_iter()
         .map(|speaker| VoiceProfile {
@@ -756,6 +756,13 @@ fn reference_voice_profiles() -> Vec<VoiceProfile> {
             provenance_ids: vec![format!("provenance-voice-{}", speaker.label.to_lowercase())],
         })
         .collect()
+}
+
+pub(crate) fn reference_profile_consent(profile_id: &str) -> Option<VoiceConsentStatus> {
+    reference_voice_profiles()
+        .into_iter()
+        .find(|profile| profile.id == profile_id)
+        .map(|profile| profile.consent)
 }
 
 fn validation_checks() -> Vec<TtsValidationCheck> {

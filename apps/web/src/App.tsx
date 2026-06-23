@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { ACCENTS, DEFAULT_ACCENT, isAccentId } from "@sceneworks/ui";
 import {
   fallbackOverview,
   fallbackAssetLibrary,
@@ -74,12 +75,7 @@ import {
   loadUiPreferences,
   saveUiPreferences,
 } from "./tauri";
-import {
-  ACCENTS,
-  DEFAULT_ACCENT,
-  isAccentId,
-  isThemeMode,
-} from "./accents";
+import { isThemeMode } from "./accents";
 import type { ThemeMode } from "./accents";
 import {
   actionFeedback,
@@ -333,9 +329,10 @@ export function App() {
     useState<WorkspaceOverview>(fallbackWorkspace);
   const [assetLibrary, setAssetLibrary] =
     useState<AssetLibraryOverview>(fallbackAssetLibrary);
-  const [libraryActionStatus, setLibraryActionStatus] = useState<ActionFeedback>(
-    actionFeedback.idle("Project and library actions are ready."),
-  );
+  const [libraryActionStatus, setLibraryActionStatus] =
+    useState<ActionFeedback>(
+      actionFeedback.idle("Project and library actions are ready."),
+    );
   const [reviewActionStatus, setReviewActionStatus] = useState<ActionFeedback>(
     actionFeedback.idle("Review actions require a saved runtime audio asset."),
   );
@@ -632,11 +629,8 @@ export function App() {
 
   function createProject(name?: string) {
     const projectName =
-      name?.trim() ||
-      `SoundWorks Recovery ${new Date().toLocaleTimeString()}`;
-    setLibraryActionStatus(
-      actionFeedback.pending(`Creating ${projectName}…`),
-    );
+      name?.trim() || `SoundWorks Recovery ${new Date().toLocaleTimeString()}`;
+    setLibraryActionStatus(actionFeedback.pending(`Creating ${projectName}…`));
     createSoundWorksProject({ name: projectName })
       .then((result) => {
         applyProjectLibraryResult(result);
@@ -1279,155 +1273,171 @@ export function App() {
 
   return (
     <AppContext.Provider value={contextValue}>
-      <main className="app-shell">
-      <aside className="sidebar" aria-label="Primary">
-        <div className="brand-mark" aria-label={overview.productName}>
-          <Waves aria-hidden="true" size={28} />
-          <span>{overview.productName}</span>
-        </div>
-
-        <nav className="nav-sections" aria-label="SoundWorks views">
-          {navSections.map((section) => (
-            <section className="sidebar-section" key={section.label}>
-              <h2 className="sidebar-section-title">{section.label}</h2>
-              <div className="nav-list">
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-
-                  return (
-                    <button
-                      aria-current={activeView === item.id ? "page" : undefined}
-                      className={
-                        activeView === item.id ? "nav-item active" : "nav-item"
-                      }
-                      key={item.id}
-                      onClick={() => setActiveView(item.id)}
-                      type="button"
-                      title={item.label}
-                    >
-                      <Icon aria-hidden="true" size={18} />
-                      <span className="nav-label">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </nav>
-      </aside>
-
-      <section className="workspace" aria-label="Workspace">
-        {webPreview ? (
-          <div className="preview-banner" role="status" aria-label="Preview mode">
-            <CircleAlert aria-hidden="true" size={16} />
-            <span>
-              Web preview — data is simulated. Launch the SoundWorks desktop
-              shell for live local library data and audio generation.
+      <main className="app">
+        <aside className="sidebar" aria-label="Primary">
+          <div className="brand" aria-label={overview.productName}>
+            <span className="brand-mark">
+              <Waves aria-hidden="true" size={24} />
             </span>
-          </div>
-        ) : null}
-        {dataError ? (
-          <div className="preview-banner preview-banner-error" role="alert">
-            <CircleAlert aria-hidden="true" size={16} />
-            <span>Some data could not be loaded: {dataError}</span>
-          </div>
-        ) : null}
-        <header className="topbar">
-          <div className="topbar-title">
-            <p className="eyebrow">Local workspace</p>
-            <h1>{activeViewMeta.title}</h1>
-            <p>{activeViewMeta.blurb}</p>
-          </div>
-          <div className="topbar-actions">
-            <span className="status-pill" aria-label="Scaffold status">
-              <strong>{scaffoldedLayerCount}</strong>
-              <span>active layers</span>
-            </span>
-            <button
-              className="queue-chip"
-              onClick={() => setActiveView("jobs")}
-              type="button"
-            >
-              <Activity aria-hidden="true" size={16} />
-              <span>{runtime.jobs.length} jobs</span>
-            </button>
-            <div
-              className="accent-picker"
-              role="group"
-              aria-label="Accent color"
-            >
-              {ACCENTS.map((option) => (
-                <button
-                  aria-label={option.name}
-                  aria-pressed={accent === option.id}
-                  className={
-                    accent === option.id
-                      ? "accent-swatch active"
-                      : "accent-swatch"
-                  }
-                  key={option.id}
-                  onClick={() => changeAccent(option.id)}
-                  style={{ "--sw": option.swatch } as CSSProperties}
-                  title={option.name}
-                  type="button"
-                />
-              ))}
+            <div>
+              <h1>{overview.productName}</h1>
+              <p>Local audio studio</p>
             </div>
-            <button
-              className="icon-btn"
-              onClick={() => changeTheme(theme === "light" ? "dark" : "light")}
-              title={
-                theme === "light"
-                  ? "Switch to dark mode"
-                  : "Switch to light mode"
-              }
-              aria-label={
-                theme === "light"
-                  ? "Switch to dark mode"
-                  : "Switch to light mode"
-              }
-              type="button"
-            >
-              {theme === "light" ? (
-                <Moon aria-hidden="true" size={18} />
-              ) : (
-                <Sun aria-hidden="true" size={18} />
-              )}
-            </button>
           </div>
-        </header>
 
-        {showWorkspace ? <WorkspaceScreen /> : null}
+          <nav className="nav-sections" aria-label="SoundWorks views">
+            {navSections.map((section) => (
+              <section className="sidebar-section" key={section.label}>
+                <h2 className="sidebar-section-title">{section.label}</h2>
+                <div className="nav-list">
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
 
-        {showLibrary ? <LibraryScreen /> : null}
+                    return (
+                      <button
+                        aria-current={
+                          activeView === item.id ? "page" : undefined
+                        }
+                        className={
+                          activeView === item.id
+                            ? "nav-item active"
+                            : "nav-item"
+                        }
+                        key={item.id}
+                        onClick={() => setActiveView(item.id)}
+                        type="button"
+                        title={item.label}
+                      >
+                        <Icon aria-hidden="true" size={18} />
+                        <span className="nav-label">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </nav>
+        </aside>
 
-        {showExport ? <ExportScreen /> : null}
+        <section className="workspace" aria-label="Workspace">
+          {webPreview ? (
+            <div
+              className="preview-banner"
+              role="status"
+              aria-label="Preview mode"
+            >
+              <CircleAlert aria-hidden="true" size={16} />
+              <span>
+                Web preview — data is simulated. Launch the SoundWorks desktop
+                shell for live local library data and audio generation.
+              </span>
+            </div>
+          ) : null}
+          {dataError ? (
+            <div className="preview-banner preview-banner-error" role="alert">
+              <CircleAlert aria-hidden="true" size={16} />
+              <span>Some data could not be loaded: {dataError}</span>
+            </div>
+          ) : null}
+          <header className="topbar">
+            <div className="topbar-title">
+              <p className="eyebrow">Local workspace</p>
+              <h1>{activeViewMeta.title}</h1>
+              <p>{activeViewMeta.blurb}</p>
+            </div>
+            <div className="topbar-spacer" aria-hidden="true" />
+            <div className="topbar-status">
+              <span className="status-pill" aria-label="Scaffold status">
+                <strong>{scaffoldedLayerCount}</strong>
+                <span>active layers</span>
+              </span>
+              <button
+                className="queue-chip"
+                onClick={() => setActiveView("jobs")}
+                type="button"
+              >
+                <Activity aria-hidden="true" size={16} />
+                <span>{runtime.jobs.length} jobs</span>
+              </button>
+              <div
+                className="accent-picker"
+                role="group"
+                aria-label="Accent color"
+              >
+                {ACCENTS.map((option) => (
+                  <button
+                    aria-label={option.name}
+                    aria-pressed={accent === option.id}
+                    className={
+                      accent === option.id
+                        ? "accent-swatch active"
+                        : "accent-swatch"
+                    }
+                    key={option.id}
+                    onClick={() => changeAccent(option.id)}
+                    style={{ "--sw": option.swatch } as CSSProperties}
+                    title={option.name}
+                    type="button"
+                  />
+                ))}
+              </div>
+              <button
+                className="icon-btn"
+                onClick={() =>
+                  changeTheme(theme === "light" ? "dark" : "light")
+                }
+                title={
+                  theme === "light"
+                    ? "Switch to dark mode"
+                    : "Switch to light mode"
+                }
+                aria-label={
+                  theme === "light"
+                    ? "Switch to dark mode"
+                    : "Switch to light mode"
+                }
+                type="button"
+              >
+                {theme === "light" ? (
+                  <Moon aria-hidden="true" size={18} />
+                ) : (
+                  <Sun aria-hidden="true" size={18} />
+                )}
+              </button>
+            </div>
+          </header>
 
-        {showMixer ? <MultitrackScreen /> : null}
+          {showWorkspace ? <WorkspaceScreen /> : null}
 
-        {showValidation ? <ValidationScreen /> : null}
+          {showLibrary ? <LibraryScreen /> : null}
 
-        {showTts ? <TtsScreen /> : null}
+          {showExport ? <ExportScreen /> : null}
 
-        {showVoice ? <VoiceLabScreen /> : null}
+          {showMixer ? <MultitrackScreen /> : null}
 
-        {showSfx ? <SfxScreen /> : null}
+          {showValidation ? <ValidationScreen /> : null}
 
-        {showVideoToAudio ? <VideoToAudioScreen /> : null}
+          {showTts ? <TtsScreen /> : null}
 
-        {showSamples ? <SamplesScreen /> : null}
+          {showVoice ? <VoiceLabScreen /> : null}
 
-        {showSong ? <SongScreen /> : null}
+          {showSfx ? <SfxScreen /> : null}
 
-        {showReview ? <ReviewScreen /> : null}
+          {showVideoToAudio ? <VideoToAudioScreen /> : null}
 
-        {showRights ? <RightsScreen /> : null}
+          {showSamples ? <SamplesScreen /> : null}
 
-        {showSettings ? <SettingsScreen /> : null}
-        {showModels ? <ModelsScreen /> : null}
-        {showJobs ? <JobsScreen /> : null}
-      </section>
-    </main>
+          {showSong ? <SongScreen /> : null}
+
+          {showReview ? <ReviewScreen /> : null}
+
+          {showRights ? <RightsScreen /> : null}
+
+          {showSettings ? <SettingsScreen /> : null}
+          {showModels ? <ModelsScreen /> : null}
+          {showJobs ? <JobsScreen /> : null}
+        </section>
+      </main>
     </AppContext.Provider>
   );
 }

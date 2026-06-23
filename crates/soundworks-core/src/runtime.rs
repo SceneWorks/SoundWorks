@@ -2513,11 +2513,26 @@ fn validate_request_gates(request: &RuntimeJobRequest) -> Option<ActionableRunti
     }
 
     let rights = RightsSafetyOverview::reference();
-    if let Some(decision) = rights
-        .model_use_decisions
-        .iter()
-        .find(|decision| decision.candidate_id == request.model_id)
+    if request.kind != JobKind::RenderComposition
+        && NativeModel::from_model_id(&request.model_id).is_none()
     {
+        let Some(decision) = rights
+            .model_use_decisions
+            .iter()
+            .find(|decision| decision.candidate_id == request.model_id)
+        else {
+            return Some(ActionableRuntimeError {
+                code: "model.use_unreviewed".to_string(),
+                summary: format!(
+                    "Model {} has no SoundWorks model-use decision",
+                    request.model_id
+                ),
+                recovery:
+                    "Add the model to the evaluated catalog and rights policy before runtime use."
+                        .to_string(),
+            });
+        };
+
         if decision.decision == PolicyDecision::Blocked {
             return Some(ActionableRuntimeError {
                 code: "model.use_blocked".to_string(),
@@ -3810,6 +3825,34 @@ mod tests {
                 .as_ref()
                 .map(|error| error.code.as_str()),
             Some("model.use_blocked")
+        );
+    }
+
+    #[test]
+    fn unreviewed_model_policy_fails_closed_before_execution() {
+        let store = RuntimeJobStore::new(temp_runtime_root("unreviewed-model"));
+        let overview = installed_overview(&store);
+        let job = store
+            .enqueue(
+                &overview,
+                RuntimeJobRequest {
+                    provider_id: "unknown".to_string(),
+                    model_id: "not-a-reviewed-model".to_string(),
+                    kind: JobKind::GenerateAudio,
+                    workflow: CapabilityWorkflow::Tts,
+                    prompt: "Should never run.".to_string(),
+                    source_surface: "TTS Studio".to_string(),
+                    parameters: BTreeMap::new(),
+                },
+            )
+            .expect("job persists");
+
+        assert_eq!(job.status, crate::domain::JobStatus::Failed);
+        assert_eq!(
+            job.actionable_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("model.use_unreviewed")
         );
     }
 

@@ -6971,11 +6971,11 @@
     "rightsSafety": {
       "blockedConsentCount": 2,
       "blockedGateCount": 2,
-      "blockedModelDecisionCount": 2,
+      "blockedModelDecisionCount": 26,
       "canExport": false,
       "consentCheckCount": 3,
       "disclosureCount": 2,
-      "modelDecisionCount": 4,
+      "modelDecisionCount": 28,
       "policyGateCount": 5,
       "schemaVersion": 1,
       "sidecarCount": 2,
@@ -8384,6 +8384,140 @@
     ],
     "modelUseDecisions": [
       {
+        "candidateId": "stable-audio-3",
+        "commercialUse": "provider-terms",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Stability AI Community License / Enterprise terms",
+        "name": "Stable Audio 3",
+        "productEligibility": "needs-runtime-port",
+        "reasons": [
+          "Provider terms must be reviewed and attached before SoundWorks export.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
+        ],
+        "requestedWorkflow": "Song",
+        "requiresPythonRuntime": false,
+        "runtimePath": "external-executable"
+      },
+      {
+        "candidateId": "ace-step-1-5",
+        "commercialUse": "allowed",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "MIT",
+        "name": "ACE-Step 1.5",
+        "productEligibility": "needs-runtime-port",
+        "reasons": [
+          "License evidence supports SoundWorks export consideration.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
+        ],
+        "requestedWorkflow": "Song",
+        "requiresPythonRuntime": false,
+        "runtimePath": "external-executable"
+      },
+      {
+        "candidateId": "levo-2",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "LeVo 2 / SongGeneration 2",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Song",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "yue",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Open-source model license requires product review",
+        "name": "YuE",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Song",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "diffrhythm-2",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "DiffRhythm 2",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Song",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "khala",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "Khala",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Song",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "heartmula",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "HeartMuLa",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Song",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "muse-song",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "Muse",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Song",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
         "candidateId": "kokoro-82m",
         "commercialUse": "allowed",
         "decision": "allowed",
@@ -8399,16 +8533,33 @@
         "runtimePath": "native-library-binding"
       },
       {
-        "candidateId": "chattts",
+        "candidateId": "vibevoice",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Microsoft repository license requires review",
+        "name": "VibeVoice",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Tts",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "xtts-v2",
         "commercialUse": "non-commercial",
         "decision": "blocked",
-        "exportCandidate": true,
-        "license": "AGPLv3+ code / CC BY-NC 4.0 model",
-        "name": "ChatTTS",
+        "exportCandidate": false,
+        "license": "Coqui Public Model License",
+        "name": "XTTS-v2",
         "productEligibility": "blocked",
         "reasons": [
           "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass.",
-          "Research-only or blocked candidates cannot be SoundWorks export choices.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
           "Python runtime dependency is not allowed in shipped SoundWorks export paths.",
           "Evaluation status is blocked."
         ],
@@ -8417,36 +8568,288 @@
         "runtimePath": "python-poc-only"
       },
       {
-        "candidateId": "diffrhythm-2",
-        "commercialUse": "unknown",
+        "candidateId": "chattts",
+        "commercialUse": "non-commercial",
         "decision": "blocked",
-        "exportCandidate": true,
-        "license": "Source-backed license review required",
-        "name": "DiffRhythm 2",
-        "productEligibility": "research-only",
+        "exportCandidate": false,
+        "license": "AGPLv3+ code / CC BY-NC 4.0 model",
+        "name": "ChatTTS",
+        "productEligibility": "blocked",
         "reasons": [
-          "Unknown model-use terms block SoundWorks export until reviewed.",
-          "Research-only or blocked candidates cannot be SoundWorks export choices.",
-          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+          "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths.",
+          "Evaluation status is blocked."
         ],
-        "requestedWorkflow": "Song",
+        "requestedWorkflow": "Tts",
         "requiresPythonRuntime": true,
         "runtimePath": "python-poc-only"
       },
       {
-        "candidateId": "stable-audio-3",
-        "commercialUse": "provider-terms",
-        "decision": "warn",
-        "exportCandidate": true,
-        "license": "Stability AI Community License / Enterprise terms",
-        "name": "Stable Audio 3",
+        "candidateId": "fish-speech",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Apache-2.0 code; model terms require version-specific review",
+        "name": "Fish Speech",
         "productEligibility": "needs-runtime-port",
         "reasons": [
-          "Provider terms must be reviewed and attached before SoundWorks export."
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
         ],
-        "requestedWorkflow": "Song",
+        "requestedWorkflow": "Tts",
         "requiresPythonRuntime": false,
         "runtimePath": "external-executable"
+      },
+      {
+        "candidateId": "chatterbox",
+        "commercialUse": "allowed",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "MIT",
+        "name": "Chatterbox",
+        "productEligibility": "needs-runtime-port",
+        "reasons": [
+          "License evidence supports SoundWorks export consideration.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
+        ],
+        "requestedWorkflow": "Tts",
+        "requiresPythonRuntime": false,
+        "runtimePath": "external-executable"
+      },
+      {
+        "candidateId": "chatterbox-turbo",
+        "commercialUse": "allowed",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "MIT",
+        "name": "Chatterbox Turbo",
+        "productEligibility": "needs-runtime-port",
+        "reasons": [
+          "License evidence supports SoundWorks export consideration.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
+        ],
+        "requestedWorkflow": "Tts",
+        "requiresPythonRuntime": false,
+        "runtimePath": "external-executable"
+      },
+      {
+        "candidateId": "gpt-sovits",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "GPT-SoVITS",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Tts",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "f5-tts",
+        "commercialUse": "non-commercial",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "MIT code / CC-BY-NC pretrained models",
+        "name": "F5-TTS",
+        "productEligibility": "blocked",
+        "reasons": [
+          "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths.",
+          "Evaluation status is blocked."
+        ],
+        "requestedWorkflow": "Tts",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "cosyvoice-2",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "CosyVoice 2",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Tts",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "openvoice-v2",
+        "commercialUse": "allowed",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "MIT",
+        "name": "OpenVoice V2",
+        "productEligibility": "needs-runtime-port",
+        "reasons": [
+          "License evidence supports SoundWorks export consideration.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
+        ],
+        "requestedWorkflow": "VoiceClone",
+        "requiresPythonRuntime": false,
+        "runtimePath": "external-executable"
+      },
+      {
+        "candidateId": "rvc",
+        "commercialUse": "allowed",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "MIT",
+        "name": "RVC",
+        "productEligibility": "needs-runtime-port",
+        "reasons": [
+          "License evidence supports SoundWorks export consideration.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
+        ],
+        "requestedWorkflow": "VoiceConversion",
+        "requiresPythonRuntime": false,
+        "runtimePath": "external-executable"
+      },
+      {
+        "candidateId": "stable-audio-open-1",
+        "commercialUse": "provider-terms",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Stability AI Community License",
+        "name": "Stable Audio Open 1.0",
+        "productEligibility": "needs-runtime-port",
+        "reasons": [
+          "Provider terms must be reviewed and attached before SoundWorks export.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
+        ],
+        "requestedWorkflow": "Sfx",
+        "requiresPythonRuntime": false,
+        "runtimePath": "external-executable"
+      },
+      {
+        "candidateId": "audiocraft-audiogen",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "MIT code; model card warns research use",
+        "name": "AudioCraft / AudioGen",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Sfx",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "audioldm",
+        "commercialUse": "non-commercial",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "CC BY-NC checkpoints",
+        "name": "AudioLDM",
+        "productEligibility": "blocked",
+        "reasons": [
+          "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths.",
+          "Evaluation status is blocked."
+        ],
+        "requestedWorkflow": "Sfx",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "audioldm-2",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required; likely research/non-commercial checkpoint constraints",
+        "name": "AudioLDM 2",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Sfx",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "audiox",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "AudioX",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "Sfx",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "mmaudio",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "MMAudio",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "VideoToAudio",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "thinksound",
+        "commercialUse": "unknown",
+        "decision": "blocked",
+        "exportCandidate": false,
+        "license": "Source-backed license review required",
+        "name": "ThinkSound",
+        "productEligibility": "research-only",
+        "reasons": [
+          "Unknown model-use terms block SoundWorks export until reviewed.",
+          "Only product-candidate models with a cleared runtime path can be SoundWorks export choices.",
+          "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+        ],
+        "requestedWorkflow": "VideoToAudio",
+        "requiresPythonRuntime": true,
+        "runtimePath": "python-poc-only"
+      },
+      {
+        "candidateId": "moss-soundeffect",
+        "commercialUse": "allowed",
+        "decision": "allowed",
+        "exportCandidate": true,
+        "license": "Apache-2.0 for v2 MLX/upstream path per model card evidence",
+        "name": "MOSS-SoundEffect",
+        "productEligibility": "product-candidate",
+        "reasons": [
+          "License evidence supports SoundWorks export consideration."
+        ],
+        "requestedWorkflow": "Sfx",
+        "requiresPythonRuntime": false,
+        "runtimePath": "native-library-binding"
       }
     ],
     "policy": {

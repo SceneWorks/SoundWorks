@@ -281,85 +281,77 @@ fn consent_checks() -> Vec<ConsentCheck> {
 }
 
 fn model_use_decisions(catalog: &ModelEvaluationCatalog) -> Vec<ModelUseDecision> {
-    ["kokoro-82m", "chattts", "diffrhythm-2", "stable-audio-3"]
-        .into_iter()
-        .filter_map(|candidate_id| {
-            catalog
-                .candidates
-                .iter()
-                .find(|candidate| candidate.id == candidate_id)
-                .map(|candidate| {
-                    let mut reasons = vec![];
-                    let mut decision = PolicyDecision::Allowed;
+    catalog
+        .candidates
+        .iter()
+        .map(|candidate| {
+            let mut reasons = vec![];
+            let mut decision = PolicyDecision::Allowed;
 
-                    match candidate.license.commercial_use {
-                        CommercialUseEvaluation::Allowed => reasons.push(
-                            "License evidence supports SoundWorks export consideration.".to_string(),
-                        ),
-                        CommercialUseEvaluation::ProviderTerms => {
-                            decision = PolicyDecision::Warn;
-                            reasons.push(
-                                "Provider terms must be reviewed and attached before SoundWorks export."
-                                    .to_string(),
-                            );
-                        }
-                        CommercialUseEvaluation::NonCommercial => {
-                            reasons.push(
-                                "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass."
-                                    .to_string(),
-                            );
-                        }
-                        CommercialUseEvaluation::Unknown => {
-                            decision = PolicyDecision::Blocked;
-                            reasons.push(
-                                "Unknown model-use terms block SoundWorks export until reviewed."
-                                    .to_string(),
-                            );
-                        }
-                    }
+            match candidate.license.commercial_use {
+                CommercialUseEvaluation::Allowed => reasons.push(
+                    "License evidence supports SoundWorks export consideration.".to_string(),
+                ),
+                CommercialUseEvaluation::ProviderTerms => {
+                    decision = PolicyDecision::Warn;
+                    reasons.push(
+                        "Provider terms must be reviewed and attached before SoundWorks export."
+                            .to_string(),
+                    );
+                }
+                CommercialUseEvaluation::NonCommercial => {
+                    reasons.push(
+                        "Noncommercial model terms fit SoundWorks' non-commercial posture when other export gates pass."
+                            .to_string(),
+                    );
+                }
+                CommercialUseEvaluation::Unknown => {
+                    decision = PolicyDecision::Blocked;
+                    reasons.push(
+                        "Unknown model-use terms block SoundWorks export until reviewed."
+                            .to_string(),
+                    );
+                }
+            }
 
-                    if matches!(
-                        candidate.product_eligibility,
-                        ProductEligibility::ResearchOnly | ProductEligibility::Blocked
-                    ) {
-                        decision = PolicyDecision::Blocked;
-                        reasons.push(
-                            "Research-only or blocked candidates cannot be SoundWorks export choices."
-                                .to_string(),
-                        );
-                    }
+            if candidate.product_eligibility != ProductEligibility::ProductCandidate {
+                decision = PolicyDecision::Blocked;
+                reasons.push(
+                    "Only product-candidate models with a cleared runtime path can be SoundWorks export choices."
+                        .to_string(),
+                );
+            }
 
-                    if candidate.runtime.requires_python_runtime {
-                        decision = PolicyDecision::Blocked;
-                        reasons.push(
-                            "Python runtime dependency is not allowed in shipped SoundWorks export paths."
-                                .to_string(),
-                        );
-                    }
+            if candidate.runtime.requires_python_runtime {
+                decision = PolicyDecision::Blocked;
+                reasons.push(
+                    "Python runtime dependency is not allowed in shipped SoundWorks export paths."
+                        .to_string(),
+                );
+            }
 
-                    if candidate.status == EvaluationStatus::Blocked {
-                        decision = PolicyDecision::Blocked;
-                        reasons.push("Evaluation status is blocked.".to_string());
-                    }
+            if candidate.status == EvaluationStatus::Blocked {
+                decision = PolicyDecision::Blocked;
+                reasons.push("Evaluation status is blocked.".to_string());
+            }
 
-                    ModelUseDecision {
-                        candidate_id: candidate.id.clone(),
-                        name: candidate.name.clone(),
-                        requested_workflow: candidate
-                            .lanes
-                            .first()
-                            .map(|lane| format!("{lane:?}"))
-                            .unwrap_or_else(|| "Unknown".to_string()),
-                        export_candidate: true,
-                        license: candidate.license.label.clone(),
-                        commercial_use: candidate.license.commercial_use,
-                        product_eligibility: candidate.product_eligibility,
-                        runtime_path: candidate.runtime.product_path,
-                        requires_python_runtime: candidate.runtime.requires_python_runtime,
-                        decision,
-                        reasons,
-                    }
-                })
+            ModelUseDecision {
+                candidate_id: candidate.id.clone(),
+                name: candidate.name.clone(),
+                requested_workflow: candidate
+                    .lanes
+                    .first()
+                    .map(|lane| format!("{lane:?}"))
+                    .unwrap_or_else(|| "Unknown".to_string()),
+                export_candidate: decision != PolicyDecision::Blocked,
+                license: candidate.license.label.clone(),
+                commercial_use: candidate.license.commercial_use,
+                product_eligibility: candidate.product_eligibility,
+                runtime_path: candidate.runtime.product_path,
+                requires_python_runtime: candidate.runtime.requires_python_runtime,
+                decision,
+                reasons,
+            }
         })
         .collect()
 }
@@ -578,7 +570,7 @@ mod tests {
         RiskCategory, WatermarkPolicy,
     };
     use crate::domain::{VoiceConsentStatus, WatermarkStatus};
-    use crate::evaluation::CommercialUseEvaluation;
+    use crate::evaluation::{CommercialUseEvaluation, REQUIRED_CANDIDATE_IDS};
 
     #[test]
     fn consent_checks_block_voice_workflows_without_explicit_metadata() {
@@ -622,13 +614,32 @@ mod tests {
         assert!(chattts
             .reasons
             .iter()
-            .any(|reason| reason.contains("Research-only or blocked candidates")));
+            .any(|reason| reason.contains("Only product-candidate models")));
         assert_eq!(diffrhythm.decision, PolicyDecision::Blocked);
         assert!(diffrhythm
             .reasons
             .iter()
             .any(|reason| reason.contains("Unknown model-use terms")));
         assert!(!overview.can_export());
+    }
+
+    #[test]
+    fn model_use_decisions_cover_every_required_candidate() {
+        let overview = RightsSafetyOverview::reference();
+
+        for candidate_id in REQUIRED_CANDIDATE_IDS {
+            assert!(
+                overview
+                    .model_use_decisions
+                    .iter()
+                    .any(|decision| decision.candidate_id == *candidate_id),
+                "missing model-use decision for {candidate_id}"
+            );
+        }
+        assert_eq!(
+            overview.model_use_decisions.len(),
+            REQUIRED_CANDIDATE_IDS.len()
+        );
     }
 
     #[test]

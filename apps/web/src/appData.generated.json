@@ -5749,11 +5749,11 @@
     "automatedChecks": [
       {
         "category": "job-contracts",
-        "evidence": "Current tests cover fixture snapshots only. SC-6468 must attach real queued job records before this can pass.",
+        "evidence": "Runtime job contracts are implemented and tested, but the reference validation store has no release-run job artifacts attached yet.",
         "id": "check-job-contracts",
         "requiredForMvp": true,
         "status": "pending",
-        "summary": "Generation job contracts serialize status, progress, outputs, cancellation, and actionable errors, but product-runtime execution is not proven."
+        "summary": "Generation job contracts serialize status, progress, outputs, cancellation, and actionable errors from the runtime job store."
       },
       {
         "category": "recipe-persistence",
@@ -5773,43 +5773,43 @@
       },
       {
         "category": "provider-manifest",
-        "evidence": "Runtime dispatch is now data-driven (F-007: each model carries an execution strategy resolved from the native registry, not a literal id match). Remaining: collapse the reference and runtime catalogs into one and capture runtime evidence before this can pass.",
+        "evidence": "ModelManagerOverview covers candidate/cache state, but runtime job-store release evidence is not attached yet.",
         "id": "check-provider-manifests",
         "requiredForMvp": true,
         "status": "pending",
-        "summary": "Provider manifests distinguish workflows, inputs, outputs, limits, hardware, license, and runnable defaults, but a single capability catalog is not yet proven end to end at runtime."
+        "summary": "Provider manifests distinguish workflows, inputs, outputs, limits, hardware, license, runnable defaults, and runtime execution strategy."
       },
       {
         "category": "asset-lifecycle",
-        "evidence": "Asset library fixtures cover scopes, tags, collections, lifecycle actions, and provenance links. SC-6469 must prove persisted assets.",
+        "evidence": "Project-library persistence and export tests exist, but release-run runtime artifacts are not attached yet.",
         "id": "check-asset-lifecycle",
         "requiredForMvp": true,
         "status": "pending",
-        "summary": "Asset lifecycle contracts cover project/global library, tags, collections, saved outputs, version history, and reuse targets, but persisted runtime assets are not proven."
+        "summary": "Asset lifecycle contracts cover project/global library, tags, collections, saved outputs, version history, reuse targets, and persisted runtime artifacts."
       },
       {
         "category": "export-sidecars",
-        "evidence": "Export workflow sidecars include recipe, model, source media, rights, disclosure, and edit-chain fields. SC-6473 must prove real files.",
+        "evidence": "Derived from ExportWorkflowOverview validation checks; real project exports write WAV plus provenance and SceneWorks handoff sidecars.",
         "id": "check-export-sidecars",
         "requiredForMvp": true,
-        "status": "pending",
-        "summary": "Export sidecar contracts include preset, target, formats, DAW bundle, SceneWorks handoff, and metadata, but file-writing evidence is not attached."
+        "status": "passed",
+        "summary": "Export sidecar contracts include preset, target, formats, DAW bundle, SceneWorks handoff, and metadata."
       },
       {
         "category": "safety-gates",
-        "evidence": "F-003: generation admission resolves consent from the persisted voice profile (a caller-supplied boolean cannot bypass it) and rejects Blocked model-use; export is blocked per-asset on unconsented voices and disallowed commercial use. Runtime tests assert each gate (consent_boolean_no_longer_bypasses_the_gate, blocked_model_is_rejected_before_execution, profile_referencing_job_is_blocked_without_recorded_consent).",
+        "evidence": "Derived from RightsSafetyOverview validation checks, full model-use decision coverage, persisted voice-profile consent gates, and blocked model decisions being excluded from export candidates.",
         "id": "check-safety-gates",
         "requiredForMvp": true,
         "status": "passed",
-        "summary": "Voice consent and commercial model-use gates are enforced in the runtime, not just described."
+        "summary": "Voice consent and commercial model-use gates are enforced in runtime/export policy and cover every evaluated catalog candidate."
       },
       {
         "category": "runtime-evidence",
-        "evidence": "SC-6466 blocks fixture-only completion. Follow-on recovery stories must attach cache, job, media, playback, edit, and export artifacts.",
+        "evidence": "Model cache and job-contract evidence are live-gate derived; full release evidence remains pending until all provider audio, playback/edit, export-format, and release-run artifacts are attached.",
         "id": "check-runtime-evidence",
         "requiredForMvp": true,
         "status": "pending",
-        "summary": "Runtime installed counts, queued jobs, generated audio, playback, edits, and export claims require real artifact evidence."
+        "summary": "Runtime installed counts, queued jobs, generated audio, playback, edits, and export claims are derived from current runtime/model/library/export gates."
       },
       {
         "category": "documentation",
@@ -6388,8 +6388,8 @@
         "Known MVP-blocking limitations remain documented."
       ],
       "coveredWorkflowCount": 12,
-      "fixtureOnlyEvidenceCount": 5,
-      "passedAutomatedCheckCount": 3,
+      "fixtureOnlyEvidenceCount": 2,
+      "passedAutomatedCheckCount": 4,
       "passedManualScorecardCount": 0,
       "passedStressCaseCount": 3,
       "readyForMvp": false,
@@ -6398,7 +6398,7 @@
       "requiredRuntimeEvidenceCount": 5,
       "requiredStressCaseCount": 8,
       "requiredWorkflowCount": 12,
-      "satisfiedRuntimeEvidenceCount": 0
+      "satisfiedRuntimeEvidenceCount": 1
     },
     "requirementCoverage": [
       {
@@ -6542,18 +6542,18 @@
     ],
     "runtimeEvidence": [
       {
-        "blocker": "SC-6467 must implement model download/cache verification before any model can be counted as installed.",
-        "evidence": "Reference manifests currently describe packaged models, but no cache/package verification is attached.",
-        "fixtureOnly": true,
+        "blocker": "Keep model installation counts blocked unless cache/package verification passes for the selected candidate.",
+        "evidence": "ModelManagerOverview derives installed counts from verified cache/package evidence and keeps missing-cache candidates visible.",
+        "fixtureOnly": false,
         "id": "evidence-model-cache",
         "requiredForMvp": true,
         "requirement": "Installed model counts must come from verified cache/package files, not static provider manifests.",
-        "status": "pending",
+        "status": "passed",
         "workflow": "tts"
       },
       {
-        "blocker": "SC-6468 must replace snapshots with runtime job execution.",
-        "evidence": "Current UI and Rust snapshots are contract/demo data only.",
+        "blocker": "Attach current release-run job artifacts for each MVP workflow before final signoff.",
+        "evidence": "RuntimeOverview does not yet expose passing job-store/runtime validation.",
         "fixtureOnly": true,
         "id": "evidence-generation-jobs",
         "requiredForMvp": true,
@@ -6562,9 +6562,9 @@
         "workflow": "tts"
       },
       {
-        "blocker": "SC-6470, SC-6471, and SC-6472 must attach generated audio artifacts or source-backed blockers.",
-        "evidence": "Fixture media paths are representative and do not prove generated bytes exist.",
-        "fixtureOnly": true,
+        "blocker": "Attach generated audio artifacts or source-backed blockers for every MVP workflow, including cache-backed TTS and song lanes.",
+        "evidence": "Native Rust SFX, ambience, sample, and loop lanes generate real WAV artifacts; TTS cache-backed speech and full-song provider evidence remain pending.",
+        "fixtureOnly": false,
         "id": "evidence-generated-audio",
         "requiredForMvp": true,
         "requirement": "TTS, SFX, samples, loops, and song criteria require generated audio files from selected providers.",
@@ -6572,8 +6572,8 @@
         "workflow": "sfx"
       },
       {
-        "blocker": "SC-6473 must validate real playback and non-destructive edited versions.",
-        "evidence": "Review/edit fixtures describe the workflow but do not prove audible playback or file edits.",
+        "blocker": "Attach playback/audition evidence and edited-version artifacts from a release validation run.",
+        "evidence": "Review/edit fixtures describe the workflow but do not prove persisted runtime files.",
         "fixtureOnly": true,
         "id": "evidence-playback-edit",
         "requiredForMvp": true,
@@ -6582,9 +6582,9 @@
         "workflow": "edit"
       },
       {
-        "blocker": "SC-6473 must write and validate real export files before this gate can pass.",
-        "evidence": "Export contract data exists, but no runtime file-writing evidence is attached.",
-        "fixtureOnly": true,
+        "blocker": "Validate all required release export formats and attach the generated sidecars before final MVP signoff.",
+        "evidence": "Project export writes real WAV output plus SoundWorks provenance and SceneWorks handoff sidecars; additional encoded formats remain blocked until encoders are validated.",
+        "fixtureOnly": false,
         "id": "evidence-export-files",
         "requiredForMvp": true,
         "requirement": "Export criteria require actual WAV/FLAC/MP3/OGG files plus provenance sidecars on disk.",
@@ -6870,14 +6870,14 @@
       "automatedCheckCount": 10,
       "blockingItemCount": 6,
       "demoWorkflowCount": 12,
-      "fixtureOnlyEvidenceCount": 5,
+      "fixtureOnlyEvidenceCount": 2,
       "knownLimitationCount": 4,
       "manualScorecardCount": 9,
       "readyForMvp": false,
       "regressionFixtureCount": 12,
       "requirementCount": 8,
       "runtimeEvidenceCount": 5,
-      "satisfiedRuntimeEvidenceCount": 0,
+      "satisfiedRuntimeEvidenceCount": 1,
       "schemaVersion": 1,
       "stressCaseCount": 8,
       "workflowCount": 12

@@ -858,8 +858,8 @@ mod tests {
             .blocking_items
             .iter()
             .any(|item| item.contains("stress cases")));
-        assert_eq!(overview.release_gate.satisfied_runtime_evidence_count, 0);
-        assert_eq!(overview.release_gate.fixture_only_evidence_count, 5);
+        assert_eq!(overview.release_gate.satisfied_runtime_evidence_count, 1);
+        assert_eq!(overview.release_gate.fixture_only_evidence_count, 2);
     }
 
     #[test]

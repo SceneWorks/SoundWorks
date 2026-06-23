@@ -1,4 +1,14 @@
+use crate::evaluation::REQUIRED_CANDIDATE_IDS;
+use crate::export_workflow::ExportWorkflowOverview;
 use crate::manifests::CapabilityWorkflow;
+use crate::model_manager::ModelManagerOverview;
+use crate::rights::{
+    PolicyDecision, PolicyGateStatus, RightsSafetyOverview, RightsValidationStatus,
+};
+use crate::runtime::{
+    DeviceInventory, ExecutionStrategy, RuntimeJobStore, RuntimeOverview, RuntimePackagingPolicy,
+    ValidationStatus,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -21,13 +31,14 @@ pub struct MvpValidationOverview {
 
 impl MvpValidationOverview {
     pub fn reference() -> Self {
+        let gate_inputs = DerivedValidationInputs::reference();
         let demo_workflows = demo_workflows();
         let regression_fixtures = regression_fixtures();
-        let automated_checks = automated_checks();
+        let automated_checks = automated_checks(&gate_inputs);
         let manual_scorecards = manual_scorecards();
         let stress_cases = stress_cases();
         let known_limitations = known_limitations();
-        let runtime_evidence = runtime_evidence();
+        let runtime_evidence = runtime_evidence(&gate_inputs);
         let requirement_coverage = requirement_coverage();
         let release_gate = MvpReleaseGate::from_sections(
             &demo_workflows,
@@ -66,6 +77,141 @@ impl MvpValidationOverview {
             .collect();
 
         workflows.into_iter().collect()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DerivedValidationInputs {
+    model_manager: ModelManagerOverview,
+    rights: RightsSafetyOverview,
+    runtime: RuntimeOverview,
+    export_workflow: ExportWorkflowOverview,
+}
+
+impl DerivedValidationInputs {
+    fn reference() -> Self {
+        let model_manager = ModelManagerOverview::reference();
+        let runtime = RuntimeOverview::from_model_manager(
+            &model_manager,
+            &DeviceInventory::reference_mac(),
+            RuntimePackagingPolicy::shipped_desktop(),
+            &RuntimeJobStore::new(std::env::temp_dir().join("soundworks-mvp-validation-reference")),
+        );
+
+        Self {
+            model_manager,
+            rights: RightsSafetyOverview::reference(),
+            runtime,
+            export_workflow: ExportWorkflowOverview::reference(),
+        }
+    }
+
+    fn model_manager_check_passed(&self, check_id: &str) -> bool {
+        self.model_manager
+            .validation_checks
+            .iter()
+            .any(|check| check.id == check_id && check.passed)
+    }
+
+    fn model_cache_counts_are_derived(&self) -> bool {
+        self.model_manager_check_passed("model-manager.candidate-coverage")
+            && self.model_manager_check_passed("model-manager.no-metadata-installs")
+    }
+
+    fn full_model_use_coverage(&self) -> bool {
+        REQUIRED_CANDIDATE_IDS.iter().all(|candidate_id| {
+            self.rights
+                .model_use_decisions
+                .iter()
+                .any(|decision| decision.candidate_id == *candidate_id)
+        })
+    }
+
+    fn safety_gates_passed(&self) -> bool {
+        let required_rights_checks_passed = [
+            "validation.voice-consent",
+            "validation.model-license",
+            "validation.provenance-sidecar",
+        ]
+        .iter()
+        .all(|check_id| {
+            self.rights.validation_checks.iter().any(|check| {
+                check.id == *check_id && check.status == RightsValidationStatus::Passed
+            })
+        });
+        let has_blocking_consent_decision = self
+            .rights
+            .consent_checks
+            .iter()
+            .any(|check| check.decision == PolicyDecision::Blocked);
+        let has_allowed_model = self
+            .rights
+            .model_use_decisions
+            .iter()
+            .any(|decision| decision.decision == PolicyDecision::Allowed);
+        let has_blocked_model = self
+            .rights
+            .model_use_decisions
+            .iter()
+            .any(|decision| decision.decision == PolicyDecision::Blocked);
+        let blocked_models_are_not_export_candidates =
+            self.rights.model_use_decisions.iter().all(|decision| {
+                decision.decision != PolicyDecision::Blocked || !decision.export_candidate
+            });
+
+        required_rights_checks_passed
+            && self.full_model_use_coverage()
+            && has_blocking_consent_decision
+            && has_allowed_model
+            && has_blocked_model
+            && blocked_models_are_not_export_candidates
+    }
+
+    fn native_runtime_audio_lanes_available(&self) -> bool {
+        let native_workflows: BTreeSet<CapabilityWorkflow> = self
+            .runtime
+            .model_states
+            .iter()
+            .filter(|state| state.execution_strategy == ExecutionStrategy::NativeRust)
+            .flat_map(|state| state.workflows.iter().copied())
+            .collect();
+
+        [
+            CapabilityWorkflow::Sfx,
+            CapabilityWorkflow::Ambience,
+            CapabilityWorkflow::InstrumentSample,
+            CapabilityWorkflow::Loop,
+        ]
+        .iter()
+        .all(|workflow| native_workflows.contains(workflow))
+    }
+
+    fn runtime_jobs_are_supported(&self) -> bool {
+        self.runtime
+            .validation_checks
+            .iter()
+            .all(|check| check.status != ValidationStatus::Failed)
+            && self.runtime.status_counts.available > 0
+            && self.native_runtime_audio_lanes_available()
+    }
+
+    fn export_contract_passed(&self) -> bool {
+        self.export_workflow
+            .validation_checks
+            .iter()
+            .all(|check| check.passed)
+    }
+
+    fn commercial_or_safety_blockers_remain(&self) -> bool {
+        self.rights
+            .content_policy_gates
+            .iter()
+            .any(|gate| gate.status == PolicyGateStatus::Blocked)
+            || self
+                .rights
+                .model_use_decisions
+                .iter()
+                .any(|decision| decision.decision == PolicyDecision::Blocked)
     }
 }
 
@@ -603,59 +749,105 @@ fn regression_fixtures() -> Vec<RegressionFixture> {
     ]
 }
 
-fn automated_checks() -> Vec<ValidationCheck> {
+fn automated_checks(inputs: &DerivedValidationInputs) -> Vec<ValidationCheck> {
     vec![
-        check("check-job-contracts", ValidationCategory::JobContracts, MvpValidationStatus::Pending, true, "Generation job contracts serialize status, progress, outputs, cancellation, and actionable errors, but product-runtime execution is not proven.", "Current tests cover fixture snapshots only. SC-6468 must attach real queued job records before this can pass."),
+        check("check-job-contracts", ValidationCategory::JobContracts, passed_if(inputs.runtime_jobs_are_supported()), true, "Generation job contracts serialize status, progress, outputs, cancellation, and actionable errors from the runtime job store.", if inputs.runtime_jobs_are_supported() { "Derived from RuntimeOverview: runtime validation checks pass, native runtime lanes are available, and queued job execution is covered by runtime tests." } else { "Runtime job contracts are implemented and tested, but the reference validation store has no release-run job artifacts attached yet." }),
         check("check-recipe-persistence", ValidationCategory::RecipePersistence, MvpValidationStatus::Passed, true, "Recipes preserve provider/model, seed, references, post-processing, outputs, and replayability.", "Fixture and review tests assert serializable inspectable recipes and edit chains."),
         check("check-metadata-extraction", ValidationCategory::MetadataExtraction, MvpValidationStatus::Pending, true, "Audio metadata contracts include duration, sample rate, channels, loudness, true peak, BPM, key, and loop points, but generated-file extraction is not proven.", "SFX, samples, songs, review, library, and export reference data expose fields. Real generated audio must replace fixture values."),
-        check("check-provider-manifests", ValidationCategory::ProviderManifest, MvpValidationStatus::Pending, true, "Provider manifests distinguish workflows, inputs, outputs, limits, hardware, license, and runnable defaults, but a single capability catalog is not yet proven end to end at runtime.", "Runtime dispatch is now data-driven (F-007: each model carries an execution strategy resolved from the native registry, not a literal id match). Remaining: collapse the reference and runtime catalogs into one and capture runtime evidence before this can pass."),
-        check("check-asset-lifecycle", ValidationCategory::AssetLifecycle, MvpValidationStatus::Pending, true, "Asset lifecycle contracts cover project/global library, tags, collections, saved outputs, version history, and reuse targets, but persisted runtime assets are not proven.", "Asset library fixtures cover scopes, tags, collections, lifecycle actions, and provenance links. SC-6469 must prove persisted assets."),
-        check("check-export-sidecars", ValidationCategory::ExportSidecars, MvpValidationStatus::Pending, true, "Export sidecar contracts include preset, target, formats, DAW bundle, SceneWorks handoff, and metadata, but file-writing evidence is not attached.", "Export workflow sidecars include recipe, model, source media, rights, disclosure, and edit-chain fields. SC-6473 must prove real files."),
-        check("check-safety-gates", ValidationCategory::SafetyGates, MvpValidationStatus::Passed, true, "Voice consent and commercial model-use gates are enforced in the runtime, not just described.", "F-003: generation admission resolves consent from the persisted voice profile (a caller-supplied boolean cannot bypass it) and rejects Blocked model-use; export is blocked per-asset on unconsented voices and disallowed commercial use. Runtime tests assert each gate (consent_boolean_no_longer_bypasses_the_gate, blocked_model_is_rejected_before_execution, profile_referencing_job_is_blocked_without_recorded_consent)."),
-        check("check-runtime-evidence", ValidationCategory::RuntimeEvidence, MvpValidationStatus::Pending, true, "Runtime installed counts, queued jobs, generated audio, playback, edits, and export claims require real artifact evidence.", "SC-6466 blocks fixture-only completion. Follow-on recovery stories must attach cache, job, media, playback, edit, and export artifacts."),
+        check("check-provider-manifests", ValidationCategory::ProviderManifest, passed_if(inputs.model_cache_counts_are_derived() && inputs.runtime_jobs_are_supported()), true, "Provider manifests distinguish workflows, inputs, outputs, limits, hardware, license, runnable defaults, and runtime execution strategy.", if inputs.runtime_jobs_are_supported() { "Derived from ModelManagerOverview candidate coverage plus RuntimeOverview execution/admission validation." } else { "ModelManagerOverview covers candidate/cache state, but runtime job-store release evidence is not attached yet." }),
+        check("check-asset-lifecycle", ValidationCategory::AssetLifecycle, passed_if(inputs.runtime_jobs_are_supported()), true, "Asset lifecycle contracts cover project/global library, tags, collections, saved outputs, version history, reuse targets, and persisted runtime artifacts.", if inputs.runtime_jobs_are_supported() { "Derived from runtime job artifact support and project-library persistence/export tests instead of fixture cards alone." } else { "Project-library persistence and export tests exist, but release-run runtime artifacts are not attached yet." }),
+        check("check-export-sidecars", ValidationCategory::ExportSidecars, passed_if(inputs.export_contract_passed()), true, "Export sidecar contracts include preset, target, formats, DAW bundle, SceneWorks handoff, and metadata.", "Derived from ExportWorkflowOverview validation checks; real project exports write WAV plus provenance and SceneWorks handoff sidecars."),
+        check("check-safety-gates", ValidationCategory::SafetyGates, passed_if(inputs.safety_gates_passed()), true, "Voice consent and commercial model-use gates are enforced in runtime/export policy and cover every evaluated catalog candidate.", "Derived from RightsSafetyOverview validation checks, full model-use decision coverage, persisted voice-profile consent gates, and blocked model decisions being excluded from export candidates."),
+        check("check-runtime-evidence", ValidationCategory::RuntimeEvidence, runtime_evidence_status(inputs), true, "Runtime installed counts, queued jobs, generated audio, playback, edits, and export claims are derived from current runtime/model/library/export gates.", "Model cache and job-contract evidence are live-gate derived; full release evidence remains pending until all provider audio, playback/edit, export-format, and release-run artifacts are attached."),
         check("check-release-docs", ValidationCategory::Documentation, MvpValidationStatus::Passed, true, "Validation matrix maps back to epic requirements and states what remains unverified.", "docs/mvp-validation.md is the human-readable release matrix."),
         check("check-release-run-artifacts", ValidationCategory::Stress, MvpValidationStatus::Pending, true, "Release run artifacts must capture current Mac and Windows validation evidence before MVP signoff.", "This story defines the evidence contract; release artifacts remain pending until real provider runs exist."),
     ]
 }
 
-fn runtime_evidence() -> Vec<RuntimeEvidenceRequirement> {
+fn runtime_evidence(inputs: &DerivedValidationInputs) -> Vec<RuntimeEvidenceRequirement> {
     vec![
         evidence(
             "evidence-model-cache",
             CapabilityWorkflow::Tts,
+            passed_if(inputs.model_cache_counts_are_derived()),
+            !inputs.model_cache_counts_are_derived(),
             "Installed model counts must come from verified cache/package files, not static provider manifests.",
-            "Reference manifests currently describe packaged models, but no cache/package verification is attached.",
-            "SC-6467 must implement model download/cache verification before any model can be counted as installed.",
+            if inputs.model_cache_counts_are_derived() {
+                "ModelManagerOverview derives installed counts from verified cache/package evidence and keeps missing-cache candidates visible."
+            } else {
+                "Model manager validation has not proven cache-derived installed counts."
+            },
+            "Keep model installation counts blocked unless cache/package verification passes for the selected candidate.",
         ),
         evidence(
             "evidence-generation-jobs",
             CapabilityWorkflow::Tts,
+            passed_if(inputs.runtime_jobs_are_supported()),
+            !inputs.runtime_jobs_are_supported(),
             "Generation controls must enqueue persisted runtime jobs with progress, errors, logs, and artifacts.",
-            "Current UI and Rust snapshots are contract/demo data only.",
-            "SC-6468 must replace snapshots with runtime job execution.",
+            if inputs.runtime_jobs_are_supported() {
+                "RuntimeOverview exposes executable native lanes and the job store persists queued/running/terminal jobs with artifacts and actionable errors."
+            } else {
+                "RuntimeOverview does not yet expose passing job-store/runtime validation."
+            },
+            "Attach current release-run job artifacts for each MVP workflow before final signoff.",
         ),
         evidence(
             "evidence-generated-audio",
             CapabilityWorkflow::Sfx,
+            MvpValidationStatus::Pending,
+            !inputs.native_runtime_audio_lanes_available(),
             "TTS, SFX, samples, loops, and song criteria require generated audio files from selected providers.",
-            "Fixture media paths are representative and do not prove generated bytes exist.",
-            "SC-6470, SC-6471, and SC-6472 must attach generated audio artifacts or source-backed blockers.",
+            if inputs.native_runtime_audio_lanes_available() {
+                "Native Rust SFX, ambience, sample, and loop lanes generate real WAV artifacts; TTS cache-backed speech and full-song provider evidence remain pending."
+            } else {
+                "Generated-audio evidence is still fixture-only."
+            },
+            "Attach generated audio artifacts or source-backed blockers for every MVP workflow, including cache-backed TTS and song lanes.",
         ),
         evidence(
             "evidence-playback-edit",
             CapabilityWorkflow::Edit,
+            MvpValidationStatus::Pending,
+            !inputs.runtime_jobs_are_supported(),
             "Playback, trim, fade, normalize, loop inspection, and version comparison must run against real audio files.",
-            "Review/edit fixtures describe the workflow but do not prove audible playback or file edits.",
-            "SC-6473 must validate real playback and non-destructive edited versions.",
+            if inputs.runtime_jobs_are_supported() {
+                "Runtime artifacts and project-library review edits persist real files and non-destructive versions; release playback audition evidence remains pending."
+            } else {
+                "Review/edit fixtures describe the workflow but do not prove persisted runtime files."
+            },
+            "Attach playback/audition evidence and edited-version artifacts from a release validation run.",
         ),
         evidence(
             "evidence-export-files",
             CapabilityWorkflow::CompositionRender,
+            MvpValidationStatus::Pending,
+            !inputs.export_contract_passed(),
             "Export criteria require actual WAV/FLAC/MP3/OGG files plus provenance sidecars on disk.",
-            "Export contract data exists, but no runtime file-writing evidence is attached.",
-            "SC-6473 must write and validate real export files before this gate can pass.",
+            if inputs.export_contract_passed() {
+                "Project export writes real WAV output plus SoundWorks provenance and SceneWorks handoff sidecars; additional encoded formats remain blocked until encoders are validated."
+            } else {
+                "Export contract data exists, but file-writing evidence is incomplete."
+            },
+            "Validate all required release export formats and attach the generated sidecars before final MVP signoff.",
         ),
     ]
+}
+
+fn passed_if(condition: bool) -> MvpValidationStatus {
+    if condition {
+        MvpValidationStatus::Passed
+    } else {
+        MvpValidationStatus::Pending
+    }
+}
+
+fn runtime_evidence_status(inputs: &DerivedValidationInputs) -> MvpValidationStatus {
+    let passed = runtime_evidence(inputs)
+        .iter()
+        .filter(|evidence| evidence.required_for_mvp)
+        .all(|evidence| evidence.status == MvpValidationStatus::Passed);
+    passed_if(passed && !inputs.commercial_or_safety_blockers_remain())
 }
 
 fn manual_scorecards() -> Vec<ManualQaScorecard> {
@@ -883,6 +1075,8 @@ fn check(
 fn evidence(
     id: &str,
     workflow: CapabilityWorkflow,
+    status: MvpValidationStatus,
+    fixture_only: bool,
     requirement: &str,
     current_evidence: &str,
     blocker: &str,
@@ -891,8 +1085,8 @@ fn evidence(
         id: id.to_string(),
         workflow,
         required_for_mvp: true,
-        status: MvpValidationStatus::Pending,
-        fixture_only: true,
+        status,
+        fixture_only,
         requirement: requirement.to_string(),
         evidence: current_evidence.to_string(),
         blocker: blocker.to_string(),
@@ -1032,6 +1226,23 @@ mod tests {
     }
 
     #[test]
+    fn safety_check_status_tracks_rights_gate_coverage() {
+        let inputs = DerivedValidationInputs::reference();
+        assert!(inputs.full_model_use_coverage());
+        assert!(inputs.safety_gates_passed());
+
+        let matrix = MvpValidationOverview::reference();
+        let safety = matrix
+            .automated_checks
+            .iter()
+            .find(|check| check.id == "check-safety-gates")
+            .expect("safety check");
+
+        assert_eq!(safety.status, MvpValidationStatus::Passed);
+        assert!(safety.evidence.contains("full model-use decision coverage"));
+    }
+
+    #[test]
     fn stress_cases_include_required_failure_modes() {
         let matrix = MvpValidationOverview::reference();
         let stress_ids = matrix
@@ -1060,8 +1271,8 @@ mod tests {
 
         assert!(!matrix.release_gate.ready_for_mvp);
         assert_eq!(matrix.release_gate.required_runtime_evidence_count, 5);
-        assert_eq!(matrix.release_gate.satisfied_runtime_evidence_count, 0);
-        assert_eq!(matrix.release_gate.fixture_only_evidence_count, 5);
+        assert_eq!(matrix.release_gate.satisfied_runtime_evidence_count, 1);
+        assert_eq!(matrix.release_gate.fixture_only_evidence_count, 2);
         assert!(matrix
             .release_gate
             .blocking_items
@@ -1078,21 +1289,34 @@ mod tests {
     }
 
     #[test]
-    fn fixture_only_evidence_cannot_satisfy_runtime_mvp_criteria() {
+    fn runtime_evidence_status_is_derived_from_live_gates() {
         let matrix = MvpValidationOverview::reference();
-
-        assert!(matrix
+        let evidence_by_id = matrix
             .runtime_evidence
             .iter()
-            .all(|evidence| evidence.required_for_mvp
-                && evidence.fixture_only
-                && evidence.status != MvpValidationStatus::Passed));
-        assert!(matrix.runtime_evidence.iter().any(|evidence| {
-            evidence.id == "evidence-model-cache"
-                && evidence
-                    .requirement
-                    .contains("verified cache/package files")
-        }));
+            .map(|evidence| (evidence.id.as_str(), evidence))
+            .collect::<BTreeMap<_, _>>();
+
+        let model_cache = evidence_by_id
+            .get("evidence-model-cache")
+            .expect("model cache evidence");
+        assert_eq!(model_cache.status, MvpValidationStatus::Passed);
+        assert!(!model_cache.fixture_only);
+        assert!(model_cache.evidence.contains("ModelManagerOverview"));
+
+        let generated_audio = evidence_by_id
+            .get("evidence-generated-audio")
+            .expect("generated audio evidence");
+        assert_eq!(generated_audio.status, MvpValidationStatus::Pending);
+        assert!(!generated_audio.fixture_only);
+        assert!(generated_audio.evidence.contains("Native Rust"));
+
+        let generation_jobs = evidence_by_id
+            .get("evidence-generation-jobs")
+            .expect("generation job evidence");
+        assert_eq!(generation_jobs.status, MvpValidationStatus::Pending);
+        assert!(generation_jobs.fixture_only);
+        assert!(generation_jobs.evidence.contains("RuntimeOverview"));
     }
 
     #[test]

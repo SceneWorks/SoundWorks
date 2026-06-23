@@ -355,12 +355,17 @@ impl ProjectLibraryStore {
                     "runtime job has no audio preview artifact",
                 )
             })?;
+        let source_path = runtime_store.resolve_artifact_path(&artifact.path)?;
         let output_manifest = job
             .artifacts
             .iter()
             .find(|artifact| artifact.kind == RuntimeArtifactKind::OutputManifest)
-            .and_then(|artifact| read_json::<Value>(&artifact.path).ok());
-        let source_path = PathBuf::from(&artifact.path);
+            .and_then(|artifact| {
+                runtime_store
+                    .resolve_artifact_path(&artifact.path)
+                    .ok()
+                    .and_then(|path| read_json::<Value>(path).ok())
+            });
         if !source_path.is_file() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -2150,7 +2155,7 @@ mod tests {
             log_tail: vec![],
             artifacts: vec![RuntimeJobArtifact {
                 kind: RuntimeArtifactKind::AudioPreview,
-                path: artifact_path.display().to_string(),
+                path: format!("jobs/{job_id}/artifacts/runtime-smoke.wav"),
                 mime_type: "audio/wav".to_string(),
                 bytes: fs::metadata(&artifact_path).unwrap().len(),
                 summary: "test audio".to_string(),

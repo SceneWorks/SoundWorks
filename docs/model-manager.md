@@ -33,7 +33,6 @@ Each candidate gets a cache subdirectory named by candidate ID, such as `kokoro-
 ## Commands
 
 - `get_model_manager_overview`
-- `install_model_candidate`
 - `revalidate_model_candidate`
 
-Install and revalidate commands return an operation record. If the expected files are still absent, the operation fails with recovery instructions instead of fabricating success.
+Install models manually with the command hint shown on each candidate card, then run `revalidate_model_candidate`. Revalidation returns an operation record. If the expected files are still absent, the operation fails with recovery instructions instead of fabricating success.

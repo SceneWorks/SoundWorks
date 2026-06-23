@@ -51,7 +51,6 @@ import {
   importRuntimeArtifactToLibrary,
   loadLibraryPlayback,
   loadExportWorkflowOverview,
-  installModelCandidate,
   mutateLibraryItem,
   openSoundWorksProject,
   retryRuntimeJob,
@@ -590,15 +589,12 @@ export function App() {
     );
   }
 
-  function runModelManagerAction(
-    candidateId: string,
-    action: "install" | "revalidate",
-  ) {
-    const runner =
-      action === "install" ? installModelCandidate : revalidateModelCandidate;
-    runner(candidateId).then((operation) => {
-      setModelManagerOperation(operation);
-    });
+  function runModelManagerAction(candidateId: string, action: "revalidate") {
+    if (action === "revalidate") {
+      revalidateModelCandidate(candidateId).then((operation) => {
+        setModelManagerOperation(operation);
+      });
+    }
   }
 
   // UX-F1: refresh the runtime model + job LIST without clobbering
